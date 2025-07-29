@@ -20,25 +20,19 @@ export default function NavItem({ item }) {
   const { menuOrientation, onChangeMenuOrientation } = useConfig();
   const itemPath = item?.link || item?.url;
 
-  let itemTarget = '_self';
-  if (item.target) {
-    itemTarget = '_blank';
-  }
   const isSelected = itemPath ? !!matchPath({ path: itemPath, end: true }, pathname) : false;
+
+  const handleClick = () => {
+    handlerDrawerOpen(false);
+    if (item?.layout === item?.title) {
+      onChangeMenuOrientation(item?.layout);
+    }
+  };
+
   return (
-    <li className={`pc-item ${isSelected ? 'active' : ''} `}>
+    <li className={`pc-item ${isSelected ? 'active' : ''}`}>
       {menuOrientation !== MenuOrientation.TAB ? (
-        <Link
-          className="pc-link"
-          to={item?.url || '#'}
-          target={itemTarget}
-          onClick={() => {
-            handlerDrawerOpen(false);
-            if (item?.layout === item?.title) {
-              onChangeMenuOrientation(item?.layout);
-            }
-          }}
-        >
+        <Link className="pc-link" to={item?.url || '#'} onClick={handleClick}>
           {item?.icon && (
             <span className="pc-micon">
               <i className={typeof item.icon === 'string' ? item.icon : item.icon?.props.className} />
@@ -47,35 +41,22 @@ export default function NavItem({ item }) {
           <FormattedMessage id={item.title} />
         </Link>
       ) : (
-        <>
-          {menuOrientation !== MenuOrientation.TAB && (
-            <OverlayTrigger
-              placement="right"
-              overlay={
-                <Tooltip id={`tooltip-${item.title}`}>
-                  <FormattedMessage id={item.title} />
-                </Tooltip>
-              }
-            >
-              <Link
-                className="pc-link"
-                to={item?.url || ''}
-                target={itemTarget}
-                onClick={() => {
-                  if (item?.layout === item?.title) {
-                    onChangeMenuOrientation(item?.layout);
-                  }
-                }}
-              >
-                {item?.icon && (
-                  <span className="pc-micon">
-                    <i className={typeof item.icon === 'string' ? item.icon : item.icon?.props.className} />
-                  </span>
-                )}
-              </Link>
-            </OverlayTrigger>
-          )}
-        </>
+        <OverlayTrigger
+          placement="right"
+          overlay={
+            <Tooltip id={`tooltip-${item.title}`}>
+              <FormattedMessage id={item.title} />
+            </Tooltip>
+          }
+        >
+          <Link className="pc-link" to={item?.url || '#'} onClick={handleClick}>
+            {item?.icon && (
+              <span className="pc-micon">
+                <i className={typeof item.icon === 'string' ? item.icon : item.icon?.props.className} />
+              </span>
+            )}
+          </Link>
+        </OverlayTrigger>
       )}
     </li>
   );

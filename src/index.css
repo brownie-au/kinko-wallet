@@ -1,0 +1,7 @@
+import './index.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can keep or add custom styles here */

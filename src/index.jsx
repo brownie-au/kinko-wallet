@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 
 // styles
+import 'bootstrap/dist/css/bootstrap.min.css';   // <-- Added Bootstrap CSS here
 import './index.scss';
 
 // project-imports

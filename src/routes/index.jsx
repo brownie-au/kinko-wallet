@@ -1,3 +1,4 @@
+import KinkoRoutes from './KinkoRoutes';
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 
@@ -14,6 +15,7 @@ import TablesRoutes from './TablesRoutes';
 
 import Loadable from 'components/Loadable';
 import SimpleLayout from 'layout/Simple';
+import WalletDetail from 'components/WalletDetail'; // <-- NEW IMPORT
 
 const PagesLanding = Loadable(lazy(() => import('../views/Landing')));
 
@@ -32,6 +34,10 @@ const router = createBrowserRouter(
         {
           path: '/landing',
           element: <PagesLanding />
+        },
+        {
+          path: '/wallet-detail',          // <-- NEW ROUTE
+          element: <WalletDetail />        // <-- USE COMPONENT
         }
       ]
     },
@@ -43,7 +49,10 @@ const router = createBrowserRouter(
     TablesRoutes,
     PagesRoutes,
     OtherRoutes,
-    ChartMapRoutes
+    ChartMapRoutes,
+
+    // --- Our New Wallet Routes ---
+    KinkoRoutes
   ],
   {
     basename: import.meta.env.VITE_APP_BASE_NAME
