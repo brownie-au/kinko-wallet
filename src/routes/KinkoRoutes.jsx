@@ -2,10 +2,10 @@ import { lazy } from 'react';
 import DashboardLayout from 'layout/Dashboard';
 import Loadable from 'components/Loadable';
 
-// --- Load Kinko Wallet pages ---
+// Kinko Wallet Pages
 const WalletDashboard = Loadable(lazy(() => import('views/wallet/WalletDashboard')));
 const WalletManage = Loadable(lazy(() => import('views/wallet/WalletManage')));
-const WalletDetail = Loadable(lazy(() => import('components/WalletDetail')));
+const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
 const PortfolioDashboard = Loadable(lazy(() => import('views/PortfolioDashboard')));
 
 const KinkoRoutes = {
@@ -30,7 +30,6 @@ const KinkoRoutes = {
       path: 'wallet/:address',
       element: <WalletDetail />
     },
-
     // Portfolio Dashboard Route
     {
       path: 'portfolio',

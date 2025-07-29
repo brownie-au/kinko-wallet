@@ -1,48 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, Table, ButtonGroup, Button, Spinner } from 'react-bootstrap';
-import { fetchMoralisTokens } from '../../services/moralisService';
-
-const CHAIN_OPTIONS = [
-  { label: 'PulseChain', value: 'pulse' },   // Moralis doesn't support pulse, but add for future
-  { label: 'Ethereum', value: 'eth' },
-  { label: 'Base', value: 'base' }
-];
+import { Card, Table, Spinner } from 'react-bootstrap';
+import { getNativeBalance, getTokenBalances } from '../../services/moralisService';
 
 export default function WalletDetail() {
   const { address = "" } = useParams();
   const [tokens, setTokens] = useState([]);
-  const [chain, setChain] = useState('eth');
+  const [native, setNative] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!address) return;
     setLoading(true);
-    fetchMoralisTokens(address, chain)
-      .then(setTokens)
+    Promise.all([
+      getNativeBalance(address),
+      getTokenBalances(address)
+    ])
+      .then(([nativeBalance, tokenList]) => {
+        setNative(nativeBalance);
+        setTokens(tokenList);
+      })
+      .catch(() => {
+        setNative(null);
+        setTokens([]);
+      })
       .finally(() => setLoading(false));
-  }, [address, chain]);
+  }, [address]);
 
   return (
     <div className="container-fluid px-0">
-      <h2 style={{ fontWeight: 600, letterSpacing: 1 }}>Mine</h2>
-      <div style={{ fontSize: 14, color: '#888', marginBottom: 18 }}>
+      <h2 style={{ fontWeight: 600, letterSpacing: 1, marginBottom: 8 }}>Ethereum Wallet</h2>
+      <div style={{ fontSize: 14, color: '#888', marginBottom: 18, wordBreak: "break-all" }}>
         {address}
       </div>
 
-      {/* Chain selector */}
-      <ButtonGroup style={{ marginBottom: 18 }}>
-        {CHAIN_OPTIONS.map(opt => (
-          <Button
-            key={opt.value}
-            variant={opt.value === chain ? 'primary' : 'outline-secondary'}
-            onClick={() => setChain(opt.value)}
-            disabled={opt.value === 'pulse'} // Only allow eth/base for now
-          >
-            {opt.label}
-          </Button>
-        ))}
-      </ButtonGroup>
+      <div style={{
+        fontSize: 18,
+        fontWeight: 500,
+        marginBottom: 16,
+        color: 'var(--bs-primary, #35a0f4)'
+      }}>
+        {loading
+          ? <Spinner size="sm" />
+          : native !== null
+            ? `${native.toLocaleString(undefined, { maximumFractionDigits: 6 })} ETH`
+            : '—'}
+      </div>
 
       <Card className="mb-4" style={{ background: 'var(--bs-card-bg, #23272b)' }}>
         <Card.Body className="p-0">
@@ -59,7 +62,6 @@ export default function WalletDetail() {
             >
               <thead>
                 <tr>
-                  <th>TOKEN</th>
                   <th>NAME</th>
                   <th style={{ textAlign: "right" }}>AMOUNT</th>
                   <th style={{ textAlign: "right" }}>SYMBOL</th>
@@ -70,26 +72,18 @@ export default function WalletDetail() {
               <tbody>
                 {tokens.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted">
-                      No tokens found for this wallet on {CHAIN_OPTIONS.find(o => o.value === chain).label}.
+                    <td colSpan={5} className="text-center text-muted">
+                      No ETH tokens found for this wallet.
                     </td>
                   </tr>
                 ) : (
                   tokens.map(token => (
-                    <tr key={token.token_address}>
-                      <td>
-                        <img
-                          src={`https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${token.token_address}/logo.png`}
-                          alt=""
-                          onError={e => e.target.style.display='none'}
-                          style={{ width: 28, height: 28, marginRight: 8, borderRadius: 4, background: "#222" }}
-                        />
-                      </td>
+                    <tr key={token.contractAddress}>
                       <td>{token.name || "-"}</td>
-                      <td style={{ textAlign: "right" }}>{parseFloat(token.balance / 10 ** token.decimals).toLocaleString()}</td>
+                      <td style={{ textAlign: "right" }}>{parseFloat(token.balance).toLocaleString()}</td>
                       <td style={{ textAlign: "right" }}>{token.symbol}</td>
                       <td style={{ textAlign: "right" }}>{token.decimals}</td>
-                      <td style={{ fontSize: 12, wordBreak: "break-all" }}>{token.token_address}</td>
+                      <td style={{ fontSize: 12, wordBreak: "break-all" }}>{token.contractAddress}</td>
                     </tr>
                   ))
                 )}

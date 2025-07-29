@@ -15,7 +15,7 @@ import TablesRoutes from './TablesRoutes';
 
 import Loadable from 'components/Loadable';
 import SimpleLayout from 'layout/Simple';
-import WalletDetail from 'components/WalletDetail'; // <-- NEW IMPORT
+import WalletDetail from '../views/wallet/WalletDetail';
 
 const PagesLanding = Loadable(lazy(() => import('../views/Landing')));
 
