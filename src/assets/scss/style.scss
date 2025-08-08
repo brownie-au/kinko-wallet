@@ -155,3 +155,37 @@ File: style.css
 .pc-header .ms-auto .pc-h-items { 
   display: none !important; 
 }
+/* Kinko Wallet – Dark Theme Modal Override (Lighter Grey) */
+.modal-content {
+  background-color: #2a2a2a;  // Softer dark grey
+  color: #f0f0f0;             
+  border: 1px solid #444;     // Slightly lighter border
+}
+
+.modal-header,
+.modal-footer {
+  border-color: #444;
+}
+
+.form-control {
+  background-color: #3a3a3a;  // Input field a shade lighter
+  border: 1px solid #555;
+  color: #f0f0f0;
+
+  &:focus {
+    background-color: #3a3a3a;
+    color: #fff;
+    border-color: #00bcd4;
+    box-shadow: none;
+  }
+}
+
+.btn-primary {
+  background-color: #00bcd4;
+  border-color: #00bcd4;
+
+  &:hover {
+    background-color: #0097a7;
+    border-color: #0097a7;
+  }
+}
