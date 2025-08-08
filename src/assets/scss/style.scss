@@ -146,3 +146,12 @@ File: style.css
 @import 'themes/plugins/data-tables';
 @import 'themes/plugins/treeview';
 @import 'themes/layouts/customizer';
+/* Kinko: hide the right-side quick-action icons in the app header */
+.pc-header .ms-auto .pc-h-item { 
+  display: none !important; 
+}
+
+/* Some builds wrap them in a <ul> */
+.pc-header .ms-auto .pc-h-items { 
+  display: none !important; 
+}

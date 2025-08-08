@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 
 // react-bootstrap
 import Image from 'react-bootstrap/Image';
-
-// third-party
 
 // project-imports
 import DrawerContent from './DrawerContent';
@@ -98,9 +96,15 @@ export default function MainDrawer() {
     <nav id="pc-sidebar" className={`pc-sidebar ${drawerOpen ? 'pc-sidebar-hide mob-sidebar-active' : ''} `}>
       <div className="navbar-wrapper">
         <div className="m-header">
-          <a className="b-brand text-primary">
-            <Image src={sidebarTheme === true ? DarkLogo : logo} fluid className="logo logo-lg" alt="logo" />
-          </a>
+          {/* Make the brand a link back to the landing page */}
+          <Link to="/" className="b-brand text-primary" aria-label="Go to Kinko Wallet home">
+            <Image
+              src={sidebarTheme === true ? DarkLogo : logo}
+              fluid
+              className="logo logo-lg"
+              alt="Kinko Wallet"
+            />
+          </Link>
         </div>
 
         <div className={menuOrientation === MenuOrientation.TAB ? 'tab-container' : 'navbar-content'}>

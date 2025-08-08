@@ -2,10 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 // react-bootstrap
-import Button from 'react-bootstrap/Button';
 import Container from 'react-bootstrap/Container';
 import Image from 'react-bootstrap/Image';
-import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 
 // assets
@@ -14,7 +12,7 @@ import Logo from 'assets/images/logo-white.svg';
 // ==============================|| SIMPLE - HEADER ||============================== //
 
 export default function HeaderSection() {
-  const navbarRef = useRef(null); // ✅ Explicit type
+  const navbarRef = useRef(null);
 
   const handleScroll = useCallback(() => {
     if (navbarRef.current) {
@@ -28,36 +26,15 @@ export default function HeaderSection() {
   }, [handleScroll]);
 
   return (
-    <Navbar expand="md" className="navbar-Datta top-nav-collapse default" ref={navbarRef}>
-      <Container>
-        <Navbar.Brand href="/">
-          <Image src={Logo} alt="logo" />
+    <Navbar expand="md" className="navbar default" ref={navbarRef}>
+      <Container className="d-flex align-items-center">
+        {/* Brand on the left */}
+        <Navbar.Brand as={Link} to="/" className="d-flex align-items-center">
+          <Image src={Logo} alt="Kinko Wallet" height={36} />
         </Navbar.Brand>
-        <Navbar.Toggle aria-controls="navbarTogglerDemo01" />
-        <Navbar.Collapse id="navbarTogglerDemo01">
-          <Nav className="ms-auto mb-2 mb-md-0 align-items-start">
-            <Nav.Item className="px-1">
-              <Link to="https://codedthemes.gitbook.io/datta" target="_blank" className="nav-link">
-                Documentation
-              </Link>
-            </Nav.Item>
-            <Nav.Item className="px-1">
-              <Link to="/dashboard/default" target="_blank" className="nav-link">
-                Live Preview
-              </Link>
-            </Nav.Item>
-            <Nav.Item className="px-1">
-              <Link to="/basic/alert" target="_blank" className="nav-link me-sm-3">
-                Components
-              </Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Button variant="dark" href="https://codedthemes.com/item/datta-able-bootstrap-admin-template/" target="_blank">
-                Purchase Now <i className="ti ti-external-link" />
-              </Button>
-            </Nav.Item>
-          </Nav>
-        </Navbar.Collapse>
+
+        {/* No right-side template links */}
+        <div className="ms-auto" />
       </Container>
     </Navbar>
   );
