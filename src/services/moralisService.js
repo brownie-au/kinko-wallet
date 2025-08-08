@@ -104,8 +104,9 @@ export async function getTokenMetadata(addresses = [], chain = CHAIN_ID) {
 }
 
 export async function getTokenPriceUSD(address, chain = CHAIN_ID) {
-  const json = await mfetch('erc20/price', { chain, address });
-  // Moralis returns { usdPrice, nativePrice: {...}, ... }
+  if (!address) return 0;
+  // Correct v2 path uses the token address in the URL
+  const json = await mfetch(`erc20/${address}/price`, { chain });
   return safeNumber(json?.usdPrice ?? json?.usd_price, 0);
 }
 

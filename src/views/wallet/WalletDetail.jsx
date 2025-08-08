@@ -11,7 +11,6 @@ const fmtNum = (n) =>
   (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
 
-// matches the 24px icon buttons
 const addrStyle = {
   fontFamily: 'monospace',
   fontSize: 18,
@@ -20,9 +19,7 @@ const addrStyle = {
   verticalAlign: 'middle'
 };
 
-/* ------------------------------------------------------------------ */
-/* Wallet name resolver: wallets.js -> localStorage (several keys)    */
-/* ------------------------------------------------------------------ */
+/* ---------------- wallet name resolver ---------------- */
 function findNameInArray(arr, addrLower) {
   const array = Array.isArray(arr) ? arr : [];
   const addrFields = ['address', 'addr', 'account', 'publicKey', 'public_key', 'hash', 'id', 'wallet'];
@@ -34,11 +31,9 @@ function resolveWalletName(address) {
   const a = (address || '').toLowerCase();
   if (!a) return 'Wallet';
 
-  // 1) imported list
   const fromImport = findNameInArray(wallets, a);
   if (fromImport) return fromImport;
 
-  // 2) localStorage (common keys / shapes)
   try {
     const keys = ['wallets', 'kinko:wallets', 'kinko_wallets', 'portfolio:wallets'];
     for (const k of keys) {
@@ -46,7 +41,6 @@ function resolveWalletName(address) {
       if (!raw) continue;
       const parsed = JSON.parse(raw);
 
-      // handle arrays, or objects that contain arrays, or single objects
       const candidates = [];
       if (Array.isArray(parsed)) candidates.push(parsed);
       else if (parsed && typeof parsed === 'object') {
@@ -62,17 +56,17 @@ function resolveWalletName(address) {
       }
     }
   } catch {
-    /* ignore JSON errors */
+    /* ignore */
   }
 
   return 'Wallet';
 }
 
-/* ------- tiny inline icon buttons ------- */
+/* -------- tiny icon button (theme-neutral) -------- */
 const IconButton = ({ title, onClick, children }) => (
   <button
     type="button"
-    className="btn btn-sm btn-outline-light p-1 d-inline-flex align-items-center justify-content-center"
+    className="btn btn-sm btn-outline-secondary p-1 d-inline-flex align-items-center justify-content-center"
     style={{ width: 24, height: 24, borderRadius: 6 }}
     title={title}
     onClick={onClick}
@@ -113,7 +107,6 @@ export default function WalletDetail() {
   const [sortDir, setSortDir] = useState('desc');
   const [showQR, setShowQR] = useState(false);
 
-  // Resolve wallet name from multiple sources
   const walletName = useMemo(() => resolveWalletName(address), [address]);
 
   useEffect(() => {
@@ -122,7 +115,7 @@ export default function WalletDetail() {
       try {
         setLoading(true);
         setErr('');
-        const { tokens, native, totalUSD } = await getPortfolioWithPrices(address, 'eth'); // ETH page
+        const { tokens, native, totalUSD } = await getPortfolioWithPrices(address, 'eth');
         if (!dead) {
           setNative({ ...native });
           setTokens(tokens);
@@ -188,22 +181,20 @@ export default function WalletDetail() {
 
   return (
     <>
-      {/* HEADER */}
+      {/* HEADER (theme-neutral) */}
       <Row className="mb-4">
         <Col>
-          <Card className="shadow-sm border-0" style={{ background: 'linear-gradient(135deg,#1f2937,#0f172a)' }}>
-            <Card.Body className="text-white">
+          <Card className="shadow-sm border-0">
+            <Card.Body>
               <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div>
-                  {/* Wallet Name */}
-                  <div className="opacity-75" style={{ fontSize: 18, fontWeight: 600 }}>
+                  <div className="text-muted" style={{ fontSize: 18, fontWeight: 600 }}>
                     {walletName}
                   </div>
 
                   <h2 className="mb-1" style={{ fontWeight: 800 }}>{fmtUSD(totalUSD)}</h2>
 
-                  {/* Short address + copy + QR */}
-                  <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12, opacity: 0.9 }}>
+                  <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span style={addrStyle}>{short(address)}</span>
                     <IconButton title="Copy address" onClick={() => copy(address)}>
                       <CopyIcon />
@@ -242,18 +233,18 @@ export default function WalletDetail() {
         </Col>
       </Row>
 
-      {/* TABLE */}
+      {/* TABLE (no hard-coded dark) */}
       <Row>
         <Col>
           <Card className="shadow-sm">
             <Card.Body className="p-0">
               <div className="table-responsive">
-                <table className="table table-dark table-hover mb-0">
+                <table className="table table-hover mb-0 align-middle">
                   <thead className="sticky-top" style={{ position: 'sticky', top: 0 }}>
                     <tr>
                       <th style={{ width: '38%' }}>
                         <button
-                          className="btn btn-link p-0 text-decoration-none text-white"
+                          className="btn btn-link p-0 text-decoration-none text-reset"
                           onClick={() => onSort('name')}
                         >
                           Token {sortKey === 'name' && (sortDir === 'asc' ? '▲' : '▼')}
@@ -261,7 +252,7 @@ export default function WalletDetail() {
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
                         <button
-                          className="btn btn-link p-0 text-decoration-none text-white"
+                          className="btn btn-link p-0 text-decoration-none text-reset"
                           onClick={() => onSort('price')}
                         >
                           Price {sortKey === 'price' && (sortDir === 'asc' ? '▲' : '▼')}
@@ -269,7 +260,7 @@ export default function WalletDetail() {
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
                         <button
-                          className="btn btn-link p-0 text-decoration-none text-white"
+                          className="btn btn-link p-0 text-decoration-none text-reset"
                           onClick={() => onSort('amount')}
                         >
                           Amount {sortKey === 'amount' && (sortDir === 'asc' ? '▲' : '▼')}
@@ -277,7 +268,7 @@ export default function WalletDetail() {
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
                         <button
-                          className="btn btn-link p-0 text-decoration-none text-white"
+                          className="btn btn-link p-0 text-decoration-none text-reset"
                           onClick={() => onSort('value')}
                         >
                           Value {sortKey === 'value' && (sortDir === 'asc' ? '▲' : '▼')}
@@ -304,7 +295,7 @@ export default function WalletDetail() {
                                 height: 28,
                                 borderRadius: 6,
                                 overflow: 'hidden',
-                                background: '#111827',
+                                background: 'var(--bs-secondary-bg, #e9ecef)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
