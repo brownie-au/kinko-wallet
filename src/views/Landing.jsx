@@ -2,12 +2,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PortfolioIdModal from '../components/PortfolioIdModal.jsx';
+import CreatePortfolioIdModal from '../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdChip from '../components/PortfolioIdChip.jsx';
 import Logo from 'assets/images/logo-white.svg';
 import 'assets/scss/landing.scss';
 
 export default function LandingPage() {
-  const [showPid, setShowPid] = useState(false);
+  const [showUsePid, setShowUsePid] = useState(false);
+  const [showCreatePid, setShowCreatePid] = useState(false);
 
   return (
     <div className="landing-page">
@@ -19,22 +21,32 @@ export default function LandingPage() {
           <p className="lp-tagline">Secure insights, no keys required.</p>
           <br />
 
-          {/* Always show current Portfolio ID if present */}
+          {/* Show current Portfolio ID if present */}
           <div className="mb-3">
             <PortfolioIdChip />
           </div>
 
-          <div className="lp-cta">
+          <div className="lp-cta d-flex gap-2 flex-wrap">
             <Link to="/dashboard/default" className="btn btn-primary btn-lg me-2">
               Get Started
             </Link>
 
+            {/* Use existing Portfolio ID (import) */}
             <button
               type="button"
               className="btn btn-outline-light btn-lg"
-              onClick={() => setShowPid(true)}
+              onClick={() => setShowUsePid(true)}
             >
-              Portfolio ID
+              Use Portfolio ID
+            </button>
+
+            {/* Create or Update Portfolio ID (export) */}
+            <button
+              type="button"
+              className="btn btn-outline-light btn-lg"
+              onClick={() => setShowCreatePid(true)}
+            >
+              Create/Update ID
             </button>
           </div>
         </div>
@@ -46,7 +58,9 @@ export default function LandingPage() {
         <div className="lp-hero-divider" />
       </header>
 
-      <PortfolioIdModal show={showPid} onHide={() => setShowPid(false)} />
+      {/* Modals */}
+      <PortfolioIdModal show={showUsePid} onHide={() => setShowUsePid(false)} />
+      <CreatePortfolioIdModal show={showCreatePid} onHide={() => setShowCreatePid(false)} />
     </div>
   );
 }
