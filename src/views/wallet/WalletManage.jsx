@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Button, Form, Row, Col, ListGroup, Alert } from 'react-bootstrap';
 import { loadWallets, saveWallets } from '../../utils/walletStorage';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
+import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
+import PortfolioIdChip from '../../components/PortfolioIdChip.jsx';
 
 const WalletManage = () => {
   const [wallets, setWallets] = useState([]);
@@ -10,6 +12,7 @@ const WalletManage = () => {
   const [error, setError] = useState('');
 
   const [showCreateId, setShowCreateId] = useState(false);
+  const [showUseId, setShowUseId] = useState(false);
 
   useEffect(() => {
     setWallets(loadWallets());
@@ -45,16 +48,28 @@ const WalletManage = () => {
 
   return (
     <div>
-      <h2 className="mb-4">Manage Wallets</h2>
+      <h2 className="mb-2">Manage Wallets</h2>
+
+      {/* Portfolio ID chip (copyable, auto-updates) */}
+      <div className="mb-3">
+        <PortfolioIdChip />
+      </div>
 
       {/* Top action row */}
-      <div className="mb-3 d-flex gap-2">
+      <div className="mb-3 d-flex gap-2 flex-wrap">
+        <Button
+          variant="outline-secondary"
+          onClick={() => setShowUseId(true)}
+        >
+          Use Portfolio ID
+        </Button>
+
         <Button
           variant="success"
           onClick={() => setShowCreateId(true)}
           style={{ backgroundColor: '#20C997', borderColor: '#20C997' }}
         >
-          Create Portfolio ID
+          Create / Update Portfolio ID
         </Button>
       </div>
 
@@ -120,7 +135,8 @@ const WalletManage = () => {
         </Card.Body>
       </Card>
 
-      {/* Create/Update ID Modal */}
+      {/* Modals */}
+      <PortfolioIdModal show={showUseId} onHide={() => setShowUseId(false)} />
       <CreatePortfolioIdModal show={showCreateId} onHide={() => setShowCreateId(false)} />
     </div>
   );
