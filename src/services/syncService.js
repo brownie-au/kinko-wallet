@@ -1,8 +1,9 @@
 // src/services/syncService.js
-// Works with a backend if VITE_SYNC_API_BASE is set,
-// otherwise falls back to localStorage-only (good for dev).
+// Works with our live /api/portfolio backend (GET ?slug=, PUT body),
+// and falls back to localStorage-only if VITE_SYNC_API_BASE is blank (dev).
 
-const API = import.meta.env.VITE_SYNC_API_BASE || '';
+const BASE = (import.meta.env.VITE_SYNC_API_BASE || '').replace(/\/$/, '');
+const API = `${BASE}/api/portfolio`;
 
 /* ------------ local wallet helpers (your existing 'wallets' key) ------------ */
 export function readLocalWallets() {
@@ -32,8 +33,30 @@ export function clearSyncId() {
 function genId(len = 8) {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I/O/1/0
   let out = '';
-  crypto.getRandomValues(new Uint8Array(len)).forEach((n) => (out += alphabet[n % alphabet.length]));
+  crypto.getRandomValues(new Uint8Array(len)).forEach(
+    (n) => (out += alphabet[n % alphabet.length])
+  );
   return out;
+}
+
+async function apiGet(id) {
+  const r = await fetch(`${API}?slug=${encodeURIComponent(id)}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('GET failed');
+  return r.json(); // { slug, version, updatedAt, blob }
+}
+
+async function apiPut(id, blob, prevVersion) {
+  const r = await fetch(API, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slug: id, blob, prevVersion })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`PUT failed ${r.status} ${text}`);
+  }
+  return r.json(); // { slug, version, updatedAt, blob }
 }
 
 /* --------------------------- API methods --------------------------- */
@@ -41,35 +64,30 @@ function genId(len = 8) {
 export async function createPortfolio() {
   const payload = { wallets: readLocalWallets() };
 
+  // Cloud path
   if (API) {
-    const res = await fetch(`${API}/api/portfolio`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ data: payload })
-    });
-    if (!res.ok) throw new Error('Failed to create portfolio id');
-    const { id } = await res.json();
-    saveSyncId(id);
-    return { id, source: 'api' };
+    const id = genId(8);
+    const saved = await apiPut(id, payload); // first version
+    saveSyncId(saved.slug);
+    return { id: saved.slug, source: 'api', version: saved.version };
   }
 
   // Local fallback (dev only)
   const id = genId(8);
   localStorage.setItem(`kinko:sync:local:${id}`, JSON.stringify(payload));
   saveSyncId(id);
-  return { id, source: 'local' };
+  return { id, source: 'local', version: 1 };
 }
 
-// Load a portfolio by ID
+// Load a portfolio by ID (does not overwrite local by itself)
 export async function loadPortfolio(id) {
   const code = (id || '').toUpperCase().trim();
   if (!code) throw new Error('Empty ID');
 
   if (API) {
-    const r = await fetch(`${API}/api/portfolio/${code}`);
-    if (!r.ok) throw new Error('Not found');
-    const { data } = await r.json();
-    return data || { wallets: [] };
+    const rec = await apiGet(code); // may be null
+    if (!rec) throw new Error('Not found');
+    return rec.blob || { wallets: [] };
   }
 
   // Local fallback (dev)
@@ -78,23 +96,29 @@ export async function loadPortfolio(id) {
   return JSON.parse(raw);
 }
 
-// Save current local wallets to the given ID
+// Save current local wallets to the given ID (optimistic version check)
 export async function savePortfolio(id) {
   const code = (id || '').toUpperCase().trim();
   if (!code) throw new Error('Missing ID');
   const payload = { wallets: readLocalWallets() };
 
   if (API) {
-    const r = await fetch(`${API}/api/portfolio/${code}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json', 'x-key': code },
-      body: JSON.stringify({ data: payload })
-    });
-    if (!r.ok) throw new Error('Save failed');
-    return true;
+    const existing = await apiGet(code); // may be null on first write
+    const saved = await apiPut(code, payload, existing?.version);
+    saveSyncId(code);
+    return { ok: true, version: saved.version };
   }
 
   // Local fallback (dev)
   localStorage.setItem(`kinko:sync:local:${code}`, JSON.stringify(payload));
+  return { ok: true, version: 1 };
+}
+
+/* ---------------- convenience for new devices --------------------- */
+// Pull a portfolio ID into this device and replace local wallets
+export async function importPortfolio(id) {
+  const data = await loadPortfolio(id);
+  writeLocalWallets(data.wallets || []);
+  saveSyncId((id || '').toUpperCase().trim());
   return true;
 }
