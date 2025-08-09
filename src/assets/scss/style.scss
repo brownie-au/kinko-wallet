@@ -236,3 +236,8 @@ File: style.css
   opacity: 1;             /* kill any extra dimming */
   font-size: .92rem;      /* tiny bump so it doesn’t disappear */
 }
+/* Kinko – portfolio cards tighten up */
+.pc-container .card {
+  background: var(--bs-card-bg);
+  border-color: rgba(255,255,255,0.08);
+}

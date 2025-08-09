@@ -3,12 +3,29 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
 import { getPortfolioWithPrices } from '../../services/moralisService.js';
+import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 import wallets from '../../data/wallets.js';
+import { setWalletCache } from '../../utils/walletCache';
 
+// ⬇️ NEW: sticky chip + last-section helpers
+import {
+  getLastSection,
+  setLastSection,
+  getWalletNetChip,
+  setWalletNetChip
+} from '../../utils/uiState';
+
+// ----------------------------- utils -----------------------------
 const fmtUSD = (n) =>
-  (Number(n) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+  (Number(n) || 0).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2
+  });
+
 const fmtNum = (n) =>
   (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
+
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
 
 const addrStyle = {
@@ -19,20 +36,28 @@ const addrStyle = {
   verticalAlign: 'middle'
 };
 
-/* ---------------- wallet name resolver ---------------- */
-function findNameInArray(arr, addrLower) {
+// ---------------- wallet name/chain resolver (robust) ----------------
+function findByAddrLoose(arr, addrLower) {
   const array = Array.isArray(arr) ? arr : [];
   const addrFields = ['address', 'addr', 'account', 'publicKey', 'public_key', 'hash', 'id', 'wallet'];
-  const item = array.find((w) => addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower));
-  return item?.name || item?.label || item?.title || item?.nickname || null;
+
+  // 1) exact full-address match
+  let item = array.find((w) =>
+    addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower)
+  );
+  if (item) return item;
+
+  // 2) loose match on short id/prefix/suffix like "0xbc16"
+  item = array.find((w) => {
+    const vals = addrFields.map((f) => (w?.[f] || '').toLowerCase());
+    return vals.some((v) => v && (addrLower.startsWith(v) || addrLower.endsWith(v)));
+  });
+  return item || null;
 }
 
-function resolveWalletName(address) {
-  const a = (address || '').toLowerCase();
-  if (!a) return 'Wallet';
-
-  const fromImport = findNameInArray(wallets, a);
-  if (fromImport) return fromImport;
+function findAnyWalletRecord(addressLower) {
+  let rec = findByAddrLoose(wallets, addressLower);
+  if (rec) return rec;
 
   try {
     const keys = ['wallets', 'kinko:wallets', 'kinko_wallets', 'portfolio:wallets'];
@@ -40,29 +65,66 @@ function resolveWalletName(address) {
       const raw = localStorage.getItem(k);
       if (!raw) continue;
       const parsed = JSON.parse(raw);
+      const groups = [];
 
-      const candidates = [];
-      if (Array.isArray(parsed)) candidates.push(parsed);
+      if (Array.isArray(parsed)) groups.push(parsed);
       else if (parsed && typeof parsed === 'object') {
-        candidates.push([parsed]);
-        Object.values(parsed).forEach((v) => {
-          if (Array.isArray(v)) candidates.push(v);
-        });
+        groups.push([parsed]);
+        Object.values(parsed).forEach((v) => { if (Array.isArray(v)) groups.push(v); });
       }
 
-      for (const arr of candidates) {
-        const name = findNameInArray(arr, a);
-        if (name) return name;
+      for (const g of groups) {
+        const hit = findByAddrLoose(g, addressLower);
+        if (hit) return hit;
       }
     }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* ignore */ }
 
-  return 'Wallet';
+  return null;
 }
 
-/* -------- tiny icon button (theme-neutral) -------- */
+function normalizeChain(x) {
+  const s = (x ?? '').toString().toLowerCase();
+  if (s.includes('pulse') || s === '369') return 'pulse';
+  if (s.includes('base')  || s === '8453') return 'base';
+  return 'eth';
+}
+
+function resolveWalletName(address) {
+  const a = (address || '').toLowerCase();
+  if (!a) return 'Wallet';
+  const rec = findAnyWalletRecord(a);
+  return rec?.name || rec?.label || rec?.title || rec?.nickname || 'Wallet';
+}
+
+function resolveDefaultChain(address) {
+  const a = (address || '').toLowerCase();
+  if (!a) return 'eth';
+  const rec = findAnyWalletRecord(a);
+  if (!rec) return 'eth';
+  const raw =
+    rec.chain ?? rec.network ?? rec.net ??
+    (typeof rec.chainId === 'number' ? String(rec.chainId) : rec.chainId);
+  return normalizeChain(raw);
+}
+
+// Derive a stable "group id" for sticky chip storage.
+// We look for common group-ish fields and fall back to a generic bucket.
+function resolveGroupId(address) {
+  const rec = findAnyWalletRecord((address || '').toLowerCase()) || {};
+  return (
+    rec.group ||
+    rec.grp ||
+    rec.collection ||
+    rec.folder ||
+    rec.section ||
+    rec.category ||
+    rec.groupId ||
+    'default'
+  );
+}
+
+// -------- tiny icon button --------
 const IconButton = ({ title, onClick, children }) => (
   <button
     type="button"
@@ -95,8 +157,12 @@ const QrIcon = () => (
   </svg>
 );
 
+// ==============================  PAGE  ==============================
 export default function WalletDetail() {
   const { address = '' } = useParams();
+
+  // Mark this page as "wallets" while mounted (used to decide default chip on entry).
+  useEffect(() => { setLastSection('wallets'); }, []);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -109,28 +175,161 @@ export default function WalletDetail() {
 
   const walletName = useMemo(() => resolveWalletName(address), [address]);
 
+  // Sticky chip logic:
+  // - scoped per wallet "group"
+  // - if we arrived from outside the wallet section (e.g., View All), default to 'all'
+  // - otherwise reuse the saved chip for this group
+  const groupId = useMemo(() => resolveGroupId(address), [address]);
+
+  const initialChip = useMemo(() => {
+    const last = getLastSection();               // 'wallets' vs something else
+    const saved = getWalletNetChip(groupId);     // '', 'all', 'eth', 'pulse', 'base'
+    return (last === 'wallets' && saved) ? saved : 'all';
+  }, [groupId]);
+
+  const [activeChain, setActiveChain] = useState(initialChip);
+
+  // Keep chip in sync when switching between wallets/groups
+  useEffect(() => {
+    setActiveChain(initialChip);
+  }, [address, groupId, initialChip]);
+
+  const onChipChange = (code) => {
+    setActiveChain(code);
+    setWalletNetChip(groupId, code); // persist per group
+  };
+
+  // Normalise any token for cache format
+  const mapTokenForCache = (t) => {
+    const priceUsd = Number(t.priceUsd ?? t.price ?? 0);
+    const amount   = Number(t.amount ?? 0);
+    const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
+    return {
+      symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
+      name: t.name || t.symbol || 'Token',
+      amount,
+      priceUsd,
+      valueUsd,
+      contract: t.contract,
+      logo: t.logo,
+      chain: t.chain || activeChain
+    };
+  };
+
+  // ---- adapt Blockscout rows -> our UI shape ----
+  const adaptPulseTokens = (rows) => {
+    const list = Array.isArray(rows) ? rows.slice() : [];
+    const plsIdx = list.findIndex((r) => r.address === 'PLS' || r.symbol === 'PLS');
+    const pls = plsIdx >= 0 ? list.splice(plsIdx, 1)[0] : null;
+
+    const nat = pls
+      ? {
+          name: 'PulseChain',
+          symbol: 'PLS',
+          amount: Number(pls.balance || 0),
+          price: Number(pls.price || 0),
+          value: Number(pls.value || 0),
+          contract: 'native',
+          logo: pls.iconUrl || null,
+          chain: 'pulse'
+        }
+      : null;
+
+    const toks = list.map((r) => ({
+      name: r.name || r.symbol || 'Token',
+      symbol: r.symbol || '',
+      amount: Number(r.balance || 0),
+      price: Number(r.price || 0),
+      value: Number(r.value || 0),
+      contract: r.address || null,
+      logo: r.iconUrl || null,
+      chain: 'pulse'
+    }));
+
+    const totalUSD = (nat ? nat.value : 0) + toks.reduce((s, t) => s + (t.value || 0), 0);
+    return { native: nat, tokens: toks, totalUSD };
+  };
+
+  // Fetch one chain and tag rows with chain
+  async function fetchOneChain(chainCode) {
+    if (chainCode === 'pulse') {
+      const rows = await fetchPulsechainTokens(address);
+      return adaptPulseTokens(rows);
+    }
+    // eth/base via Moralis
+    const res = await getPortfolioWithPrices(address, chainCode);
+    const nat = res?.native
+      ? { ...res.native, chain: chainCode }
+      : null;
+    const toks = Array.isArray(res?.tokens) ? res.tokens.map((t) => ({ ...t, chain: chainCode })) : [];
+    const totalUSD = Number(res?.totalUSD || (nat?.value || 0) + toks.reduce((s, t) => s + (t.value || t.valueUsd || 0), 0));
+    return { native: nat, tokens: toks, totalUSD };
+  }
+
+  // fetch -> set state -> cache
   useEffect(() => {
     let dead = false;
+
     async function load() {
       try {
         setLoading(true);
         setErr('');
-        const { tokens, native, totalUSD } = await getPortfolioWithPrices(address, 'eth');
+        setNative(null);
+        setTokens([]);
+
+        let result;
+        if (activeChain === 'all') {
+          const chainsWanted = ['eth', 'base', 'pulse'];
+          const parts = await Promise.allSettled(chainsWanted.map(fetchOneChain));
+          const ok = parts
+            .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: chainsWanted[i] } : null))
+            .filter(Boolean);
+
+          const natRows = ok.map((r) => r.native).filter(Boolean);
+          const tokRows = ok.flatMap((r) => r.tokens || []);
+          const totalUSD = ok.reduce((s, r) => s + (Number(r.totalUSD) || 0), 0);
+
+          result = { native: null, tokens: [...natRows, ...tokRows], totalUSD };
+        } else {
+          result = await fetchOneChain(activeChain);
+        }
+
+        const { tokens: tok, native: nat, totalUSD } = result || { tokens: [], native: null, totalUSD: 0 };
+
         if (!dead) {
-          setNative({ ...native });
-          setTokens(tokens);
+          setNative(nat ? { ...nat } : null);
+          setTokens(Array.isArray(tok) ? tok : []);
           document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUSD)}`;
         }
+
+        // cache snapshot for View All
+        try {
+          const cachedTokens = [
+            ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' })] : []),
+            ...(Array.isArray(tok) ? tok.map(mapTokenForCache) : []),
+          ];
+          const cachedTotal = Number.isFinite(result?.totalUSD)
+            ? Number(result.totalUSD)
+            : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
+
+          setWalletCache(`${address}:${activeChain}`, {
+            chain: activeChain,
+            tokens: cachedTokens,
+            totalUsd: cachedTotal
+          });
+        } catch { /* ignore */ }
       } catch (e) {
-        if (!dead) setErr(e.message || 'Failed to load wallet');
+        if (!dead) setErr(e.message || `Failed to load ${activeChain.toUpperCase()} data`);
       } finally {
         if (!dead) setLoading(false);
       }
     }
+
     if (address) load();
     return () => { dead = true; };
-  }, [address, walletName]);
+  }, [address, walletName, activeChain]);
 
+  // ----------------------------- table data & sorting -----------------------------
   const items = useMemo(() => {
     const base = native ? [native, ...tokens] : tokens.slice();
     const s = (q || '').trim().toLowerCase();
@@ -148,18 +347,18 @@ export default function WalletDetail() {
         sortKey === 'name'
           ? (a.name || a.symbol || '').toLowerCase()
           : sortKey === 'price'
-          ? a.price
+          ? (a.price ?? a.priceUsd ?? 0)
           : sortKey === 'amount'
-          ? a.amount
-          : a.value;
+          ? (a.amount ?? 0)
+          : (a.value ?? a.valueUsd ?? 0);
       const vb =
         sortKey === 'name'
           ? (b.name || b.symbol || '').toLowerCase()
           : sortKey === 'price'
-          ? b.price
+          ? (b.price ?? b.priceUsd ?? 0)
           : sortKey === 'amount'
-          ? b.amount
-          : b.value;
+          ? (b.amount ?? 0)
+          : (b.value ?? b.valueUsd ?? 0);
       if (va < vb) return sortDir === 'asc' ? -1 : 1;
       if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -167,7 +366,10 @@ export default function WalletDetail() {
     return filtered.sort(cmp);
   }, [native, tokens, q, sortKey, sortDir]);
 
-  const totalUSD = useMemo(() => items.reduce((s, t) => s + (t.value || 0), 0), [items]);
+  const totalUSD = useMemo(
+    () => items.reduce((s, t) => s + (t.value ?? t.valueUsd ?? 0), 0),
+    [items]
+  );
 
   const onSort = (k) => {
     setSortKey((prev) => {
@@ -179,9 +381,29 @@ export default function WalletDetail() {
 
   const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
 
+  // clickable chip
+  const chip = (label, code) => (
+    <button
+      type="button"
+      className={`badge ${activeChain === code ? 'bg-primary' : 'bg-secondary'}`}
+      onClick={() => onChipChange(code)}
+      style={{ border: 'none' }}
+    >
+      {label}
+    </button>
+  );
+
+  const standardLabel =
+    activeChain === 'pulse' ? 'PRC-20'
+    : activeChain === 'all' ? 'ERC-20 & PRC-20'
+    : 'ERC-20';
+
+  const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
+
+  // ----------------------------- render -----------------------------
   return (
     <>
-      {/* HEADER (theme-neutral) */}
+      {/* HEADER */}
       <Row className="mb-4">
         <Col>
           <Card className="shadow-sm border-0">
@@ -205,11 +427,12 @@ export default function WalletDetail() {
                   </div>
                 </div>
 
-                {/* Chain chips (static for now) */}
+                {/* Chain chips (All first) */}
                 <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-primary">Ethereum</span>
-                  <span className="badge bg-secondary">Base</span>
-                  <span className="badge bg-secondary">PulseChain</span>
+                  {chip('All', 'all')}
+                  {chip('Ethereum', 'eth')}
+                  {chip('PulseChain', 'pulse')}
+                  {chip('Base', 'base')}
                 </div>
               </div>
             </Card.Body>
@@ -221,7 +444,7 @@ export default function WalletDetail() {
       <Row className="mb-3">
         <Col md={6} className="mb-2">
           <Form.Control
-            placeholder="Search token / symbol / contract…"
+            placeholder={`Search ${standardLabel} token / symbol / contract…`}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -233,7 +456,19 @@ export default function WalletDetail() {
         </Col>
       </Row>
 
-      {/* TABLE (no hard-coded dark) */}
+      {/* TABLE */}
+      <Row className="mb-2">
+        <Col>
+          <small className="text-muted">
+            {activeChain === 'all'
+              ? 'All chains — ERC-20 & PRC-20 tokens'
+              : activeChain === 'pulse'
+              ? 'PulseChain — PRC-20 tokens'
+              : `${activeChain === 'base' ? 'Base' : 'Ethereum'} — ERC-20 tokens`}
+          </small>
+        </Col>
+      </Row>
+
       <Row>
         <Col>
           <Card className="shadow-sm">
@@ -274,64 +509,74 @@ export default function WalletDetail() {
                           Value {sortKey === 'value' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
-                      <th style={{ width: '8%' }}>Contract</th>
+                      <th style={{ width: '8%' }}>CONTRACT</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {loading && <tr><td colSpan={5} className="text-center py-4">Loading…</td></tr>}
+                    {loading && <tr><td colSpan={5} className="text-center py-4">Loading {standardLabel}…</td></tr>}
                     {!loading && err && <tr><td colSpan={5} className="text-danger py-4 text-center">{err}</td></tr>}
                     {!loading && !err && items.length === 0 && (
                       <tr><td colSpan={5} className="py-4 text-center">No tokens found.</td></tr>
                     )}
 
-                    {!loading && !err && items.map((t) => (
-                      <tr key={`${t.contract}-${t.symbol}`}>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
-                            <div
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 6,
-                                overflow: 'hidden',
-                                background: 'var(--bs-secondary-bg, #e9ecef)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
+                    {!loading && !err && items.map((t, i) => {
+                      const price = (t.price ?? t.priceUsd ?? 0);
+                      const amount = (t.amount ?? 0);
+                      const value = (t.value ?? t.valueUsd ?? (amount * price));
+                      const c = (t.chain || activeChain);
+
+                      return (
+                        <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
+                          <td>
+                            <div className="d-flex align-items-center gap-2">
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  overflow: 'hidden',
+                                  background: 'var(--bs-secondary-bg, #e9ecef)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                {t.logo ? (
+                                  <img src={t.logo} alt="" style={{ width: 28, height: 28, objectFit: 'cover' }} />
+                                ) : (
+                                  <span style={{ fontSize: 12, opacity: 0.7 }}>
+                                    {(t.symbol || '?').slice(0, 3)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="d-flex flex-column">
+                                <strong>{t.name}</strong>
+                                <small className="text-muted">
+                                  {t.symbol}
+                                  {activeChain === 'all' && t.symbol ? ' • ' : ''}
+                                  {activeChain === 'all' && <span className="badge bg-secondary ms-0">{chainName(c)}</span>}
+                                </small>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="text-end">{fmtUSD(price)}</td>
+                          <td className="text-end">{fmtNum(amount)}</td>
+                          <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
+                          <td>
+                            <span
+                              className="badge bg-secondary"
+                              style={{ cursor: t.contract ? 'pointer' : 'default' }}
+                              title={t.contract ? 'Copy contract' : undefined}
+                              onClick={() => t.contract && copy(t.contract)}
                             >
-                              {t.logo ? (
-                                <img src={t.logo} alt="" style={{ width: 28, height: 28, objectFit: 'cover' }} />
-                              ) : (
-                                <span style={{ fontSize: 12, opacity: 0.7 }}>
-                                  {(t.symbol || '?').slice(0, 3)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="d-flex flex-column">
-                              <strong>{t.name}</strong>
-                              <small className="text-muted">{t.symbol}</small>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="text-end">{fmtUSD(t.price)}</td>
-                        <td className="text-end">{fmtNum(t.amount)}</td>
-                        <td className="text-end">
-                          <strong>{fmtUSD(t.value)}</strong>
-                        </td>
-                        <td>
-                          <span
-                            className="badge bg-secondary"
-                            style={{ cursor: 'pointer' }}
-                            title="Copy contract"
-                            onClick={() => t.contract && copy(t.contract)}
-                          >
-                            {t.contract ? short(t.contract) : '—'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                              {t.contract ? short(t.contract) : 'native'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

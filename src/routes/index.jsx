@@ -1,8 +1,7 @@
-import KinkoRoutes from './KinkoRoutes';
+// src/routes/index.jsx
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 
-// project-imports
 import AdminPanelRoutes from './AdminPanelRoutes';
 import ApplicationRoutes from './ApplicationRoutes';
 import ChartMapRoutes from './ChartMapRoutes';
@@ -12,35 +11,27 @@ import OtherRoutes from './OtherRoutes';
 import PagesRoutes from './PagesRoutes';
 import NavigationRoutes from './NavigationRoutes';
 import TablesRoutes from './TablesRoutes';
+import KinkoRoutes from './KinkoRoutes';
 
 import Loadable from 'components/Loadable';
 import SimpleLayout from 'layout/Simple';
-import WalletDetail from '../views/wallet/WalletDetail';
 
-const PagesLanding = Loadable(lazy(() => import('../views/Landing')));
-
-// ==============================|| ROUTING RENDER ||============================== //
+// Landing
+const PagesLanding = Loadable(lazy(() => import('views/Landing')));
 
 const router = createBrowserRouter(
   [
+    // Landing-only group (no sidebar)
     {
       path: '/',
       element: <SimpleLayout />,
       children: [
-        {
-          index: true,
-          element: <PagesLanding />
-        },
-        {
-          path: '/landing',
-          element: <PagesLanding />
-        },
-        {
-          path: '/wallet-detail',          // <-- NEW ROUTE
-          element: <WalletDetail />        // <-- USE COMPONENT
-        }
+        { index: true, element: <PagesLanding /> },
+        { path: 'landing', element: <PagesLanding /> }
       ]
     },
+
+    // All dashboard content (with sidebar/header)
     ApplicationRoutes,
     AdminPanelRoutes,
     NavigationRoutes,
@@ -50,8 +41,6 @@ const router = createBrowserRouter(
     PagesRoutes,
     OtherRoutes,
     ChartMapRoutes,
-
-    // --- Our New Wallet Routes ---
     KinkoRoutes
   ],
   {
