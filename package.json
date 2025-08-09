@@ -42,6 +42,7 @@
     "@uppy/progress-bar": "4.2.1",
     "@uppy/react": "4.2.1",
     "@uppy/webcam": "4.1.1",
+    "@vercel/blob": "^1.1.1",
     "animate.css": "4.1.1",
     "apexcharts": "^4.5.0",
     "axios": "^1.7.9",
