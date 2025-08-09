@@ -30,8 +30,7 @@ const UserSocialProfilePage = Loadable(lazy(() => import('views/application/user
 const UserProfilePage = Loadable(lazy(() => import('views/application/users/Profile')));
 const UserCardPage = Loadable(lazy(() => import('views/application/users/UserCard')));
 
-// ✅ portfolio & wallet detail
-const PortfolioOverview = Loadable(lazy(() => import('views/portfolio')));
+// ✅ wallet detail (keep if you want it here; KinkoRoutes also defines it)
 const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
 
 const ApplicationRoutes = {
@@ -81,10 +80,9 @@ const ApplicationRoutes = {
       ]
     },
 
-    // ✅ portfolio lives directly under dashboard
-    { path: 'portfolio', element: <PortfolioOverview /> },
+    // ⛔ Removed: { path: 'portfolio', element: <PortfolioOverview /> },
 
-    // ✅ wallet detail (still under dashboard for consistent layout)
+    // ✅ wallet detail (optional here; KinkoRoutes also has it)
     { path: 'wallet/:address', element: <WalletDetail /> }
   ]
 };

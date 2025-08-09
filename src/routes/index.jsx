@@ -21,17 +21,18 @@ const PagesLanding = Loadable(lazy(() => import('views/Landing')));
 
 const router = createBrowserRouter(
   [
-    // Landing-only group (no sidebar)
+    // Landing-only group (marketing footer, no sidebar)
     {
       path: '/',
       element: <SimpleLayout />,
       children: [
         { index: true, element: <PagesLanding /> },
         { path: 'landing', element: <PagesLanding /> }
+        // ⛔ DO NOT put /portfolio here
       ]
     },
 
-    // All dashboard content (with sidebar/header)
+    // Main app (dashboard layout + sidebar)
     ApplicationRoutes,
     AdminPanelRoutes,
     NavigationRoutes,
@@ -41,11 +42,9 @@ const router = createBrowserRouter(
     PagesRoutes,
     OtherRoutes,
     ChartMapRoutes,
-    KinkoRoutes
+    KinkoRoutes // ✅ /portfolio lives here
   ],
-  {
-    basename: import.meta.env.VITE_APP_BASE_NAME
-  }
+  { basename: import.meta.env.VITE_APP_BASE_NAME }
 );
 
 export default router;

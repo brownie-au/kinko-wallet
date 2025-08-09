@@ -1,39 +1,38 @@
+// src/routes/KinkoRoutes.jsx
 import { lazy } from 'react';
 import DashboardLayout from 'layout/Dashboard';
 import Loadable from 'components/Loadable';
+import { WalletProvider } from 'contexts/WalletContext';
 
-// Kinko Wallet Pages
+// Wallet pages
 const WalletDashboard = Loadable(lazy(() => import('views/wallet/WalletDashboard')));
-const WalletManage = Loadable(lazy(() => import('views/wallet/WalletManage')));
-const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
-const PortfolioDashboard = Loadable(lazy(() => import('views/PortfolioDashboard')));
+const WalletManage    = Loadable(lazy(() => import('views/wallet/WalletManage')));
+const WalletDetail    = Loadable(lazy(() => import('views/wallet/WalletDetail')));
+
+// View All (NEW)
+const Portfolio       = Loadable(lazy(() => import('views/portfolio/Portfolio')));
 
 const KinkoRoutes = {
   path: '/',
   element: <DashboardLayout />,
   children: [
-    // Wallet Dashboard Pages
     {
       path: 'wallets',
       children: [
-        {
-          index: true,
-          element: <WalletDashboard />
-        },
-        {
-          path: 'manage',
-          element: <WalletManage />
-        }
+        { index: true, element: <WalletDashboard /> },
+        { path: 'manage', element: <WalletManage /> }
       ]
     },
-    {
-      path: 'wallet/:address',
-      element: <WalletDetail />
-    },
-    // Portfolio Dashboard Route
+    { path: 'wallet/:address', element: <WalletDetail /> },
+
+    // View All -> always render the new Portfolio page
     {
       path: 'portfolio',
-      element: <PortfolioDashboard />
+      element: (
+        <WalletProvider>
+          <Portfolio />
+        </WalletProvider>
+      )
     }
   ]
 };

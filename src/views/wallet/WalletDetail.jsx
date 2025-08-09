@@ -16,12 +16,14 @@ import {
 } from '../../utils/uiState';
 
 // ----------------------------- utils -----------------------------
-const fmtUSD = (n) =>
-  (Number(n) || 0).toLocaleString(undefined, {
-    style: 'currency',
-    currency: 'USD',
+// Force "USD $12,345.67"
+const fmtUSD = (n) => {
+  const amt = (Number(n) || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+  return `USD $${amt}`;
+};
 
 const fmtNum = (n) =>
   (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
