@@ -498,7 +498,7 @@
       top: $header-height;
 
       .header-wrapper {
-        background: var(pc-header-background);
+        background: var(--pc-header-background);
         position: relative;
         z-index: 5;
       }
@@ -585,3 +585,32 @@
 // ============================
 //   4. header css end
 // ============================
+
+/* Visibility guards for the two header sidebar toggles */
+@media (min-width: 1025px) {
+  .pc-header .pc-sidebar-popup { display: none !important; }  /* hide mobile hamburger on desktop */
+}
+@media (max-width: 1024px) {
+  .pc-header .pc-sidebar-collapse { display: none !important; } /* hide desktop hamburger on mobile */
+}
+
+/* --- Mobile/off‑canvas behavior fix ----------------------------------- */
+@media (max-width: 1024px) {
+  /* Sidebar is off-canvas by default */
+  .pc-sidebar {
+    left: -#{$sidebar-width};
+    transition: left 0.15s ease-in-out;
+  }
+
+  /* When the app sets the "open" class, slide it in */
+  /* (Template commonly uses .mob-sidebar-active on <body> or .pc-sidebar) */
+  .mob-sidebar-active .pc-sidebar,
+  .pc-sidebar.mob-sidebar-active {
+    left: 0;
+  }
+
+  /* Content and header should not reserve sidebar width on mobile */
+  .pc-header { left: 0; }
+  .pc-container,
+  .pc-content { margin-left: 0; }
+}

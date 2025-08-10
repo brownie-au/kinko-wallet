@@ -11,7 +11,13 @@ import { fetchEthereumTokens } from '../../services/ethereumService.js';
 import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 
 import wallets from '../../data/wallets.js';
-import { setWalletCache } from '../../utils/walletCache';
+import {
+  setWalletCache,
+  getWalletCache,
+  clearWalletCache,
+  clearWalletPrefix,
+  WALLET_CACHE_DEFAULT_TTL
+} from '../../utils/walletCache';
 
 import {
   getLastSection,
@@ -101,18 +107,6 @@ function resolveWalletName(address) {
   return rec?.name || rec?.label || rec?.title || rec?.nickname || 'Wallet';
 }
 
-function resolveDefaultChain(address) {
-  const a = (address || '').toLowerCase();
-  if (!a) return 'eth';
-  const rec = findAnyWalletRecord(a);
-  if (!rec) return 'eth';
-  const raw =
-    rec.chain ?? rec.network ?? rec.net ??
-    (typeof rec.chainId === 'number' ? String(rec.chainId) : rec.chainId);
-  return normalizeChain(raw);
-}
-
-// Derive a stable "group id" for sticky chip storage.
 function resolveGroupId(address) {
   const rec = findAnyWalletRecord((address || '').toLowerCase()) || {};
   return (
@@ -160,7 +154,7 @@ const QrIcon = () => (
   </svg>
 );
 
-// ---- loading shimmer (slower 2.6s) ----
+// ---- loading shimmer ----
 const LoadingStyles = () => (
   <style>{`
     @keyframes kinkoShimmer {
@@ -206,7 +200,7 @@ const LoadingRow = ({ label = 'Loading…', colSpan = 5 }) => (
   </tr>
 );
 
-// ---- unified chip/pill styling (≈20% bigger) ----
+// ---- unified chip/pill styling ----
 const CHIP_STYLE = {
   border: 'none',
   borderRadius: 10,
@@ -230,6 +224,7 @@ const Chip = ({ active, label, onClick }) => (
 // ==============================  PAGE  ==============================
 export default function WalletDetail() {
   const { address = '' } = useParams();
+  const walletName = useMemo(() => resolveWalletName(address), [address]);
 
   useEffect(() => { setLastSection('wallets'); }, []);
 
@@ -241,8 +236,7 @@ export default function WalletDetail() {
   const [sortKey, setSortKey] = useState('value');
   const [sortDir, setSortDir] = useState('desc');
   const [showQR, setShowQR] = useState(false);
-
-  const walletName = useMemo(() => resolveWalletName(address), [address]);
+  const [refreshBump, setRefreshBump] = useState(0); // manual refresh trigger
 
   // Sticky chip logic
   const groupId = useMemo(() => resolveGroupId(address), [address]);
@@ -271,7 +265,7 @@ export default function WalletDetail() {
   const onChipChange = (code) => { setActiveChain(code); setWalletNetChip(groupId, code); };
 
   // Normalise any token for cache format
-  const mapTokenForCache = (t) => {
+  const mapTokenForCache = (t, chainHint) => {
     const priceUsd = Number(t.priceUsd ?? t.price ?? 0);
     const amount   = Number(t.amount ?? 0);
     const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
@@ -279,9 +273,9 @@ export default function WalletDetail() {
       symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
       name: t.name || t.symbol || 'Token',
       amount, priceUsd, valueUsd,
-      contract: t.contract,
-      logo: t.logo,
-      chain: t.chain ?? activeChain
+      contract: t.contract || t.address || null,
+      logo: t.logo || t.iconUrl || null,
+      chain: t.chain ?? chainHint
     };
   };
 
@@ -331,7 +325,6 @@ export default function WalletDetail() {
   // ---- adapt ETH list (ethereumService -> UI) ----
   const adaptEthFromList = (rows) => {
     const list = Array.isArray(rows) ? rows.slice() : [];
-    // ethereumService returns native ETH as first element with symbol 'ETH' / address 'native'
     const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
     const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
 
@@ -380,7 +373,7 @@ export default function WalletDetail() {
       const rows = await fetchEthereumTokens(address); // Ethplorer + Dexscreener
       return adaptEthFromList(rows);
     }
-    // base via Moralis (balances+prices)
+    // base via Moralis (balances + prices)
     const res = await getPortfolioWithPrices(address, chainCode);
     const nat = res?.native
       ? {
@@ -404,58 +397,105 @@ export default function WalletDetail() {
     return { native: nat, tokens: toks, totalUSD };
   }
 
-  // fetch -> set state -> cache
+  // --------- caching helpers ----------
+  const CHAINS_FOR_ALL = ['eth', 'base', 'pulse'];
+  const cacheKey = (chain) => `${address}:${chain}`;
+
+  // Try to hydrate UI from cache instantly; return {hadCache, anyStale}
+  function tryHydrateFromCache(chain) {
+    if (!address) return { hadCache: false, anyStale: false };
+    if (chain === 'all') {
+      let mergedTokens = [];
+      let totalUsd = 0;
+      let had = false;
+      let stale = false;
+      CHAINS_FOR_ALL.forEach((c) => {
+        const snap = getWalletCache(cacheKey(c), { maxAge: WALLET_CACHE_DEFAULT_TTL });
+        if (snap && Array.isArray(snap.tokens)) {
+          had = true;
+          stale = stale || !!snap.stale;
+          mergedTokens = mergedTokens.concat(snap.tokens.map((t) => ({ ...t, chain: t.chain || c })));
+          totalUsd += Number(snap.totalUsd || 0);
+        }
+      });
+      if (had) {
+        setNative(null);
+        setTokens(mergedTokens);
+        document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUsd)}`;
+        setLoading(false);
+      }
+      return { hadCache: had, anyStale: stale };
+    }
+
+    const snap = getWalletCache(cacheKey(chain), { maxAge: WALLET_CACHE_DEFAULT_TTL });
+    if (snap && Array.isArray(snap.tokens)) {
+      setNative(null);
+      setTokens(snap.tokens.map((t) => ({ ...t, chain: t.chain || chain })));
+      document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(Number(snap.totalUsd || 0))}`;
+      setLoading(false);
+      return { hadCache: true, anyStale: !!snap.stale };
+    }
+    return { hadCache: false, anyStale: false };
+  }
+
+  // Cache writer
+  function writeCache(chain, result) {
+    const { tokens: tok, native: nat } = result || { tokens: [], native: null };
+    const cachedTokens = [
+      ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' }, chain)] : []),
+      ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : []),
+    ];
+    const cachedTotal = Number.isFinite(result?.totalUSD)
+      ? Number(result.totalUSD)
+      : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
+
+    setWalletCache(cacheKey(chain), {
+      chain,
+      tokens: cachedTokens,
+      totalUsd: cachedTotal
+    });
+  }
+
+  // fetch -> set state -> cache (but show cache first if we have it)
   useEffect(() => {
     let dead = false;
 
     async function load() {
+      setErr('');
+      setLoading(true);
+
+      // 1) Instant hydrate from cache (if present)
+      const { hadCache, anyStale } = tryHydrateFromCache(activeChain);
+
+      // 2) Network revalidation if no cache or stale (or manual refresh bump)
       try {
-        setLoading(true);
-        setErr('');
-        setNative(null);
-        setTokens([]);
+        if (!hadCache || anyStale) {
+          let result;
+          if (activeChain === 'all') {
+            const parts = await Promise.allSettled(CHAINS_FOR_ALL.map(fetchOneChain));
+            const ok = parts
+              .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null))
+              .filter(Boolean);
 
-        let result;
-        if (activeChain === 'all') {
-          const chainsWanted = ['eth', 'base', 'pulse'];
-          const parts = await Promise.allSettled(chainsWanted.map(fetchOneChain));
-          const ok = parts
-            .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: chainsWanted[i] } : null))
-            .filter(Boolean);
+            // write each chain to its own cache
+            ok.forEach((r) => writeCache(r._c, r));
 
-          const natRows = ok.map((r) => r.native).filter(Boolean);
-          const tokRows = ok.flatMap((r) => r.tokens || []);
-          const totalUSD = ok.reduce((s, r) => s + (Number(r.totalUSD) || 0), 0);
+            const natRows = ok.map((r) => r.native).filter(Boolean);
+            const tokRows = ok.flatMap((r) => r.tokens || []);
+            const totalUSD = ok.reduce((s, r) => s + (Number(r.totalUSD) || 0), 0);
+            result = { native: null, tokens: [...natRows, ...tokRows], totalUSD };
+          } else {
+            result = await fetchOneChain(activeChain);
+            writeCache(activeChain, result);
+          }
 
-          result = { native: null, tokens: [...natRows, ...tokRows], totalUSD };
-        } else {
-          result = await fetchOneChain(activeChain);
+          if (!dead) {
+            const { tokens: tok, native: nat, totalUSD } = result || { tokens: [], native: null, totalUSD: 0 };
+            setNative(nat ? { ...nat } : null);
+            setTokens(Array.isArray(tok) ? tok : []);
+            document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUSD)}`;
+          }
         }
-
-        const { tokens: tok, native: nat, totalUSD } = result || { tokens: [], native: null, totalUSD: 0 };
-
-        if (!dead) {
-          setNative(nat ? { ...nat } : null);
-          setTokens(Array.isArray(tok) ? tok : []);
-          document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUSD)}`;
-        }
-
-        // cache snapshot for View All
-        try {
-          const cachedTokens = [
-            ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' })] : []),
-            ...(Array.isArray(tok) ? tok.map(mapTokenForCache) : []),
-          ];
-          const cachedTotal = Number.isFinite(result?.totalUSD)
-            ? Number(result.totalUSD)
-            : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
-
-          setWalletCache(`${address}:${activeChain}`, {
-            chain: activeChain,
-            tokens: cachedTokens,
-            totalUsd: cachedTotal
-          });
-        } catch { /* ignore */ }
       } catch (e) {
         if (!dead) setErr(e.message || `Failed to load ${activeChain.toUpperCase()} data`);
       } finally {
@@ -465,7 +505,7 @@ export default function WalletDetail() {
 
     if (address) load();
     return () => { dead = true; };
-  }, [address, walletName, activeChain]);
+  }, [address, walletName, activeChain, refreshBump]);
 
   // ----------------------------- table data & sorting -----------------------------
   const items = useMemo(() => {
@@ -526,6 +566,18 @@ export default function WalletDetail() {
 
   const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
 
+  // Manual refresh: clear caches for this wallet and refetch
+  const onRefresh = () => {
+    if (!address) return;
+    // nuke only relevant chain(s)
+    if (activeChain === 'all') {
+      clearWalletPrefix(address);
+    } else {
+      clearWalletCache(`${address}:${activeChain}`);
+    }
+    setRefreshBump((n) => n + 1);
+  };
+
   // ----------------------------- render -----------------------------
   return (
     <>
@@ -582,7 +634,7 @@ export default function WalletDetail() {
           <Chip
             label="Refresh"
             active={false}
-            onClick={() => window.location.reload()}
+            onClick={onRefresh}
           />
         </Col>
       </Row>
@@ -645,7 +697,7 @@ export default function WalletDetail() {
                   </thead>
 
                   <tbody>
-                    {loading && <LoadingRow label={`Loading ${standardLabel}…`} colSpan={5} />}
+                    {loading && <LoadingRow label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} colSpan={5} />}
                     {!loading && err && <tr><td colSpan={5} className="text-danger py-4 text-center">{err}</td></tr>}
                     {!loading && !err && items.length === 0 && (
                       <tr><td colSpan={5} className="py-4 text-center">No tokens found.</td></tr>
@@ -700,7 +752,7 @@ export default function WalletDetail() {
                               className="badge bg-secondary"
                               style={{ cursor: t.contract ? 'pointer' : 'default' }}
                               title={t.contract ? 'Copy contract' : undefined}
-                              onClick={() => t.contract && copy(t.contract)}
+                              onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
                             >
                               {t.contract ? short(t.contract) : 'native'}
                             </span>
@@ -730,7 +782,7 @@ export default function WalletDetail() {
             src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(address)}`}
           />
           <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{address}</div>
-          <Button className="mt-3" onClick={() => { copy(address); setShowQR(false); }}>
+          <Button className="mt-3" onClick={() => { navigator.clipboard?.writeText(address); setShowQR(false); }}>
             Copy Address
           </Button>
         </Modal.Body>

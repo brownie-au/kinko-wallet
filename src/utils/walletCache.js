@@ -1,25 +1,23 @@
 // src/utils/walletCache.js
-const CACHE_PREFIX = 'kw:wallet-cache:'; // one key per wallet
-const DEFAULT_TTL_MS = 10 * 60 * 1000;   // 10 minutes (tweak as you like)
+const CACHE_PREFIX = 'kw:wallet-cache:'; // one key per wallet(+chain)
+const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 30 minutes
 
 /** Save a wallet snapshot (tokens, totals, chain, etc.) */
-export function setWalletCache(address, payload) {
-  if (!address) return;
-  const key = CACHE_PREFIX + address.toLowerCase();
+export function setWalletCache(key, payload) {
+  if (!key) return;
   const data = { ...payload, updatedAt: Date.now() };
-  localStorage.setItem(key, JSON.stringify(data));
+  localStorage.setItem(CACHE_PREFIX + key.toLowerCase(), JSON.stringify(data));
 }
 
-/** Read a wallet snapshot. If maxAge is provided, stale is still returned (we want "sticky") */
-export function getWalletCache(address, { maxAge = DEFAULT_TTL_MS } = {}) {
-  if (!address) return null;
-  const key = CACHE_PREFIX + address.toLowerCase();
+/** Read a wallet snapshot. Returns stale data too (sticky), with .stale flag. */
+export function getWalletCache(key, { maxAge = DEFAULT_TTL_MS } = {}) {
+  if (!key) return null;
+  const k = CACHE_PREFIX + key.toLowerCase();
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(k);
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data || !data.updatedAt) return null;
-    // We *keep* stale data (sticky), but you can check staleness via .stale
     const stale = Date.now() - data.updatedAt > maxAge;
     return { ...data, stale };
   } catch {
@@ -27,13 +25,25 @@ export function getWalletCache(address, { maxAge = DEFAULT_TTL_MS } = {}) {
   }
 }
 
-/** Optional: clear one wallet’s cache */
-export function clearWalletCache(address) {
-  if (!address) return;
-  localStorage.removeItem(CACHE_PREFIX + address.toLowerCase());
+/** Clear one wallet(+chain) cache */
+export function clearWalletCache(key) {
+  if (!key) return;
+  localStorage.removeItem(CACHE_PREFIX + key.toLowerCase());
 }
 
-/** Optional: read all wallet caches (useful for debugging) */
+/** Clear all cache entries for a wallet across chains (prefix match) */
+export function clearWalletPrefix(address) {
+  if (!address) return;
+  const prefix = CACHE_PREFIX + address.toLowerCase();
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(prefix)) toRemove.push(k);
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k));
+}
+
+/** Debug helper: read all wallet caches */
 export function getAllWalletCaches() {
   const out = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -41,9 +51,11 @@ export function getAllWalletCaches() {
     if (k && k.startsWith(CACHE_PREFIX)) {
       try {
         const data = JSON.parse(localStorage.getItem(k) || 'null');
-        out.push({ address: k.replace(CACHE_PREFIX, ''), ...data });
+        out.push({ key: k.replace(CACHE_PREFIX, ''), ...data });
       } catch {}
     }
   }
   return out;
 }
+
+export const WALLET_CACHE_DEFAULT_TTL = DEFAULT_TTL_MS;
