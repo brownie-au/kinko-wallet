@@ -1,26 +1,22 @@
-// src/components/PortfolioIdModal.jsx
 import { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { loadPortfolio } from '../services/syncService.js';
-import { useNavigate } from 'react-router-dom';
+import { useWallets } from '../contexts/WalletContext.jsx';
 
 export default function PortfolioIdModal({ show, onHide }) {
+  const { replaceWallets } = useWallets();
   const [id, setId] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
 
   const submit = async () => {
     try {
       setBusy(true); setErr('');
-      const { wallets } = await loadPortfolio(id.trim().toUpperCase()); // this mirrors to local inside the service
-      if (!Array.isArray(wallets)) throw new Error('Invalid Portfolio data');
+      const { wallets } = await loadPortfolio(id.trim().toUpperCase());
+      replaceWallets(wallets);
       onHide?.();
-      // Ensure contexts re-read localStorage (kept simple)
-      navigate('/wallets/manage');
-      setTimeout(() => window.location.reload(), 0);
     } catch (e) {
-      setErr(e?.message || 'Invalid or not found Portfolio ID.');
+      setErr(e?.message || 'Remote load failed.');
     } finally {
       setBusy(false);
     }
@@ -28,10 +24,7 @@ export default function PortfolioIdModal({ show, onHide }) {
 
   return (
     <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Use Portfolio ID</Modal.Title>
-      </Modal.Header>
-
+      <Modal.Header closeButton><Modal.Title>Use Portfolio ID</Modal.Title></Modal.Header>
       <Modal.Body>
         <Form.Group className="mb-3">
           <Form.Label>Enter Portfolio ID</Form.Label>
@@ -43,15 +36,12 @@ export default function PortfolioIdModal({ show, onHide }) {
           />
         </Form.Group>
         {err && <Alert variant="danger" className="mb-0">{err}</Alert>}
-        <div className="text-muted small mt-2">
-          This replaces the wallets on this device with those from the Portfolio ID.
-        </div>
+        <div className="text-muted small mt-2">Loads wallets from the remote store and replaces current session.</div>
       </Modal.Body>
-
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={onHide} disabled={busy}>Cancel</Button>
         <Button variant="primary" onClick={submit} disabled={busy || !id.trim()}>
-          {busy ? (<><Spinner size="sm" className="me-2" />Adding…</>) : 'Add / Open'}
+          {busy ? (<><Spinner size="sm" className="me-2" />Loading…</>) : 'Load'}
         </Button>
       </Modal.Footer>
     </Modal>
