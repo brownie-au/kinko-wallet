@@ -1,3 +1,4 @@
+// src/views/wallet/WalletManage.jsx
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Form, Row, Col, ListGroup, Alert } from 'react-bootstrap';
 import { loadWallets, saveWallets } from '../../utils/walletStorage';
@@ -47,10 +48,11 @@ const WalletManage = () => {
 
   return (
     <div>
-      <h2 className="mb-4 text-center">Manage Wallets</h2>
+      {/* Left-aligned title (remove text-center) */}
+      <h2 className="mb-3">Manage Wallets</h2>
 
-      {/* Centered action row */}
-      <div className="mb-3 d-flex justify-content-center gap-2 flex-wrap">
+      {/* Left-aligned action row (no center classes) */}
+      <div className="mb-3 d-flex justify-content-start gap-2 flex-wrap">
         <Button
           variant="outline-secondary"
           className="rounded-pill"
