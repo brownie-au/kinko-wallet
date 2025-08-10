@@ -13,6 +13,12 @@ const HIDE_USD_MIN = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0.01);
 const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
 const DEBUG = !!import.meta.env.VITE_ETH_DEBUG;
 
+// --- blocklist of scam/dust tokens (lowercased contract addresses) ---
+const TOKEN_BLOCKLIST = new Set([
+  '0x3fc29836e84e471a053d2d9e80494a867d670ead', // Ethereum Games (scam)
+  '0x66a3c2fa3e467aa586e90912f977e648589cabaf'  // AI Chain Coin (scam)
+]);
+
 // ---------- helpers ----------
 const fromUnits = (v, d = 18) => {
   if (v == null) return 0;
@@ -153,6 +159,9 @@ async function fetchEthereumTokensLive(address) {
         iconUrl: null
       };
     });
+
+    // 🔒 blocklist filter (remove scam/dust tokens)
+    baseList = baseList.filter(t => !TOKEN_BLOCKLIST.has((t.address || '').toLowerCase()));
 
     // 2) native ETH
     const ethUsd = await getETHPriceUSD();

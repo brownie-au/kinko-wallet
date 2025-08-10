@@ -181,6 +181,27 @@
   background: transparent !important;
 }
 
+/* ===== Sidebar Wallet Name Fix (no wrap + ellipsis) ===== */
+.sidebar .nav-item,
+.sidebar .list-group-item {
+  min-width: 0; /* ensures flexbox allows shrinking */
+}
+
+.sidebar .nav-item a,
+.sidebar .list-group-item a {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 10px; /* reduced padding for more visible text */
+}
+
+/* JSX tip: add title attr to show full text on hover
+   <Link className="wallet-link" title={`${fullAddress} – ${walletName}`}>
+     {shortAddr} – {walletName}
+   </Link>
+*/
+
 [data-pc-theme='dark'] {
   .rc-slider-rail {
     background-color: #1a1b1d;
@@ -230,19 +251,6 @@
     color: var(--bs-white) !important;
   }
 
-  // advance on notification
-  // .Toastify__toast-theme--light {
-  //   background: #2d2f31;
-  //   .Toastify__toast-body .img-thumbnail {
-  //     background-color: #2d2f31;
-  //     border: none;
-  //   }
-  //   .Toastify__close-button--light {
-  //     color: var(--bs-white);
-  //     opacity: 0.8;
-  //   }
-  // }
-
   .react-calendar__tile:disabled {
     background-color: #393b3f;
   }
@@ -269,4 +277,49 @@
       background-color: #919090;
     }
   }
+}
+/* ===== FINAL NUKE: Datta Able sidebar no-wrap + ellipsis ===== */
+
+/* Flex items must be allowed to shrink */
+.pc-sidebar,
+.pc-sidebar * {
+  min-width: 0;
+}
+
+/* Link rows are flex; make them the overflow boundary */
+.pc-sidebar .pc-item .pc-link,
+.pc-sidebar .pc-submenu .pc-item .pc-link {
+  display: flex;           /* Datta uses flex internally */
+  align-items: center;
+  overflow: hidden;        /* boundary for ellipsis */
+  white-space: nowrap;     /* no wrapping */
+  padding: 6px 10px;       /* tighter */
+}
+
+/* Icon should never grow */
+.pc-sidebar .pc-item .pc-link .pc-micon {
+  flex: 0 0 auto;
+}
+
+/* The text element MUST be able to shrink and ellipsize */
+.pc-sidebar .pc-item .pc-link .pc-mtext {
+  flex: 1 1 auto;          /* allow shrink */
+  min-width: 0;            /* critical for flex ellipsis */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Also hit plain <a> text in nested lists just in case */
+.pc-sidebar .list-group-item a,
+.pc-sidebar .nav-item a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Remove the unwanted green pc-dot element */
+.pc-sidebar .pc-dot {
+  display: none !important;
 }
