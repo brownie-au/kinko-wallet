@@ -47,21 +47,14 @@ const WalletManage = () => {
 
   return (
     <div>
-      <h2 className="mb-4">Manage Wallets</h2>
+      <h2 className="mb-4 text-center">Manage Wallets</h2>
 
-      {/* Top action row */}
-      <div className="mb-3 d-flex gap-2 flex-wrap">
-        <Button
-          variant="outline-light"
-          onClick={() => setShowUseId(true)}
-        >
+      {/* Centered action row */}
+      <div className="mb-3 d-flex justify-content-center gap-2 flex-wrap">
+        <Button variant="outline-secondary" onClick={() => setShowUseId(true)}>
           Use Portfolio ID
         </Button>
-
-        <Button
-          variant="outline-light"
-          onClick={() => setShowCreateId(true)}
-        >
+        <Button variant="outline-secondary" onClick={() => setShowCreateId(true)}>
           Create / Update Portfolio ID
         </Button>
       </div>
