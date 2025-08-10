@@ -1,7 +1,7 @@
 // src/components/PortfolioIdModal.jsx
 import { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
-import { loadPortfolio, writeLocalWallets, saveSyncId } from '../services/syncService.js';
+import { loadPortfolio } from '../services/syncService.js';
 import { useNavigate } from 'react-router-dom';
 
 export default function PortfolioIdModal({ show, onHide }) {
@@ -13,12 +13,11 @@ export default function PortfolioIdModal({ show, onHide }) {
   const submit = async () => {
     try {
       setBusy(true); setErr('');
-      const data = await loadPortfolio(id.trim().toUpperCase());
-      writeLocalWallets(data.wallets || []);
-      saveSyncId(id.trim().toUpperCase());
+      const { wallets } = await loadPortfolio(id.trim().toUpperCase()); // this mirrors to local inside the service
+      if (!Array.isArray(wallets)) throw new Error('Invalid Portfolio data');
       onHide?.();
-      // Navigate & force a reload so contexts pick up new wallets
-      navigate('/dashboard/default');
+      // Ensure contexts re-read localStorage (kept simple)
+      navigate('/wallets/manage');
       setTimeout(() => window.location.reload(), 0);
     } catch (e) {
       setErr(e?.message || 'Invalid or not found Portfolio ID.');

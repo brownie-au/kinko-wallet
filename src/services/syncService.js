@@ -1,21 +1,19 @@
 // src/services/syncService.js
-// Remote-backed sync when VITE_SYNC_API_BASE is set; mirrors to localStorage.
-// Very loud logs so we can see exactly what's happening in DevTools.
+// Local-first sync. If VITE_SYNC_API_BASE is set, we also push/pull to a backend.
+// Always mirror to the 'wallets' key so the UI stays in sync.
 
 const API = import.meta.env.VITE_SYNC_API_BASE || '';
 
-const log = (...args) => console.log('%c[SYNC]', 'color:#0bf', ...args);
-const warn = (...args) => console.warn('%c[SYNC]', 'color:#fb0', ...args);
-const err  = (...args) => console.error('%c[SYNC]', 'color:#f55', ...args);
+const log  = (...a) => console.log('%c[SYNC]', 'color:#0bf', ...a);
+const warn = (...a) => console.warn('%c[SYNC]', 'color:#fb0', ...a);
+const err  = (...a) => console.error('%c[SYNC]', 'color:#f55', ...a);
 
-// ---------------- local wallets mirror (existing key) ----------------
+/* -------------------- local UI mirror (wallets key) -------------------- */
 export function readLocalWallets() {
   try {
     const out = JSON.parse(localStorage.getItem('wallets') || '[]');
-    log('readLocalWallets()', out);
     return Array.isArray(out) ? out : [];
-  } catch (e) {
-    err('readLocalWallets() parse error', e);
+  } catch {
     return [];
   }
 }
@@ -28,113 +26,118 @@ export function writeLocalWallets(wallets) {
   }
 }
 
-// ---------------- sync id helpers ----------------
+/* -------------------- sync id helpers -------------------- */
 const SYNC_ID_KEY = 'kinko:sync:id';
+const bundleKey = (id) => `kinko:sync:local:${id}`;
 
 export function saveSyncId(id) {
   localStorage.setItem(SYNC_ID_KEY, id || '');
   log('saveSyncId()', id);
 }
 export function getSyncId() {
-  const id = localStorage.getItem(SYNC_ID_KEY) || '';
-  log('getSyncId() ->', id);
-  return id;
+  return localStorage.getItem(SYNC_ID_KEY) || '';
 }
 export function clearSyncId() {
   localStorage.removeItem(SYNC_ID_KEY);
-  log('clearSyncId()');
 }
 
-export function hasRemote() {
-  const ok = Boolean(API);
-  log('hasRemote()', ok, API || '(none)');
-  return ok;
+/* -------------------- bundle helpers (local) -------------------- */
+export function readSyncBundle(id) {
+  if (!id) return { wallets: [], updatedAt: 0 };
+  try {
+    const raw = localStorage.getItem(bundleKey(id));
+    const obj = raw ? JSON.parse(raw) : null;
+    const wallets = Array.isArray(obj?.wallets) ? obj.wallets : [];
+    return { wallets, updatedAt: obj?.updatedAt || 0 };
+  } catch (e) {
+    warn('readSyncBundle() parse error', e);
+    return { wallets: [], updatedAt: 0 };
+  }
 }
 
-// ---------------- remote API helpers ----------------
-// Expected server:
-//   GET  {API}/v1/portfolio/:id           -> 200 { wallets: [...], updatedAt, checksum }
-//   PUT  {API}/v1/portfolio/:id  body:{ wallets } -> 200 { ok:true, updatedAt, checksum }
-// CORS must allow your app origin.
+export function writeSyncBundle(id, wallets) {
+  if (!id) return;
+  const payload = { wallets: Array.isArray(wallets) ? wallets : [], updatedAt: Date.now() };
+  localStorage.setItem(bundleKey(id), JSON.stringify(payload));
+  log('writeSyncBundle()', { id, count: payload.wallets.length });
+}
 
+/* -------------------- remote helpers (optional) -------------------- */
+function hasRemote() {
+  return Boolean(API);
+}
 async function getJSON(url) {
-  const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
-  if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
-  return res.json();
+  const r = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`GET ${url} -> ${r.status}`);
+  return r.json();
 }
 async function putJSON(url, body) {
-  const res = await fetch(url, {
+  const r = await fetch(url, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body || {})
   });
-  if (!res.ok) throw new Error(`PUT ${url} -> ${res.status}`);
-  return res.json();
+  if (!r.ok) throw new Error(`PUT ${url} -> ${r.status}`);
+  return r.json();
 }
 
-// ---------------- public API used by modals ----------------
+/* -------------------- ID generator -------------------- */
+export function generatePortfolioId(len = 8) {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // avoid 0/O/I/1
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[(Math.random() * chars.length) | 0];
+  return out;
+}
+
+/* -------------------- public API -------------------- */
+// Load wallets by ID → mirror to 'wallets'
 export async function loadById(id) {
-  if (!id) {
-    warn('loadById() missing id');
-    return { wallets: [], source: 'none' };
+  id = (id || '').trim().toUpperCase();
+  if (!id) return { wallets: [], source: 'none' };
+
+  // Remote if configured, else local bundle
+  if (hasRemote()) {
+    const url = `${API.replace(/\/+$/, '')}/v1/portfolio/${encodeURIComponent(id)}`;
+    try {
+      const data = await getJSON(url);
+      const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+      writeLocalWallets(wallets);
+      saveSyncId(id);
+      return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
+    } catch (e) {
+      err('loadById remote FAIL, falling back to local bundle', e);
+    }
   }
 
-  if (!hasRemote()) {
-    // CURRENT BEHAVIOUR: local only (why cross-browser fails)
-    const wallets = readLocalWallets();
-    const note = '(local-only build: no VITE_SYNC_API_BASE)';
-    warn('loadById() remote unavailable', note);
-    return { wallets, source: 'local' };
-  }
-
-  const url = `${API.replace(/\/+$/, '')}/v1/portfolio/${encodeURIComponent(id)}`;
-  try {
-    log('loadById() -> GET', url);
-    const data = await getJSON(url);
-    const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
-    log('loadById() remote OK', { count: wallets.length, updatedAt: data?.updatedAt });
-    // mirror locally for offline/fast open
-    writeLocalWallets(wallets);
-    saveSyncId(id);
-    return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
-  } catch (e) {
-    err('loadById() remote FAIL', e);
-    // graceful fallback to local
-    const wallets = readLocalWallets();
-    return { wallets, source: 'fallback-local', error: e.message };
-  }
+  const { wallets } = readSyncBundle(id);
+  writeLocalWallets(wallets);
+  saveSyncId(id);
+  return { wallets, source: 'local-bundle' };
 }
 
+// Save wallets under ID → mirror to local + (optional) remote
 export async function saveById(id, wallets) {
-  if (!id) {
-    warn('saveById() missing id');
-    return { ok: false, error: 'missing id' };
-  }
+  id = (id || '').trim().toUpperCase();
+  if (!id) return { ok: false, error: 'missing id' };
 
+  // Always update local mirror + local bundle
   writeLocalWallets(wallets || []);
+  writeSyncBundle(id, wallets || []);
   saveSyncId(id);
 
-  if (!hasRemote()) {
-    warn('saveById() remote unavailable; saved local only');
-    return { ok: true, source: 'local-only' };
-  }
+  if (!hasRemote()) return { ok: true, source: 'local-only' };
 
-  const url = `${API.replace(/\/+$/, '')}/v1/portfolio/${encodeURIComponent(id)}`;
   try {
-    log('saveById() -> PUT', url, { count: (wallets || []).length });
+    const url = `${API.replace(/\/+$/, '')}/v1/portfolio/${encodeURIComponent(id)}`;
     const resp = await putJSON(url, { wallets: wallets || [] });
-    log('saveById() remote OK', resp);
     return { ok: true, source: 'remote', meta: resp };
   } catch (e) {
-    err('saveById() remote FAIL', e);
+    err('saveById remote FAIL, kept local mirror', e);
     return { ok: false, source: 'local-mirror', error: e.message };
   }
 }
-// ---- compatibility aliases for old imports ----
-export const loadPortfolio = loadById;
-export const savePortfolio = saveById;
 
-// If "createPortfolio" was previously used to both generate an ID and save wallets
-// here we alias it to saveById, assuming ID is already generated by UI.
-export const createPortfolio = saveById;
-
+/* ---- compatibility aliases ---- */
+export const loadPortfolio   = loadById;
+export const savePortfolio   = saveById;
+export const createPortfolio = saveById; // kept for legacy callers

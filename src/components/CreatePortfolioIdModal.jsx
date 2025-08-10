@@ -1,7 +1,13 @@
 // src/components/CreatePortfolioIdModal.jsx
 import { useEffect, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
-import { createPortfolio, savePortfolio, getSyncId } from '../services/syncService.js';
+import {
+  createPortfolio,
+  savePortfolio,
+  getSyncId,
+  generatePortfolioId,
+  readLocalWallets
+} from '../services/syncService.js';
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
   const [id, setId] = useState('');
@@ -20,12 +26,15 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
   const onCreateOrUpdate = async () => {
     try {
       setBusy(true); setMsg(''); setErr('');
+      const wallets = readLocalWallets(); // <-- always include the current wallets
+
       if (id) {
-        await savePortfolio(id);
+        await savePortfolio(id, wallets);
         setMsg('Updated your existing Portfolio ID with current wallets.');
       } else {
-        const res = await createPortfolio();
-        setId(res.id);
+        const newId = generatePortfolioId();
+        await createPortfolio(newId, wallets);
+        setId(newId);
         setMsg('Created a new Portfolio ID from your current wallets.');
       }
     } catch (e) {
