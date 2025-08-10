@@ -1,14 +1,12 @@
+// src/views/Landing.jsx
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import useTheme from '../hooks/useTheme.js';
 import PortfolioIdModal from '../components/PortfolioIdModal.jsx';
 import Logo from 'assets/images/logo-white.svg';
 import 'assets/scss/landing.scss';
 
 export default function LandingPage() {
   const [showUsePid, setShowUsePid] = useState(false);
-  const theme = useTheme();
-  const outlineVariant = theme === 'light' ? 'btn-outline-dark' : 'btn-outline-light';
 
   return (
     <div className="landing-page">
@@ -20,15 +18,18 @@ export default function LandingPage() {
           <p className="lp-tagline">Secure insights, no keys required.</p>
           <br />
 
-          {/* Centered CTA row */}
-          <div className="lp-cta d-flex justify-content-center gap-3 flex-wrap">
+          {/* Centered CTA row (hard-centered, ignores lp-cta left bias) */}
+          <div
+            className="lp-cta d-flex justify-content-center gap-3 flex-wrap"
+            style={{ marginLeft: 'auto', marginRight: 'auto', width: 'fit-content' }}
+          >
             <Link to="/dashboard/default" className="btn btn-primary btn-lg">
               Get Started
             </Link>
 
             <button
               type="button"
-              className={`btn ${outlineVariant} btn-lg`}
+              className="btn btn-outline-secondary btn-lg"
               onClick={() => setShowUsePid(true)}
             >
               Use Portfolio ID
@@ -38,7 +39,8 @@ export default function LandingPage() {
 
         <br />
         <div className="lp-copy text-center">
-          © {new Date().getFullYear()} Kinko Wallet — <span className="nowrap">Always stay in control.</span>
+          © {new Date().getFullYear()} Kinko Wallet —{' '}
+          <span className="nowrap">Always stay in control.</span>
         </div>
         <div className="lp-hero-divider" />
       </header>

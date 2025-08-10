@@ -51,10 +51,18 @@ const WalletManage = () => {
 
       {/* Centered action row */}
       <div className="mb-3 d-flex justify-content-center gap-2 flex-wrap">
-        <Button variant="outline-secondary" onClick={() => setShowUseId(true)}>
+        <Button
+          variant="outline-secondary"
+          className="rounded-pill"
+          onClick={() => setShowUseId(true)}
+        >
           Use Portfolio ID
         </Button>
-        <Button variant="outline-secondary" onClick={() => setShowCreateId(true)}>
+        <Button
+          variant="outline-secondary"
+          className="rounded-pill"
+          onClick={() => setShowCreateId(true)}
+        >
           Create / Update Portfolio ID
         </Button>
       </div>
