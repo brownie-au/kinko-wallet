@@ -5,6 +5,13 @@ import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainServ
 import { fetchEthereumTokens,  refreshEthereumTokens  } from './ethereumService';
 import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
 
+// Visibility threshold (USD). Default 0.01 if not set.
+const HIDE_USD_MIN = Number(
+  import.meta.env.VITE_PORTFOLIO_HIDE_USD_MIN ??
+  import.meta.env.VITE_HIDE_USD_MIN ??
+  0.01
+);
+
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 function toRow(sr, wallet) {
@@ -144,13 +151,24 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     breakdown.get(k).sort((a, b) => (b.amount || 0) - (a.amount || 0));
   }
 
-  const tokens = [...byKey.values()]
+  // Build token list, then apply visibility filter
+  const tokensAll = [...byKey.values()]
     .map((t) => ({ ...t, valueUsd: t.valueUsd || (t.amount || 0) * (t.priceUsd || 0) }))
     .sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
 
+  const tokens = tokensAll.filter((t) => (Number(t.valueUsd) || 0) >= HIDE_USD_MIN);
+
+  // Prune breakdown to only visible tokens
+  const visibleBreakdown = new Map();
+  for (const t of tokens) {
+    const k = tokenKey(t);
+    visibleBreakdown.set(k, breakdown.get(k) || []);
+  }
+
+  // Totals from visible tokens only
   const totalUsd = tokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
 
-  return { totalUsd, tokens, breakdown };
+  return { totalUsd, tokens, breakdown: visibleBreakdown };
 }
 
 // Totals helper (optional)
