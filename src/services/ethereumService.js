@@ -1,11 +1,11 @@
 // src/services/ethereumService.js
 // Ethereum balances via QuickNode RPC (native ETH + token methods)
 // with Moralis → Etherscan+on-chain → Ethplorer fallbacks for ERC-20s.
-// SAFE pricing: native ETH (ethPriceService) + ERC-20s (Dexscreener best-liquidity).
+// SAFE pricing: native ETH (CoinPaprika primary → ethPriceService fallback) + ERC-20s (Dexscreener best-liquidity).
 // Includes spam filtering: blocklist + "no price & no metadata" + optional min USD.
 
 import axios from 'axios';
-import { getEthUsdPrice } from './ethPriceService';
+import { getEthUsdPrice as getEthUsdPriceFallback } from './ethPriceService';
 import { enrichErc20Prices } from './ethErc20PriceService';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
@@ -16,6 +16,11 @@ const ETHERSCAN_BASE = 'https://api.etherscan.io/api';
 const ETHERSCAN_KEY = import.meta.env.VITE_ETHERSCAN_KEY || '';
 const MORALIS_BASE = import.meta.env.VITE_MORALIS_API_BASE || 'https://deep-index.moralis.io/api/v2';
 const MORALIS_KEY = import.meta.env.VITE_MORALIS_API_KEY || '';
+
+// ---- CoinPaprika (PRIMARY ETH PRICE) ----
+const PAPRIKA_BASE = 'https://api.coinpaprika.com/v1';
+const PAPRIKA_ETH_ID = 'eth-ethereum';
+const PRICE_CACHE_TTL_MS = Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60) * 1000;
 
 const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
 const DEBUG = !!import.meta.env.DEV;
@@ -94,6 +99,33 @@ const row = ({ address, symbol, name, decimals, balance }) => ({
   usd: 0
 });
 
+// ---------- Known token overrides (aliases/metadata fixes) ----------
+const EHEX_CONTRACT = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // HEX on Ethereum (eHEX)
+const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC on Ethereum
+
+const KNOWN_TOKENS = {
+  [EHEX_CONTRACT]: { symbol: 'eHEX', name: 'HEX (Ethereum)', decimals: 8 },
+  [USDC_CONTRACT]: { symbol: 'USDC', name: 'USD Coin', decimals: 6 }
+};
+
+function applyKnownTokenFixes(list = []) {
+  for (const t of list) {
+    if (!t || t.address === 'native') continue;
+    const addr = String(t.address || '').toLowerCase();
+    const fix = KNOWN_TOKENS[addr];
+    if (fix) {
+      t.symbol   = fix.symbol;
+      t.name     = fix.name;
+      t.decimals = Number.isFinite(fix.decimals) ? fix.decimals : t.decimals;
+      if (Number.isFinite(t.priceUSD) && Number.isFinite(t.balance)) {
+        const unit = Number(t.priceUSD) || Number(t.price) || 0;
+        t.usd = unit * Number(t.balance || 0);
+      }
+    }
+  }
+  return list;
+}
+
 // ---------- spam filter ----------
 function filterEthSpam(tokens) {
   const isBlocked = (addr) => {
@@ -120,10 +152,42 @@ function filterEthSpam(tokens) {
   });
 }
 
+// ---------- ETH price (Paprika primary → fallback) ----------
+async function getEthUsdFromPaprika() {
+  const cacheKey = 'price:eth:usd:paprika';
+  const cached = getCachedJSON(cacheKey, PRICE_CACHE_TTL_MS);
+  if (cached) return Number(cached);
+
+  try {
+    const { data } = await axios.get(`${PAPRIKA_BASE}/tickers/${PAPRIKA_ETH_ID}`, { timeout: 8000 });
+    const price = Number(data?.quotes?.USD?.price || 0);
+    if (price > 0) {
+      setCachedJSON(cacheKey, price);
+      return price;
+    }
+  } catch (e) {
+    log('Paprika price failed:', e?.message || e);
+  }
+  return 0;
+}
+
+async function getEthUsdPricePrimary() {
+  const p = await getEthUsdFromPaprika();
+  if (p > 0) return p;
+
+  // Fallback to your existing safe service
+  try {
+    const f = await getEthUsdPriceFallback();
+    return Number(f) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ---------- pricing enrichers ----------
 async function enrichEthPrice(tokens) {
   try {
-    const ethUsd = await getEthUsdPrice();
+    const ethUsd = await getEthUsdPricePrimary();
     if (!Array.isArray(tokens) || !(ethUsd > 0)) return tokens;
     const native = tokens.find(
       (t) => t.chain === 'eth' && (t.address === 'native' || (t.symbol || '').toUpperCase() === 'ETH')
@@ -375,7 +439,8 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
   if (!force) {
     const cached = getCachedJSON(key, CACHE_TTL_MS);
     if (cached) {
-      const priced = await enrichAllPrices(cached);
+      const fixed = applyKnownTokenFixes(cached);
+      const priced = await enrichAllPrices(fixed);
       const cleaned = filterEthSpam(priced);
       setCachedJSON(key, cleaned);
       return cleaned;
@@ -401,7 +466,10 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     erc20 = await fetchERC20sFromEthplorer(address);
   }
 
-  const result = await enrichAllPrices([nativeRow, ...erc20]);
+  const baseList = [nativeRow, ...erc20];
+  applyKnownTokenFixes(baseList);
+
+  const result = await enrichAllPrices(baseList);
   const cleaned = filterEthSpam(result);
   setCachedJSON(key, cleaned);
   return cleaned;
