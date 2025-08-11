@@ -1,228 +1,224 @@
 // src/services/ethereumService.js
-// Ethereum (mainnet): balances (Ethplorer), prices (Coinbase/Coingecko for ETH, Dexscreener for ERC-20), with caching.
+// Ethereum balances via QuickNode RPC (native ETH + token methods) with Ethplorer fallback for ERC-20s.
+// Adds SAFE pricing for native ETH only (via ethPriceService). Sets both priceUSD and price. ERC-20 prices remain 0.
 
 import axios from 'axios';
+import { getEthUsdPrice } from './ethPriceService';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
-const ETHPLORER     = 'https://api.ethplorer.io';
-const ETHPLORER_KEY = 'freekey'; // public, no signup
-const DEXSCREENER   = 'https://api.dexscreener.com/latest/dex';
+const QN_URL = import.meta.env.VITE_QUICKNODE_HTTP || '';
+const ETHPLORER = 'https://api.ethplorer.io';
+const ETHPLORER_KEY = import.meta.env.VITE_ETHPLORER_KEY || 'freekey';
 
-const STABLES = new Set(['USDC','USDT','DAI','FDUSD','TUSD','USDD','USDP']);
-const HIDE_USD_MIN = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0.01);
 const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
-const DEBUG = !!import.meta.env.VITE_ETH_DEBUG;
+const DEBUG = !!import.meta.env.DEV;
+const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
 
-// --- blocklist of scam/dust tokens (lowercased contract addresses) ---
-const TOKEN_BLOCKLIST = new Set([
-  '0x3fc29836e84e471a053d2d9e80494a867d670ead', // Ethereum Games (scam)
-  '0x66a3c2fa3e467aa586e90912f977e648589cabaf'  // AI Chain Coin (scam)
-]);
-
-// ---------- helpers ----------
-const fromUnits = (v, d = 18) => {
-  if (v == null) return 0;
-  const s = typeof v === 'bigint' ? v.toString() : String(v);
-  return Number(s) / Math.pow(10, Number(d || 18));
+// ---------- utils ----------
+const toBN = (hex) => {
+  if (!hex) return 0n;
+  const s = String(hex);
+  return s.startsWith('0x') ? BigInt(s) : BigInt(`0x${s}`);
 };
+const weiToEth = (weiBig) => Number(weiBig) / 1e18;
+const toNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
-const liq = (p) => Number(p?.liquidity?.usd || 0);
+// Default token row
+const row = ({ address, symbol, name, decimals, balance }) => ({
+  chain: 'eth',
+  address: address ? String(address).toLowerCase() : 'native',
+  symbol: symbol || '',
+  name: name || '',
+  decimals: Number(decimals ?? 18),
+  balance: Number(balance ?? 0),
+  priceUSD: 0,   // used by parts of the app
+  price: 0,      // some views expect `price`
+  usd: 0
+});
 
-// restrict to ethereum and to a specific token’s pairs
-function filterEthPairsForToken(addr, pairs) {
-  const a = (addr || '').toLowerCase();
-  return (pairs || [])
-    .filter(p => (p?.chainId || '').toLowerCase() === 'ethereum')
-    .filter(p =>
-      (p?.baseToken?.address || '').toLowerCase() === a ||
-      (p?.quoteToken?.address || '').toLowerCase() === a
+// Enrich just native ETH with USD price (runs for fresh and cached arrays)
+async function enrichEthPrice(tokens) {
+  try {
+    const ethUsd = await getEthUsdPrice(); // e.g., 4309.16
+    if (!Array.isArray(tokens) || !(ethUsd > 0)) return tokens;
+    const native = tokens.find(
+      (t) => t.chain === 'eth' && (t.address === 'native' || (t.symbol || '').toUpperCase() === 'ETH')
     );
-}
-
-// liquidity‑weighted USD price for a token from a bundle of pairs
-function usdForTokenFromPairs(addr, pairs) {
-  const a = (addr || '').toLowerCase();
-  const mine = filterEthPairsForToken(a, pairs);
-  if (!mine.length) return 0;
-
-  // prefer stable pairs
-  const stable = mine.filter(p => {
-    const isBase = (p?.baseToken?.address || '').toLowerCase() === a;
-    const otherSym = isBase ? p?.quoteToken?.symbol : p?.baseToken?.symbol;
-    return STABLES.has((otherSym || '').toUpperCase());
-  });
-
-  const src = (stable.length ? stable : mine)
-    .map(p => {
-      const isBase = (p?.baseToken?.address || '').toLowerCase() === a;
-      const baseUsd = Number(p?.priceUsd || 0);     // price of base token in USD provided by Dexscreener
-      const ratio   = Number(p?.price ?? 0);        // base/quote price ratio
-      // If the token is quote, invert using ratio
-      const usd = isBase ? baseUsd : (baseUsd && ratio ? baseUsd / ratio : 0);
-      return { usd, liq: liq(p) };
-    })
-    .filter(x => x.usd > 0 && x.liq > 0);
-
-  if (!src.length) return 0;
-  const num = src.reduce((s, r) => s + r.usd * r.liq, 0);
-  const den = src.reduce((s, r) => s + r.liq, 0);
-  return den > 0 ? num / den : 0;
-}
-
-// ---------- Native ETH price (robust) ----------
-export async function getETHPriceUSD() {
-  // 1) Coinbase spot
-  try {
-    const { data } = await axios.get('https://api.coinbase.com/v2/prices/ETH-USD/spot', { timeout: 8000 });
-    const p = Number(data?.data?.amount || 0);
-    if (p > 500 && p < 10000) return p;
-  } catch {}
-
-  // 2) CoinGecko simple/price
-  try {
-    const { data } = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd', { timeout: 8000 });
-    const p = Number(data?.ethereum?.usd || 0);
-    if (p > 500 && p < 10000) return p;
-  } catch {}
-
-  // 3) last ditch: 0
-  return 0;
-}
-
-// ---------- Ethplorer (balances) ----------
-async function fetchEthplorerAddressInfo(address) {
-  const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
-  const { data } = await axios.get(url, { timeout: 12000 });
-  return data || {};
-}
-
-export async function getETHNativeBalance(address) {
-  try {
-    const info = await fetchEthplorerAddressInfo(address);
-    return Number(info?.ETH?.balance || 0);
-  } catch { return 0; }
-}
-
-// ---------- Dexscreener ERC-20 pricing ----------
-async function dexPricesForBatch(addresses) {
-  const out = {};
-  const uniq = [...new Set((addresses || []).map(a => (a || '').toLowerCase()))].filter(Boolean);
-  const chunk = 25;
-  for (let i = 0; i < uniq.length; i += chunk) {
-    const batch = uniq.slice(i, i + chunk);
-    try {
-      const { data } = await axios.get(`${DEXSCREENER}/tokens/${batch.join(',')}`, { timeout: 12000 });
-      const pairs = data?.pairs || [];
-      for (const addr of batch) {
-        const usd = usdForTokenFromPairs(addr, pairs);
-        if (usd > 0) out[addr.toLowerCase()] = usd;
-      }
-    } catch {}
-  }
-  return out;
-}
-
-async function dexPriceForSingle(address) {
-  try {
-    const { data } = await axios.get(`${DEXSCREENER}/search?q=${address}%20chain:ethereum`, { timeout: 8000 });
-    return usdForTokenFromPairs(address, data?.pairs || []);
-  } catch { return 0; }
-}
-
-// ---------- Public API: fetch & cache ----------
-async function fetchEthereumTokensLive(address) {
-  // 1) balances via Ethplorer
-  let baseList = [];
-  try {
-    const info = await fetchEthplorerAddressInfo(address);
-    const ethBal = Number(info?.ETH?.balance || 0);
-    // Token balances
-    const tokens = Array.isArray(info?.tokens) ? info.tokens : [];
-
-    baseList = tokens.map(t => {
-      const tk   = t?.tokenInfo || {};
-      const dec  = Number(tk?.decimals || 18);
-      const bal  = fromUnits(t?.balance || '0', dec);
-      // Ethplorer sometimes includes a price snapshot; treat it as hint only
-      const hint = Number(tk?.price?.rate || 0);
-
-      return {
-        chain: 'eth',
-        address: (tk?.address || '').toLowerCase(),
-        symbol: tk?.symbol || '',
-        name: tk?.name || '',
-        decimals: dec,
-        balance: bal,
-        price: hint > 0 ? hint : 0,
-        priceSource: hint > 0 ? 'ethplorer' : 'none',
-        value: bal * (hint > 0 ? hint : 0),
-        iconUrl: null
-      };
-    });
-
-    // 🔒 blocklist filter (remove scam/dust tokens)
-    baseList = baseList.filter(t => !TOKEN_BLOCKLIST.has((t.address || '').toLowerCase()));
-
-    // 2) native ETH
-    const ethUsd = await getETHPriceUSD();
-    const native = {
-      chain: 'eth',
-      address: 'native',
-      symbol: 'ETH',
-      name: 'Ethereum (native)',
-      decimals: 18,
-      balance: ethBal,
-      price: ethUsd,
-      priceSource: ethUsd > 0 ? 'coinbase/coingecko' : 'none',
-      value: ethBal * (ethUsd || 0),
-      iconUrl: null
-    };
-
-    // 3) price enrichment for ERC-20s with 0 price using Dexscreener (ethereum only)
-    const needs = baseList.filter(t => !t.price && t.address).map(t => t.address);
-    if (needs.length) {
-      const batch = await dexPricesForBatch(needs);
-      const still = needs.filter(a => !batch[a.toLowerCase()]);
-      for (let i = 0; i < Math.min(still.length, 12); i += 1) {
-        const a = still[i];
-        const p = await dexPriceForSingle(a);
-        if (p > 0) batch[a.toLowerCase()] = p;
-      }
-      baseList = baseList.map(t => {
-        if (t.price && t.price > 0) return t;
-        const p = batch[t.address?.toLowerCase()] || 0;
-        return {
-          ...t,
-          price: p,
-          priceSource: p > 0 ? 'dex' : t.priceSource,
-          value: t.balance * (p || 0)
-        };
-      });
+    if (native) {
+      native.priceUSD = ethUsd;
+      native.price = ethUsd; // alias for UIs that read `price`
+      native.usd = toNum(native.balance, 0) * ethUsd;
     }
-
-    // 4) hide dust
-    const all = [native, ...baseList];
-    return all.filter((t, i) => i === 0 || ((t?.value ?? 0) > HIDE_USD_MIN + 1e-12));
   } catch (e) {
-    if (DEBUG) console.warn('[Ethereum] fetch failed', e?.message);
+    console.warn('[ETH] price enrich failed:', e?.message || e);
+  }
+  return tokens;
+}
+
+// ---------- RPC ----------
+async function rpc(method, params, id = 1) {
+  if (!QN_URL) throw new Error('QuickNode URL missing');
+  const { data } = await axios.post(
+    QN_URL,
+    { jsonrpc: '2.0', id, method, params },
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  if (data?.error) throw new Error(data.error?.message || 'RPC error');
+  return data?.result;
+}
+
+// Native ETH
+async function fetchNativeETH(address) {
+  try {
+    const hex = await rpc('eth_getBalance', [address, 'latest']);
+    const eth = weiToEth(toBN(hex));
+    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
+  } catch (e) {
+    console.error('[ETH] eth_getBalance failed:', e?.message || e);
+    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
+  }
+}
+
+// ERC-20s via QuickNode (try common method names)
+async function fetchERC20sFromQuickNode(address) {
+  if (!QN_URL) return [];
+  const candidates = [
+    {
+      method: 'qn_getTokenBalances',
+      params: [address],
+      normalize: (res) => {
+        const arr = res?.assets || res || [];
+        return arr.map((t) =>
+          row({
+            address: t?.contractAddress,
+            symbol: t?.symbol,
+            name: t?.name,
+            decimals: Number(t?.decimals ?? 18),
+            balance:
+              t?.decimals != null
+                ? Number(t?.balance ?? 0) / 10 ** Number(t.decimals)
+                : Number(t?.balance ?? 0)
+          })
+        );
+      }
+    },
+    {
+      method: 'qn_getWalletTokenBalances',
+      params: [address],
+      normalize: (res) => {
+        const arr = res?.assets || res || [];
+        return arr.map((t) =>
+          row({
+            address: t?.contractAddress,
+            symbol: t?.symbol,
+            name: t?.name,
+            decimals: Number(t?.decimals ?? 18),
+            balance:
+              t?.decimals != null
+                ? Number(t?.balance ?? 0) / 10 ** Number(t.decimals)
+                : Number(t?.balance ?? 0)
+          })
+        );
+      }
+    },
+    {
+      method: 'alchemy_getTokenBalances',
+      params: [address, 'erc20'],
+      normalize: (res) => {
+        const arr = res?.tokenBalances || [];
+        return arr
+          .filter((t) => t?.contractAddress)
+          .map((t) =>
+            row({
+              address: t.contractAddress,
+              symbol: t?.symbol || '',
+              name: t?.name || '',
+              decimals: Number(t?.decimals ?? 18),
+              balance:
+                t?.tokenBalance != null && t?.decimals != null
+                  ? Number(BigInt(t.tokenBalance)) / 10 ** Number(t.decimals)
+                  : 0
+            })
+          );
+      }
+    }
+  ];
+
+  for (const c of candidates) {
+    try {
+      log('Trying', c.method);
+      const res = await rpc(c.method, c.params);
+      const out = c.normalize(res).filter((t) => t.balance > 0);
+      if (out.length) {
+        log(`Success via ${c.method}:`, out.length, 'tokens');
+        return out;
+      }
+    } catch (e) {
+      log(`${c.method} failed:`, e?.message || e);
+    }
+  }
+  return [];
+}
+
+// ERC-20s via Ethplorer (fallback)
+async function fetchERC20sFromEthplorer(address) {
+  try {
+    const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
+    const { data } = await axios.get(url);
+    const tokens = data?.tokens || [];
+    return tokens
+      .map((t) => {
+        const info = t?.tokenInfo || {};
+        const dec = Number(info?.decimals ?? 18);
+        const raw = Number(t?.balance ?? 0);
+        const bal = dec ? raw / 10 ** dec : raw;
+        return row({
+          address: info?.address,
+          symbol: info?.symbol,
+          name: info?.name,
+          decimals: dec,
+          balance: bal
+        });
+      })
+      .filter((t) => t.balance > 0);
+  } catch (e) {
+    console.error('[ETH] Ethplorer failed:', e?.message || e);
     return [];
   }
 }
 
-// Cached entry points
-export async function fetchEthereumTokens(address, opts = {}) {
+// ---------- public ----------
+export async function fetchEthereumTokens(address, { force = false } = {}) {
   const key = `eth:tokens:${(address || '').toLowerCase()}`;
-  if (!opts.force) {
-    const hit = getCachedJSON(key, CACHE_TTL_MS);
-    if (hit?.data) return hit.data;
+
+  // Serve cached result if present, but always enrich price before returning
+  if (!force) {
+    const cached = getCachedJSON(key, CACHE_TTL_MS);
+    if (cached) {
+      const priced = await enrichEthPrice(cached);
+      setCachedJSON(key, priced);
+      return priced;
+    }
   }
-  const fresh = await fetchEthereumTokensLive(address);
-  setCachedJSON(key, fresh);
-  return fresh;
+
+  const [nativeRow, qnErc20] = await Promise.all([
+    fetchNativeETH(address),
+    fetchERC20sFromQuickNode(address)
+  ]);
+
+  let erc20 = qnErc20;
+  if (!erc20.length) {
+    log('No ERC-20s from QuickNode; falling back to Ethplorer');
+    erc20 = await fetchERC20sFromEthplorer(address);
+  }
+
+  const result = await enrichEthPrice([nativeRow, ...erc20]);
+  setCachedJSON(key, result);
+  return result;
 }
 
 export async function refreshEthereumTokens(address) {
-  const fresh = await fetchEthereumTokensLive(address);
+  const fresh = await fetchEthereumTokens(address, { force: true });
   setCachedJSON(`eth:tokens:${(address || '').toLowerCase()}`, fresh);
   return fresh;
 }
