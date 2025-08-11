@@ -3,14 +3,15 @@
 
 import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainService';
 import { fetchEthereumTokens,  refreshEthereumTokens  } from './ethereumService';
+import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
 
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 function toRow(sr, wallet) {
   return {
-    chain: (sr.chain || '').toLowerCase(),               // 'pulse' | 'eth'
+    chain: (sr.chain || '').toLowerCase(),               // 'pulse' | 'eth' | 'base'
     wallet,                                              // wallet address
-    address: sr.address === 'native' ? null : (sr.address || null),
+    address: sr.address === 'native' ? null : (sr.address || sr.contract || null),
     symbol: sr.symbol || '',
     name: sr.name || '',
     decimals: Number(sr.decimals ?? 18),
@@ -20,15 +21,69 @@ function toRow(sr, wallet) {
   };
 }
 
+// Map Moralis result (used for Base) into token rows
+function rowsFromMoralis(address, chainCode, res) {
+  const out = [];
+  if (!res) return out;
+
+  const price = (x) => Number(x?.priceUsd ?? x?.price ?? 0);
+  const value = (amt, p) => (Number(xorZero(amt)) * Number(xorZero(p)));
+  const xorZero = (v) => Number(v || 0);
+
+  // native first
+  if (res.native) {
+    out.push(
+      toRow(
+        {
+          chain: chainCode,
+          address: 'native',
+          symbol: res.native.symbol || (chainCode === 'base' ? 'ETH' : 'NATIVE'),
+          name: res.native.name || (chainCode === 'base' ? 'Ethereum' : 'Native'),
+          amount: xorZero(res.native.amount),
+          priceUsd: price(res.native),
+          valueUsd: Number(res.native.valueUsd ?? res.native.value ?? value(res.native.amount, price(res.native)))
+        },
+        address
+      )
+    );
+  }
+
+  // tokens
+  (res.tokens || []).forEach((t) => {
+    const p = price(t);
+    const amt = xorZero(t.amount);
+    out.push(
+      toRow(
+        {
+          chain: chainCode,
+          address: t.address,
+          symbol: t.symbol,
+          name: t.name || t.symbol || 'Token',
+          amount: amt,
+          priceUsd: p,
+          valueUsd: Number(t.valueUsd ?? t.value ?? (amt * p))
+        },
+        address
+      )
+    );
+  });
+
+  return out;
+}
+
 /**
  * Build portfolio view.
  * @param {Array<{address:string, name?:string}>} wallets
- * @param {{ only?: 'auto'|'pulse'|'eth', force?: boolean }} options
+ * @param {{ only?: 'all'|'auto'|'pulse'|'eth'|'base', force?: boolean }} options
  * @returns {{ totalUsd:number, tokens:Array, breakdown:Map<string, Array> }}
  */
 export async function buildPortfolioDetailed(wallets = [], options = {}) {
-  const only  = (options.only  || 'auto').toLowerCase(); // 'auto' | 'pulse' | 'eth'
+  const only  = (options.only  || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
   const force = !!options.force;
+
+  const wantPulse = (only === 'all' || only === 'auto' || only === 'pulse');
+  const wantEth   = (only === 'all' || only === 'auto' || only === 'eth');
+  const wantBase  = (only === 'all' || only === 'auto' || only === 'base');
 
   const rows = [];
 
@@ -36,7 +91,7 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     const addr = w.address;
 
     // Pulse
-    if (only === 'pulse' || only === 'auto') {
+    if (wantPulse) {
       try {
         const list = force ? await refreshPulsechainTokens(addr) : await fetchPulsechainTokens(addr);
         for (const r of list) rows.push(toRow(r, addr));
@@ -46,12 +101,22 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     }
 
     // ETH
-    if (only === 'eth' || only === 'auto') {
+    if (wantEth) {
       try {
         const list = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
         for (const r of list) rows.push(toRow(r, addr));
       } catch (e) {
         console.warn('[PortfolioAgg] ETH fetch failed for', addr, e?.message);
+      }
+    }
+
+    // Base (Moralis)
+    if (wantBase) {
+      try {
+        const res = await getPortfolioWithPrices(addr, 'base'); // prices + balances
+        rows.push(...rowsFromMoralis(addr, 'base', res));
+      } catch (e) {
+        console.warn('[PortfolioAgg] BASE fetch failed for', addr, e?.message);
       }
     }
   }
