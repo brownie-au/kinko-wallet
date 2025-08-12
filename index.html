@@ -8,22 +8,46 @@
     <meta name="description" content="Web site created using create-react-app" />
     <title>Datta Able React Admin Dashboard</title>
 
-    <!-- this is to resolve issue in old safari browser in tablet -->
+    <!-- 0) Prefer dark UI controls while loading -->
+    <meta name="color-scheme" content="dark light" />
+
+    <!-- 1) Set theme ASAP so DOM has the right mode before any CSS/JS -->
+    <script>
+      (() => {
+        const KEY = 'datta-able-react-ts-config';
+        let mode = 'dark';
+        try {
+          const raw = localStorage.getItem(KEY);
+          if (raw) {
+            const saved = JSON.parse(raw);
+            if (saved && saved.mode) mode = saved.mode;
+          } else {
+            localStorage.setItem(KEY, JSON.stringify({ mode: 'dark' }));
+          }
+        } catch {}
+        document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.classList.toggle('dark', mode === 'dark');
+      })();
+    </script>
+
+    <!-- 2) Critical paint styles to prevent white flash BEFORE your app CSS loads -->
+    <style>
+      /* Default paint: dark, very low specificity so your app CSS wins later */
+      html, body { background: #000; color: #fff; }
+      /* If user has light saved, flip it immediately */
+      html[data-theme="light"] body { background: #fff; color: #000; }
+      /* Avoid layout shift from scrollbars while loading */
+      html { min-height: 100%; }
+      body { min-height: 100vh; margin: 0; }
+    </style>
+
+    <!-- Old Safari tablet fix -->
     <script src="https://cdn.jsdelivr.net/npm/resize-observer-polyfill@1.5.1/dist/ResizeObserver.min.js"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
     <script type="module" src="/src/index.jsx"></script>
   </body>
 </html>

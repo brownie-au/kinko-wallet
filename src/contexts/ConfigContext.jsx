@@ -5,9 +5,21 @@ import { createContext, useEffect } from 'react';
 import useLocalStorage from 'hooks/useLocalStorage';
 import config from 'config';
 
-// initial state
-const initialState = {
+/* -----------------------------------------------------------------------------
+   Default to DARK mode when there is no saved preference.
+   We also mirror `mode` -> <html data-theme="..."> and `.dark` class.
+----------------------------------------------------------------------------- */
+
+const STORAGE_KEY = 'datta-able-react-ts-config';
+
+// Base config with a dark-mode default (only used when nothing in storage)
+const initialConfig = {
   ...config,
+  mode: (config?.mode ?? 'dark')
+};
+
+// Handler stubs to shape context defaults
+const handlerStubs = {
   onChangeLocalization: () => {},
   onChangeMenuOrientation: () => {},
   onChangeDirection: () => {},
@@ -20,96 +32,76 @@ const initialState = {
   onReset: () => {}
 };
 
-const ConfigContext = createContext(initialState);
+const ConfigContext = createContext({ ...initialConfig, ...handlerStubs });
 
 // ==============================|| CONFIG CONTEXT & PROVIDER ||============================== //
 
 function ConfigProvider({ children }) {
-  const [config, setConfig] = useLocalStorage('datta-able-react-ts-config', initialState);
+  // If nothing is stored, useLocalStorage will seed with initialConfig (which is dark)
+  const [cfg, setCfg] = useLocalStorage(STORAGE_KEY, initialConfig);
 
+  // Enforce vertical menu on narrow screens (kept from your code)
   useEffect(() => {
     const width = window.innerWidth;
-    if (width < 1025 && config.menuOrientation !== 'vertical') {
-      setConfig((prevConfig) => ({
-        ...prevConfig,
-        menuOrientation: 'vertical'
-      }));
+    if (width < 1025 && cfg.menuOrientation !== 'vertical') {
+      setCfg((prev) => ({ ...prev, menuOrientation: 'vertical' }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
+  // Reflect theme mode to the DOM early and on every change
+  useEffect(() => {
+    const mode = cfg.mode || 'dark';
+    document.documentElement.setAttribute('data-theme', mode);
+    document.documentElement.classList.toggle('dark', mode === 'dark');
+  }, [cfg.mode]);
+
   const onReset = () => {
-    setConfig(initialState);
+    setCfg(initialConfig); // resets to dark by default
   };
 
   const onChangeLocalization = (lang) => {
-    setConfig({
-      ...config,
-      i18n: lang
-    });
+    setCfg({ ...cfg, i18n: lang });
   };
 
   const onChangeMenuOrientation = (layout) => {
     if (window.innerWidth >= 1025) {
-      setConfig({
-        ...config,
-        menuOrientation: layout
-      });
+      setCfg({ ...cfg, menuOrientation: layout });
     }
   };
 
   const onChangeMode = (selectedMode) => {
-    setConfig({
-      ...config,
-      mode: selectedMode
-    });
+    setCfg({ ...cfg, mode: selectedMode });
   };
 
   const onChangeCaption = (caption) => {
-    setConfig({
-      ...config,
-      caption: caption
-    });
+    setCfg({ ...cfg, caption });
   };
 
   const onChangeSideTheme = (sidebarTheme) => {
-    setConfig({
-      ...config,
-      sidebarTheme: sidebarTheme
-    });
+    setCfg({ ...cfg, sidebarTheme });
   };
 
   const onChangeDirection = (direction) => {
-    setConfig({
-      ...config,
-      themeDirection: direction
-    });
+    setCfg({ ...cfg, themeDirection: direction });
   };
 
   const onChangeContainer = (container) => {
-    setConfig({
-      ...config,
-      container: container
-    });
+    setCfg({ ...cfg, container });
   };
 
   const onChangeThemePreset = (key, value) => {
-    setConfig({
-      ...config,
-      [key]: value
-    });
+    setCfg({ ...cfg, [key]: value });
   };
 
   const onChangeMenuIcon = (key, value) => {
-    setConfig({
-      ...config,
-      [key]: value
-    });
+    setCfg({ ...cfg, [key]: value });
   };
 
   return (
     <ConfigContext.Provider
       value={{
-        ...config,
+        ...cfg,
         onChangeLocalization,
         onChangeMenuOrientation,
         onChangeMode,
