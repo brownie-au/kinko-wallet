@@ -323,3 +323,58 @@
 .pc-sidebar .pc-dot {
   display: none !important;
 }
+/* ==================== Kinko: Chain selector chips ==================== */
+.k-chain-btn {
+  padding: var(--k-chip-padding-y, 6px) var(--k-chip-padding-x, 12px);
+  border-radius: var(--k-chip-radius, 12px);
+  font-size: var(--k-chip-font, .9rem);
+  line-height: 1;
+  cursor: pointer;
+
+  border: 1px solid var(--bs-border-color);
+  background: var(--k-chip-bg, var(--bs-secondary-bg));
+  color: var(--k-chip-fg, var(--bs-body-color));
+  box-shadow: 0 1px 0 rgba(0,0,0,.05);
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
+
+  &:hover {
+    /* subtle lift without neon */
+    background: color-mix(in srgb, var(--k-chip-bg, var(--bs-secondary-bg)) 85%, #fff 15%);
+    border-color: color-mix(in srgb, var(--bs-border-color) 70%, #fff 30%);
+  }
+
+  &:active { transform: translateY(0); }
+
+  &.is-active {
+    background: var(--k-chip-active-bg, var(--bs-primary));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 35%, #000 65%) inset;
+  }
+}
+
+/* -------- Dark theme tuning -------- */
+[data-pc-theme='dark'] .k-chain-btn {
+  --k-chip-bg: #2b2f36;         /* darker base so it doesn't look washed out */
+  --k-chip-fg: #f3f6fb;         /* near-white text */
+  border-color: #3e4451;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+
+  &:hover {
+    background: #383e49;        /* a hair lighter on hover */
+    border-color: #4d5564;
+  }
+
+  &.is-active {
+    /* keep your accent pop when active */
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 0 0 1px rgba(10,167,255,.25) inset;
+  }
+}
+
+/* Optional: tiny focus ring for accessibility */
+.k-chain-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 70%, #fff 30%);
+  outline-offset: 2px;
+}

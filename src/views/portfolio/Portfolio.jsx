@@ -123,6 +123,50 @@ const Styles = () => (
       .kw-break-row{ transition: none; }
     }
 
+    /* ==================== Chip styles (used for Refresh + can match ChainSelector) ==================== */
+    .k-chain-btn {
+      padding: var(--k-chip-padding-y, 6px) var(--k-chip-padding-x, 12px);
+      border-radius: var(--k-chip-radius, 12px);
+      font-size: var(--k-chip-font, .9rem);
+      line-height: 1;
+      cursor: pointer;
+
+      border: 1px solid var(--bs-border-color);
+      background: var(--k-chip-bg, var(--bs-secondary-bg));
+      color: var(--k-chip-fg, var(--bs-body-color));
+      box-shadow: 0 1px 0 rgba(0,0,0,.05);
+      transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .k-chain-btn:hover {
+      background: color-mix(in srgb, var(--k-chip-bg, var(--bs-secondary-bg)) 85%, #fff 15%);
+      border-color: color-mix(in srgb, var(--bs-border-color) 70%, #fff 30%);
+    }
+    .k-chain-btn.is-active {
+      background: var(--k-chip-active-bg, var(--bs-primary));
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 35%, #000 65%) inset;
+    }
+    [data-pc-theme='dark'] .k-chain-btn {
+      --k-chip-bg: #2b2f36;
+      --k-chip-fg: #f3f6fb;
+      border-color: #3e4451;
+      box-shadow: 0 1px 0 rgba(0,0,0,.35);
+    }
+    [data-pc-theme='dark'] .k-chain-btn:hover {
+      background: #383e49;
+      border-color: #4d5564;
+    }
+    [data-pc-theme='dark'] .k-chain-btn.is-active {
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 0 0 1px rgba(10,167,255,.25) inset;
+    }
+    .k-chain-btn:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 70%, #fff 30%);
+      outline-offset: 2px;
+    }
+
     @media (max-width: 768px){
       .kw-scope{
         --kw-price: 120px;
@@ -325,16 +369,10 @@ export default function Portfolio() {
           />
         </Col>
         <Col md={6} className="text-md-end">
+          {/* Refresh pill now uses the same chip styles */}
           <button
             type="button"
-            className="badge"
-            style={{
-              border: '1px solid var(--bs-border-color)',
-              borderRadius: 10,
-              padding: '6px 12px',
-              background: 'var(--bs-secondary-bg)',
-              color: 'var(--bs-body-color)'
-            }}
+            className="k-chain-btn"
             onClick={() => load(true)}
             title="Refresh"
           >
