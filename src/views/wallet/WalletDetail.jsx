@@ -10,6 +10,9 @@ import { fetchEthereumTokens } from '../../services/ethereumService.js';
 // PulseChain stays on Blockscout + Dexscreener
 import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 
+// Shared, theme-aware chain UI
+import { ChainSelector } from '../../components/ChainUI';
+
 import wallets from '../../data/wallets.js';
 import {
   setWalletCache,
@@ -200,36 +203,6 @@ const LoadingRow = ({ label = 'Loading…', colSpan = 5 }) => (
   </tr>
 );
 
-// ---- coloured chips (match View All) ----
-const CHAIN_COLORS = {
-  eth:   '#2ecc71', // green
-  pulse: '#9b59b6', // purple
-  base:  '#3498db'  // blue
-};
-
-const bigChipStyle = (color, active) => ({
-  border: 'none',
-  borderRadius: 10,
-  padding: '6px 12px',
-  fontSize: '0.9rem',
-  lineHeight: 1.0,
-  cursor: 'pointer',
-  color: '#fff',
-  background: active ? color : 'rgba(255,255,255,0.25)',
-  opacity: active ? 1 : 0.5
-});
-
-const Chip = ({ active, label, onClick, color = 'rgba(255,255,255,0.25)' }) => (
-  <button
-    type="button"
-    className="badge"
-    style={bigChipStyle(color, active)}
-    onClick={onClick}
-  >
-    {label}
-  </button>
-);
-
 // ==============================  PAGE  ==============================
 export default function WalletDetail() {
   const { address = '' } = useParams();
@@ -335,7 +308,12 @@ export default function WalletDetail() {
 
   // ---- adapt ETH list (ethereumService -> UI) ----
   const adaptEthFromList = (rows) => {
-    const list = Array.isArray(rows) ? rows.slice() : [];
+    const list = Array.isArray(rows)
+      ? rows.slice()
+      : Array.isArray(rows?.tokens)
+      ? rows.tokens.slice()
+      : [];
+
     const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
     const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
 
@@ -381,7 +359,7 @@ export default function WalletDetail() {
       return adaptPulseTokens(rows);
     }
     if (chainCode === 'eth') {
-      const rows = await fetchEthereumTokens(address); // Ethplorer + Dexscreener
+      const rows = await fetchEthereumTokens(address);
       return adaptEthFromList(rows);
     }
     // base via Moralis (balances + prices)
@@ -412,7 +390,6 @@ export default function WalletDetail() {
   const CHAINS_FOR_ALL = ['eth', 'base', 'pulse'];
   const cacheKey = (chain) => `${address}:${chain}`;
 
-  // Try to hydrate UI from cache instantly; return {hadCache, anyStale}
   function tryHydrateFromCache(chain) {
     if (!address) return { hadCache: false, anyStale: false };
     if (chain === 'all') {
@@ -449,7 +426,6 @@ export default function WalletDetail() {
     return { hadCache: false, anyStale: false };
   }
 
-  // Cache writer
   function writeCache(chain, result) {
     const { tokens: tok, native: nat } = result || { tokens: [], native: null };
     const cachedTokens = [
@@ -475,10 +451,8 @@ export default function WalletDetail() {
       setErr('');
       setLoading(true);
 
-      // 1) Instant hydrate from cache (if present)
       const { hadCache, anyStale } = tryHydrateFromCache(activeChain);
 
-      // 2) Network revalidation if no cache or stale (or manual refresh bump)
       try {
         if (!hadCache || anyStale) {
           let result;
@@ -488,7 +462,6 @@ export default function WalletDetail() {
               .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null))
               .filter(Boolean);
 
-            // write each chain to its own cache
             ok.forEach((r) => writeCache(r._c, r));
 
             const natRows = ok.map((r) => r.native).filter(Boolean);
@@ -570,11 +543,6 @@ export default function WalletDetail() {
 
   const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
 
-  const standardLabel =
-    activeChain === 'pulse' ? 'PRC-20'
-    : activeChain === 'all' ? 'ERC-20 & PRC-20'
-    : 'ERC-20';
-
   const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
 
   // Manual refresh: clear caches for this wallet and refetch
@@ -617,13 +585,8 @@ export default function WalletDetail() {
                   </div>
                 </div>
 
-                {/* Chain chips (All first) — coloured to match View All */}
-                <div className="d-flex align-items-center gap-2">
-                  <Chip label="All"        active={activeChain === 'all'}   onClick={() => onChipChange('all')}   color="#0d6efd" />
-                  <Chip label="Ethereum"   active={activeChain === 'eth'}   onClick={() => onChipChange('eth')}   color={CHAIN_COLORS.eth} />
-                  <Chip label="PulseChain" active={activeChain === 'pulse'} onClick={() => onChipChange('pulse')} color={CHAIN_COLORS.pulse} />
-                  <Chip label="Base"       active={activeChain === 'base'}  onClick={() => onChipChange('base')}  color={CHAIN_COLORS.base} />
-                </div>
+                {/* Chain selector — consistent across app */}
+                <ChainSelector value={activeChain} onChange={onChipChange} />
               </div>
             </Card.Body>
           </Card>
@@ -640,8 +603,14 @@ export default function WalletDetail() {
           />
         </Col>
         <Col md={6} className="text-md-end">
-          {/* Refresh: neutral pill */}
-          <Chip label="Refresh" active={false} onClick={onRefresh} color="rgba(255,255,255,0.25)" />
+          <button
+            type="button"
+            className="badge k-chip-ghost"
+            onClick={onRefresh}
+            title="Refresh"
+          >
+            Refresh
+          </button>
         </Col>
       </Row>
 

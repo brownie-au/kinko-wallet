@@ -31,16 +31,16 @@ const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0); // 
 const ENV_BLOCKLIST = new Set(
   (import.meta.env.VITE_ETH_BLOCKLIST || '')
     .split(',')
-    .map(s => s.trim().toLowerCase())
+    .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
 );
 // You can hardcode known-bad contracts here if you want:
 const STATIC_BLOCKLIST = new Set([
-  // '0xdead...beef' // example
+  // '0xdead...beef'
 ]);
 
 // Limits for Etherscan discovery to avoid huge wallets hammering RPC
-const MAX_DISCOVERED = 60;   // cap contracts per wallet from Etherscan discovery
+const MAX_DISCOVERED = 60;
 const READ_TIMEOUT = 12_000;
 
 // ---------- utils ----------
@@ -54,10 +54,10 @@ const toNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 // Encode ERC-20 calls
 const SIG = {
-  balanceOf: '0x70a08231', // balanceOf(address)
-  decimals:  '0x313ce567', // decimals()
-  symbol:    '0x95d89b41', // symbol()
-  name:      '0x06fdde03'  // name()
+  balanceOf: '0x70a08231',
+  decimals: '0x313ce567',
+  symbol: '0x95d89b41',
+  name: '0x06fdde03'
 };
 function encodeBalanceOfData(address) {
   const a = address.toLowerCase().replace(/^0x/, '');
@@ -67,18 +67,16 @@ function encodeBalanceOfData(address) {
 
 function tryDecodeString(hex) {
   if (!hex || hex === '0x') return '';
-  // Try standard ABI-encoded dynamic string
   try {
     const data = hex.replace(/^0x/, '');
     const offset = parseInt(data.slice(0, 64), 16);
-    if (offset >= 64 && data.length >= (offset + 64)) {
+    if (offset >= 64 && data.length >= offset + 64) {
       const len = parseInt(data.slice(offset, offset + 64), 16);
       const strHex = data.slice(offset + 64, offset + 64 + len * 2);
       const bytes = strHex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [];
       return new TextDecoder().decode(new Uint8Array(bytes)).replace(/\u0000/g, '').trim();
     }
   } catch {}
-  // Try bytes32 (padded ascii)
   try {
     const bytes = hex.replace(/^0x/, '').slice(0, 64);
     const buf = bytes.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [];
@@ -99,9 +97,9 @@ const row = ({ address, symbol, name, decimals, balance }) => ({
   usd: 0
 });
 
-// ---------- Known token overrides (aliases/metadata fixes) ----------
-const EHEX_CONTRACT = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // HEX on Ethereum (eHEX)
-const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC on Ethereum
+// ---------- Known token overrides ----------
+const EHEX_CONTRACT = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // eHEX
+const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC
 
 const KNOWN_TOKENS = {
   [EHEX_CONTRACT]: { symbol: 'eHEX', name: 'HEX (Ethereum)', decimals: 8 },
@@ -114,8 +112,8 @@ function applyKnownTokenFixes(list = []) {
     const addr = String(t.address || '').toLowerCase();
     const fix = KNOWN_TOKENS[addr];
     if (fix) {
-      t.symbol   = fix.symbol;
-      t.name     = fix.name;
+      t.symbol = fix.symbol;
+      t.name = fix.name;
       t.decimals = Number.isFinite(fix.decimals) ? fix.decimals : t.decimals;
       if (Number.isFinite(t.priceUSD) && Number.isFinite(t.balance)) {
         const unit = Number(t.priceUSD) || Number(t.price) || 0;
@@ -134,18 +132,13 @@ function filterEthSpam(tokens) {
   };
 
   return tokens.filter((t) => {
-    // never hide native ETH
     if (t.address === 'native') return true;
-
-    // explicit blocklist
     if (isBlocked(t.address)) return false;
 
-    // optional min-USD threshold
     if (ETH_HIDE_MIN_USD > 0 && Number(t.usd || 0) < ETH_HIDE_MIN_USD) return false;
 
-    // hide obvious junk: no price AND no symbol/name
     const hasPrice = Number(t.price || t.priceUSD || 0) > 0;
-    const hasMeta  = Boolean((t.symbol || '').trim()) || Boolean((t.name || '').trim());
+    const hasMeta = Boolean((t.symbol || '').trim()) || Boolean((t.name || '').trim());
     if (!hasPrice && !hasMeta) return false;
 
     return true;
@@ -174,8 +167,6 @@ async function getEthUsdFromPaprika() {
 async function getEthUsdPricePrimary() {
   const p = await getEthUsdFromPaprika();
   if (p > 0) return p;
-
-  // Fallback to your existing safe service
   try {
     const f = await getEthUsdPriceFallback();
     return Number(f) || 0;
@@ -236,8 +227,6 @@ async function fetchNativeETH(address) {
 }
 
 // ---------- ERC-20 discovery/fetchers ----------
-
-// QuickNode Token API variants
 async function fetchERC20sFromQuickNode(address) {
   if (!QN_URL) return [];
   const candidates = [
@@ -280,7 +269,6 @@ async function fetchERC20sFromQuickNode(address) {
       }
     },
     {
-      // If someone swaps QuickNode URL for an Alchemy URL in ENV, this would work too.
       method: 'alchemy_getTokenBalances',
       params: [address, 'erc20'],
       normalize: (res) => {
@@ -345,11 +333,10 @@ async function fetchERC20sFromMoralis(address) {
   }
 }
 
-// Etherscan discovery + on-chain reads (no paid add-on)
+// Etherscan discovery + on-chain reads
 async function fetchERC20sFromEtherscan(address) {
   if (!ETHERSCAN_KEY) return [];
   try {
-    // 1) Discover token contracts from transfers
     const url =
       `${ETHERSCAN_BASE}?module=account&action=tokentx&address=${address}` +
       `&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_KEY}`;
@@ -357,7 +344,6 @@ async function fetchERC20sFromEtherscan(address) {
     const txs = Array.isArray(data?.result) ? data.result : [];
     if (!txs.length) return [];
 
-    // Unique token addresses (most recent first), cap to avoid overload
     const uniq = [];
     const seen = new Set();
     for (const t of txs) {
@@ -370,7 +356,6 @@ async function fetchERC20sFromEtherscan(address) {
     }
     if (!uniq.length) return [];
 
-    // 2) For each contract: read decimals/symbol/name + balanceOf(address)
     const out = [];
     await Promise.all(
       uniq.map(async (ca) => {
@@ -391,8 +376,8 @@ async function fetchERC20sFromEtherscan(address) {
           if (balance > 0) {
             out.push(row({ address: ca, symbol, name, decimals, balance }));
           }
-        } catch (e) {
-          // skip bad/spam contracts silently
+        } catch {
+          /* skip */
         }
       })
     );
@@ -435,14 +420,20 @@ async function fetchERC20sFromEthplorer(address) {
 export async function fetchEthereumTokens(address, { force = false } = {}) {
   const key = `eth:tokens:${(address || '').toLowerCase()}`;
 
-  // Cached path — always enrich prices & filter before returning
+  // Cached path — normalise old shapes {tokens: []} → []
   if (!force) {
-    const cached = getCachedJSON(key, CACHE_TTL_MS);
-    if (cached) {
-      const fixed = applyKnownTokenFixes(cached);
+    const cachedRaw = getCachedJSON(key, CACHE_TTL_MS);
+    const cachedArr = Array.isArray(cachedRaw)
+      ? cachedRaw
+      : Array.isArray(cachedRaw?.tokens)
+      ? cachedRaw.tokens
+      : null;
+
+    if (cachedArr) {
+      const fixed = applyKnownTokenFixes(cachedArr.slice());
       const priced = await enrichAllPrices(fixed);
       const cleaned = filterEthSpam(priced);
-      setCachedJSON(key, cleaned);
+      setCachedJSON(key, cleaned); // rewrite in the new array-only shape
       return cleaned;
     }
   }
@@ -471,7 +462,7 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
 
   const result = await enrichAllPrices(baseList);
   const cleaned = filterEthSpam(result);
-  setCachedJSON(key, cleaned);
+  setCachedJSON(key, cleaned); // store as array
   return cleaned;
 }
 

@@ -1,0 +1,18 @@
+/* src/styles/chain-ui.css */
+
+/* Dark-mode legibility for unselected chips (and ghost chips like Refresh) */
+:root[data-pc-theme='dark'] {
+  --k-chip-fg: rgba(255,255,255,0.92); /* stronger text on dark for inactive chips */
+}
+
+/* Optional sticky legend if you use it */
+.k-chain-legend { position: sticky; top: 84px; }
+
+/* Ghost chip used for "Refresh" */
+.k-chip-ghost {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: 6px 12px;
+  background: var(--bs-secondary-bg);
+  color: var(--k-chip-fg, var(--bs-body-color));
+}

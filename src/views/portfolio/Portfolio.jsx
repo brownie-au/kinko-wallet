@@ -7,6 +7,9 @@ import { useWallets } from '../../contexts/WalletContext';
 import walletsStatic from '../../data/wallets.js';
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 
+// shared chain UI (chips + small chain badge)
+import { ChainSelector, ChainBadge } from '../../components/ChainUI';
+
 // ---------- formats ----------
 const fmtUSD = (n) => {
   const amt = (Number(n) || 0).toLocaleString(undefined, {
@@ -39,41 +42,8 @@ function isJunkToken(t) {
   return false;
 }
 
-// ---------------- Colours (ETH green, PULSE purple, BASE blue) ----------------
-const CHAIN_COLORS = { eth: '#2ecc71', pulse: '#9b59b6', base: '#3498db' };
-const chainLabel = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
-
-// ---------------- Big chip (header) ----------------
-// Theme-aware chip: inactive adapts to theme; active uses provided accent color
-const BigChip = ({ active, onClick, children, color }) => (
-  <button
-    type="button"
-    className={`kw-chip ${active ? 'is-active' : ''}`}
-    onClick={onClick}
-    style={{ ['--kw-chip-accent']: color }}
-  >
-    {children}
-  </button>
-);
-
-// ---------------- Small chip (row identifier) ----------------
-const smallChipStyle = (color) => ({
-  display: 'inline-block',
-  borderRadius: 8,
-  padding: '2px 6px',
-  fontSize: 11,
-  lineHeight: 1.0,
-  color: '#fff',
-  background: color
-});
-const SmallChainChip = ({ chain, className = '' }) => (
-  <span className={className} style={smallChipStyle(CHAIN_COLORS[chain] || '#6c757d')}>
-    {chainLabel(chain)}
-  </span>
-);
-
-// ---------------- Loading shimmer ----------------
-const LoadingStyles = () => (
+// ---------------- Loading shimmer + layout helpers ----------------
+const Styles = () => (
   <style>{`
     @keyframes kinkoShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     .kinko-loading-cell { position: relative; overflow: hidden; height: 56px;
@@ -87,51 +57,80 @@ const LoadingStyles = () => (
     .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
 
-    /* Row layout tweaks */
+    /* ------- scope + shared column geometry ------- */
+    .kw-scope{
+      --kw-price: 140px;
+      --kw-amount: 170px;
+      --kw-value: 140px;
+      /* reserve the same space used by the Expand/Hide button in header */
+      --kw-action: 84px;
+      --kw-gap: 18px;
+    }
+
     .kw-row { padding: 8px 0; }
     .kw-left { display:flex; align-items:center; gap:10px; min-width: 0; }
     .kw-dot { flex: 0 0 18px; width:18px; height:18px; border-radius:50%; background: var(--bs-secondary); opacity:.6; }
     .kw-name { min-width:0; }
     .kw-symbol { font-weight:600; white-space:nowrap; }
     .kw-sub { font-size:12px; color: var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .kw-cols { display:flex; align-items:center; gap:18px; }
-    .kw-col { text-align:right; }
-    .kw-price { width:140px; }
-    .kw-amount { width:170px; }
-    .kw-value { width:140px; }
-    .kw-delta.up { color: #1fbf75; }     /* green */
-    .kw-delta.down { color: #e55353; }   /* red */
 
-    /* Theme-aware subtitle for dark mode */
+    .kw-cols { display:flex; align-items:center; gap: var(--kw-gap); }
+    .kw-col { text-align:right; }
+    .kw-price { width: var(--kw-price); }
+    .kw-amount { width: var(--kw-amount); }
+    .kw-value { width: var(--kw-value); }
+    .kw-delta.up { color: #1fbf75; }
+    .kw-delta.down { color: #e55353; }
     [data-pc-theme='dark'] .kw-sub{ color: rgba(255,255,255,.65); }
 
-    /* Theme-aware filter chips */
-    .kw-chip{
-      border: 1px solid var(--bs-border-color);
-      border-radius: 10px;
-      padding: 6px 12px;
-      font-size: .9rem;
-      line-height: 1;
-      cursor: pointer;
-      background: color-mix(in srgb, var(--bs-body-color) 8%, transparent);
-      color: var(--bs-body-color);
+    /* ------- breakdown under token label; columns align to header ------- */
+    .kw-break { margin-top: 4px; }
+    /* header row for "Balance Breakdown" label with correct column grid */
+    .kw-break-hdr{
+      display:grid;
+      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
+      column-gap: var(--kw-gap);
+      align-items: end;
+      margin-bottom: 2px;
     }
-    [data-pc-theme='dark'] .kw-chip{
-      background: color-mix(in srgb, #ffffff 10%, transparent);
-      color: #fff;
-      border-color: rgba(255,255,255,.2);
+    .kw-break-title { font-size:12px; color: var(--bs-secondary-color); letter-spacing:.3px; }
+
+    /* each breakdown line follows the same 5-column grid */
+    .kw-break-row{
+      display:grid;
+      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
+      column-gap: var(--kw-gap);
+      align-items:center;
+      line-height:18px;
+      font-size:12px;
+      position: relative;
+      border-radius: 6px;
+      transition: background-color .15s ease, box-shadow .15s ease;
     }
-    .kw-chip.is-active{
-      background: var(--kw-chip-accent);
-      border-color: var(--kw-chip-accent);
-      color: #fff;
+    .kw-break-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kw-right{ text-align:right; }
+
+    /* --- Hover highlight for breakdown rows --- */
+    .kw-break-row:hover{
+      background: rgba(255,255,255,.06);         /* dark theme */
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    :root:not([data-pc-theme='dark']) .kw-break-row:hover{
+      background: rgba(0,0,0,.04);               /* light theme */
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+    }
+    @media (prefers-reduced-motion: reduce){
+      .kw-break-row{ transition: none; }
     }
 
     @media (max-width: 768px){
-      .kw-price { width: 120px; }
-      .kw-amount { width: 150px; }
-      .kw-value { width: 130px; }
-      .kw-cols { gap:12px; }
+      .kw-scope{
+        --kw-price: 120px;
+        --kw-amount: 150px;
+        --kw-value: 130px;
+        --kw-action: 84px; /* usually similar on mobile */
+        --kw-gap: 12px;
+      }
     }
   `}</style>
 );
@@ -143,10 +142,9 @@ function LoadingBlock({ label = 'Loading…' }) {
   );
 }
 
-// ---------------- View‑All cache ----------------
+// ---------------- View-All cache ----------------
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const CACHE_PREFIX = 'kw:viewall-cache:'; // key = prefix + mode + ':' + walletsSig
-
 const now = () => Date.now();
 const walletsSigOf = (arr) =>
   (arr || [])
@@ -204,7 +202,7 @@ export default function Portfolio() {
   const [expanded, setExpanded] = useState(new Set());
   const [q, setQ] = useState('');
 
-  // in‑memory cache
+  // in-memory cache
   const memCacheRef = useRef(new Map()); // key -> {totalUsd,tokens,breakdown,updatedAt}
 
   const walletCount = wallets.length;
@@ -288,7 +286,7 @@ export default function Portfolio() {
 
   return (
     <>
-      <LoadingStyles />
+      <Styles />
 
       {/* HEADER */}
       <Row className="mb-4">
@@ -309,13 +307,8 @@ export default function Portfolio() {
                   </div>
                 </div>
 
-                {/* Chain chips */}
-                <div className="d-flex align-items-center gap-2">
-                  <BigChip active={mode === 'all'}   onClick={() => setMode('all')}   color="#0d6efd">All</BigChip>
-                  <BigChip active={mode === 'eth'}   onClick={() => setMode('eth')}   color={CHAIN_COLORS.eth}>Ethereum</BigChip>
-                  <BigChip active={mode === 'pulse'} onClick={() => setMode('pulse')} color={CHAIN_COLORS.pulse}>PulseChain</BigChip>
-                  <BigChip active={mode === 'base'}  onClick={() => setMode('base')}  color={CHAIN_COLORS.base}>Base</BigChip>
-                </div>
+                {/* Chain selector (uniform across app) */}
+                <ChainSelector value={mode} onChange={setMode} />
               </div>
             </Card.Body>
           </Card>
@@ -332,13 +325,25 @@ export default function Portfolio() {
           />
         </Col>
         <Col md={6} className="text-md-end">
-          <BigChip active={false} onClick={() => load(true)} color="#6c757d">
+          <button
+            type="button"
+            className="badge"
+            style={{
+              border: '1px solid var(--bs-border-color)',
+              borderRadius: 10,
+              padding: '6px 12px',
+              background: 'var(--bs-secondary-bg)',
+              color: 'var(--bs-body-color)'
+            }}
+            onClick={() => load(true)}
+            title="Refresh"
+          >
             Refresh
-          </BigChip>
+          </button>
         </Col>
       </Row>
 
-      {/* Sub‑label */}
+      {/* Sub-label */}
       <Row className="mb-2">
         <Col>
           <small className="text-muted">
@@ -358,7 +363,7 @@ export default function Portfolio() {
       {/* Token rows (aggregated) */}
       <Row>
         <Col>
-          <Card className="shadow-sm">
+          <Card className="shadow-sm kw-scope">
             <Card.Header><strong>Top Tokens</strong></Card.Header>
             <Card.Body>
               {loading && (
@@ -376,14 +381,17 @@ export default function Portfolio() {
                 const deltaCls = delta == null ? '' : delta >= 0 ? 'up' : 'down';
                 const deltaTxt = delta == null ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
 
+                const label =
+                  (t.chain === 'pulse') ? 'Pulse' :
+                  (t.chain === 'base')  ? 'Base'  : 'ETH';
+
                 return (
                   <div key={`${k}:${i}`} className="kw-row border-bottom">
                     <div className="d-flex align-items-center justify-content-between">
-                      {/* LEFT: avatar dot + chain chip + symbol/name */}
+                      {/* LEFT: avatar dot + chain badge + symbol/name */}
                       <div className="kw-left">
                         <div className="kw-dot" />
-                        {/* chip BEFORE name per request */}
-                        {mode === 'all' && <SmallChainChip className="me-1" chain={(t.chain || 'eth')} />}
+                        {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
                         <div className="kw-name">
                           <div className="kw-symbol">
                             {t.symbol || '—'}
@@ -394,7 +402,7 @@ export default function Portfolio() {
                         </div>
                       </div>
 
-                      {/* RIGHT: columns pulled a bit left with smaller widths/gaps */}
+                      {/* RIGHT: price/amount/value + expand */}
                       <div className="kw-cols">
                         <div className="kw-col kw-price">
                           <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
@@ -411,8 +419,8 @@ export default function Portfolio() {
                           <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
                           <div className="fw-semibold">{fmtUSD(t.valueUsd)}</div>
                         </div>
-                        <div>
-                          <button className="btn btn-sm btn-outline-secondary" onClick={()=>toggleExpand(k)}>
+                        <div style={{ width: 'var(--kw-action)' }}>
+                          <button className="btn btn-sm btn-outline-secondary w-100" onClick={()=>toggleExpand(k)}>
                             {open ? 'Hide' : 'Expand'}
                           </button>
                         </div>
@@ -420,13 +428,30 @@ export default function Portfolio() {
                     </div>
 
                     {open && (
-                      <div className="mt-3 ms-4">
-                        <div className="text-muted mb-2" style={{ fontSize: 12 }}>Balance Breakdown</div>
-                        {rows.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No holdings.</div>}
+                      <div className="kw-break">
+                        {/* Header row under the token name; columns mirror header (inc. action placeholder) */}
+                        <div className="kw-break-hdr">
+                          <div className="kw-break-title text-muted">Balance Breakdown</div>
+                          <div /> {/* price spacer */}
+                          <div /> {/* amount hdr placeholder */}
+                          <div /> {/* value hdr placeholder */}
+                          <div /> {/* action spacer */}
+                        </div>
+
+                        {/* Rows: [names | (price spacer) | amount | value | action spacer] */}
+                        {rows.length === 0 && (
+                          <div className="kw-break-row">
+                            <div className="text-muted">No holdings.</div>
+                            <div></div><div></div><div></div><div></div>
+                          </div>
+                        )}
                         {rows.map((r, idx)=>(
-                          <div key={idx} className="d-flex justify-content-between" style={{ fontSize: 12, lineHeight: '22px' }}>
-                            <div>{walletName(r.wallet)}</div>
-                            <div className="text-end">{fmtAmt(r.amount)} {t.symbol}</div>
+                          <div key={idx} className="kw-break-row">
+                            <div className="kw-break-name">{walletName(r.wallet)}</div>
+                            <div></div> {/* price spacer */}
+                            <div className="kw-right">{fmtAmt(r.amount)} {t.symbol}</div>
+                            <div className="kw-right">{fmtUSD((Number(r.amount)||0) * price)}</div>
+                            <div></div> {/* action spacer */}
                           </div>
                         ))}
                       </div>
