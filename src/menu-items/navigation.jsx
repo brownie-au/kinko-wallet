@@ -1,18 +1,29 @@
-import { loadWallets } from '../utils/walletStorage'; // Adjust path if needed
+// src/menu-items/navigation.jsx
 
-const wallets = loadWallets();
+import { loadWallets } from '../utils/walletStorage'; // adjust if needed
+
+const wallets = loadWallets() || [];
 
 const navigation = {
   id: 'navigation',
   title: 'Secure Insights, No Keys Required',
   type: 'group',
   children: [
+    // Plain link, NO children
+    {
+      id: 'dashboard',
+      title: 'Dashboard',
+      type: 'item',
+      url: '/dashboard/default',
+      icon: <i className="ph ph-gauge" />
+    },
+
+    // Collapsible portfolio section
     {
       id: 'wallet-portfolio',
       title: 'Wallet Portfolio',
       type: 'collapse',
       icon: <i className="ph ph-wallet" />,
-      // DYNAMIC CHILDREN
       children: [
         {
           id: 'wallet-view-all',
@@ -20,7 +31,7 @@ const navigation = {
           type: 'item',
           url: '/portfolio'
         },
-        ...wallets.map(w => ({
+        ...wallets.map((w) => ({
           id: `wallet-${w.address.slice(-4)}`,
           title: `0x...${w.address.slice(-4)} – ${w.name || 'Unnamed'}`,
           type: 'item',

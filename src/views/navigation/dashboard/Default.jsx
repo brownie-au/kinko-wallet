@@ -2,24 +2,18 @@
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 
-// project-imports
-import SalesPerformanceCard from 'components/cards/SalesPerformanceCard';
+// keep these existing cards for lower rows
 import SocialStatsCard from 'components/cards/SocialStatsCard';
 import StatIndicatorCard from 'components/cards/StatIndicatorCard';
-import { UsersMap, EarningChart, RatingCard, RecentUsersCard } from 'sections/dashboard/default';
+import { RatingCard, RecentUsersCard } from 'sections/dashboard/default';
 
-// ===============================|| SALES PERFORMANCE CARD - DATA ||============================== //
-
-const salesPerformanceData = [
-  { title: 'Daily Sales', icon: 'ph ph-arrow-up text-success', amount: '$ 249.95', progress: { now: 67, className: 'bg-brand-color-1' } },
-  {
-    title: 'Monthly Sales',
-    icon: 'ph ph-arrow-down text-danger',
-    amount: '$ 2,942.32',
-    progress: { now: 36, className: 'bg-brand-color-2' }
-  },
-  { title: 'Yearly Sales', icon: 'ph ph-arrow-up text-success', amount: '$ 8,638.32', progress: { now: 80, className: 'bg-brand-color-1' } }
-];
+// NEW: KPI + Balance Chart
+import {
+  PortfolioValueCard,
+  PnLCard,
+  FearGreedCard,
+  PortfolioBalanceChart
+} from '../../../sections/dashboard/default';
 
 // ===============================|| STAT INDICATOR CARD - DATA ||============================== //
 
@@ -37,22 +31,8 @@ const socialStatsData = [
     percentage: '+7.2%',
     color: 'text-success',
     stats: [
-      {
-        label: 'Target',
-        value: '35,098',
-        progress: {
-          now: 60,
-          className: 'bg-brand-color-1'
-        }
-      },
-      {
-        label: 'Duration',
-        value: '3,539',
-        progress: {
-          now: 45,
-          className: 'bg-brand-color-2'
-        }
-      }
+      { label: 'Target', value: '35,098', progress: { now: 60, className: 'bg-brand-color-1' } },
+      { label: 'Duration', value: '3,539', progress: { now: 45, className: 'bg-brand-color-2' } }
     ]
   },
   {
@@ -61,21 +41,8 @@ const socialStatsData = [
     percentage: '+6.2%',
     color: 'text-primary',
     stats: [
-      {
-        label: 'Target',
-        value: '34,185',
-        progress: {
-          now: 40,
-          className: 'bg-success'
-        }
-      },
-      {
-        label: 'Duration',
-        value: '4,567',
-        progress: {
-          now: 70
-        }
-      }
+      { label: 'Target', value: '34,185', progress: { now: 40, className: 'bg-success' } },
+      { label: 'Duration', value: '4,567', progress: { now: 70 } }
     ]
   },
   {
@@ -84,22 +51,8 @@ const socialStatsData = [
     percentage: '+5.9%',
     color: 'text-primary',
     stats: [
-      {
-        label: 'Target',
-        value: '25,998',
-        progress: {
-          now: 80,
-          className: 'bg-brand-color-1'
-        }
-      },
-      {
-        label: 'Duration',
-        value: '7,753',
-        progress: {
-          now: 50,
-          className: 'bg-brand-color-2'
-        }
-      }
+      { label: 'Target', value: '25,998', progress: { now: 80, className: 'bg-brand-color-1' } },
+      { label: 'Duration', value: '7,753', progress: { now: 50, className: 'bg-brand-color-2' } }
     ]
   }
 ];
@@ -109,37 +62,36 @@ const socialStatsData = [
 export default function DefaultPage() {
   return (
     <Row>
-      {/* row - 1 */}
-      {salesPerformanceData.map((item, index) => (
-        <Col key={index} md={index === 2 ? 12 : 6} xl={4}>
-          <SalesPerformanceCard {...item} />
-        </Col>
-      ))}
-
-      {/* row - 2 */}
-      <Col md={6} xl={8}>
-        <UsersMap />
+      {/* ---- Top Row: KPIs ---- */}
+      <Col md={6} xl={4}>
+        <PortfolioValueCard />
       </Col>
       <Col md={6} xl={4}>
-        <>
-          <EarningChart />
-          <StatIndicatorCard data={statIndicatorData} />
-        </>
+        <PnLCard />
+      </Col>
+      <Col md={12} xl={4}>
+        <FearGreedCard />
       </Col>
 
-      {/* row - 3 */}
+      {/* ---- Balance History: full width, replaces map + old Earnings ---- */}
+      <Col xs={12} className="mt-3">
+        <PortfolioBalanceChart />
+      </Col>
+
+      {/* ---- Keep your existing rows below (can refine later) ---- */}
       {socialStatsData.map((item, index) => (
         <Col key={index} md={index === 0 ? 12 : 6} xl={4}>
           <SocialStatsCard {...item} />
         </Col>
       ))}
 
-      {/* row - 4 */}
       <Col md={6} xl={4}>
         <RatingCard />
       </Col>
       <Col md={6} xl={8}>
-        <RecentUsersCard />
+        {/* You previously showed EarningChart + StatIndicatorCard here.
+            Since Earnings moved to Balance History, we keep only the indicators. */}
+        <StatIndicatorCard data={statIndicatorData} />
       </Col>
     </Row>
   );

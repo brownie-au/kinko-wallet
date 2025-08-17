@@ -6,6 +6,9 @@ import { RouterProvider } from 'react-router-dom';
 import router from 'routes';
 import Locales from 'components/Locales';
 
+// NEW: wallet context (so dashboard tiles can read real totals)
+import { WalletProvider } from 'contexts/WalletContext';
+
 // NEW: background snapshot prefetcher
 import { prefetchAllManaged } from './services/snapshotService';
 
@@ -63,8 +66,10 @@ function PreloadSnapshots() {
 function App() {
   return (
     <Locales>
-      <PreloadSnapshots />
-      <RouterProvider router={router} />
+      <WalletProvider>
+        <PreloadSnapshots />
+        <RouterProvider router={router} />
+      </WalletProvider>
     </Locales>
   );
 }

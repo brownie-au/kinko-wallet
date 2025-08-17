@@ -2,13 +2,27 @@
 /* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Form } from 'react-bootstrap';
-
+import { getPortfolioTotalUsd, /* read cache */
+         setPortfolioTotalUsd } from '../../utils/portfolioTotal';
 import { useWallets } from '../../contexts/WalletContext';
 import walletsStatic from '../../data/wallets.js';
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 
 // shared chain UI (chips + small chain badge)
 import { ChainSelector, ChainBadge } from '../../components/ChainUI';
+
+// --- shared keys so other pages can read the total ---
+const LS_TOTAL_KEY = 'kw:lastTotalUsd';
+const LS_PCT_KEY = 'kw:lastChangePct24h';
+const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
+
+function saveTotalsToLS(totalUsd, changePct24h = 0) {
+  try {
+    localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
+    localStorage.setItem(LS_PCT_KEY, String(Number(changePct24h) || 0));
+    localStorage.setItem(LS_UPDATED_KEY, String(Date.now()));
+  } catch {}
+}
 
 // ---------- formats ----------
 const fmtUSD = (n) => {
@@ -41,6 +55,19 @@ function isJunkToken(t) {
   if (!isFinite(amount) || amount < 0) return true;
   return false;
 }
+
+// Extract a grand total in USD from the aggregator result
+const getTotalUsd = (res) => {
+  if (res?.totals?.usd != null) return Number(res.totals.usd);
+  if (res?.totalUsd != null) return Number(res.totalUsd);
+  if (Array.isArray(res?.rows)) {
+    return res.rows.reduce(
+      (sum, r) => sum + (Number(r.amount) * Number(r.priceUsd ?? r.price ?? 0)),
+      0
+    );
+  }
+  return 0;
+};
 
 // ---------------- Loading shimmer + layout helpers ----------------
 const Styles = () => (
@@ -85,7 +112,6 @@ const Styles = () => (
 
     /* ------- breakdown under token label; columns align to header ------- */
     .kw-break { margin-top: 4px; }
-    /* header row for "Balance Breakdown" label with correct column grid */
     .kw-break-hdr{
       display:grid;
       grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
@@ -95,7 +121,6 @@ const Styles = () => (
     }
     .kw-break-title { font-size:12px; color: var(--bs-secondary-color); letter-spacing:.3px; }
 
-    /* each breakdown line follows the same 5-column grid */
     .kw-break-row{
       display:grid;
       grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
@@ -110,20 +135,18 @@ const Styles = () => (
     .kw-break-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .kw-right{ text-align:right; }
 
-    /* --- Hover highlight for breakdown rows --- */
     .kw-break-row:hover{
-      background: rgba(255,255,255,.06);         /* dark theme */
+      background: rgba(255,255,255,.06);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
     }
     :root:not([data-pc-theme='dark']) .kw-break-row:hover{
-      background: rgba(0,0,0,.04);               /* light theme */
+      background: rgba(0,0,0,.04);
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
     }
     @media (prefers-reduced-motion: reduce){
       .kw-break-row{ transition: none; }
     }
 
-    /* ==================== Chip styles (used for Refresh + can match ChainSelector) ==================== */
     .k-chain-btn {
       padding: var(--k-chip-padding-y, 6px) var(--k-chip-padding-x, 12px);
       border-radius: var(--k-chip-radius, 12px);
@@ -172,7 +195,7 @@ const Styles = () => (
         --kw-price: 120px;
         --kw-amount: 150px;
         --kw-value: 130px;
-        --kw-action: 84px; /* usually similar on mobile */
+        --kw-action: 84px;
         --kw-gap: 12px;
       }
     }
@@ -228,19 +251,33 @@ function getChangePct(t) {
 }
 
 export default function Portfolio() {
-  // Context + fallbacks
+  // Context (safe if provider missing)
   let ctx;
   try { ctx = useWallets(); } catch { ctx = undefined; }
+  const replaceWallets = ctx?.replaceWallets ?? (() => {});
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
+
   const fromLS  = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
   const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
   const walletsSig = walletsSigOf(wallets);
+
+  // Keep WalletContext in sync with the page's wallet list (drives dashboard totals)
+  useEffect(() => {
+    if (wallets && wallets.length) replaceWallets(wallets);
+  }, [walletsSig, replaceWallets]);
 
   // 'all' | 'eth' | 'pulse' | 'base'
   const [mode, setMode] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [totalUsd, setTotalUsd] = useState(0);
+
+  // seed total from sticky cache so the header never shows $0
+  const [totalUsd, setTotalUsd] = useState(() => getPortfolioTotalUsd());
+  // track "last updated" label that moves when we persist a new total
+  const [lastUpdated, setLastUpdated] = useState(() => {
+    try { return Number(localStorage.getItem('kw:lastPortfolioTotalUsdAt') || 0); } catch { return 0; }
+  });
+
   const [tokens, setTokens] = useState([]);
   const [breakdown, setBreakdown] = useState(new Map());
   const [expanded, setExpanded] = useState(new Set());
@@ -256,6 +293,12 @@ export default function Portfolio() {
       (w) => (w.address || '').toLowerCase() === (addr || '').toLowerCase()
     )?.name || 'Wallet';
 
+  // helper: persist sticky + bump "last updated" state
+  const persistTotal = (v) => {
+    setPortfolioTotalUsd(v);
+    setLastUpdated(Date.now());
+  };
+
   async function load(force = false) {
     setError(null);
 
@@ -265,6 +308,7 @@ export default function Portfolio() {
     const memHit = memCacheRef.current.get(memKey);
     if (!force && memHit && now() - memHit.updatedAt < CACHE_TTL) {
       setTotalUsd(memHit.totalUsd);
+      persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
       setLoading(false);
@@ -275,6 +319,7 @@ export default function Portfolio() {
     const ls = readCache(mode, walletsSig);
     if (!force && ls && ls.fresh) {
       setTotalUsd(ls.totalUsd);
+      persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
       setLoading(false);
@@ -285,7 +330,9 @@ export default function Portfolio() {
     // 3) Show stale quickly while refreshing
     if (!force && (memHit || ls)) {
       const stale = memHit || ls;
-      setTotalUsd(stale.totalUsd || 0);
+      const st = stale.totalUsd || 0;
+      setTotalUsd(st);
+      persistTotal(st);
       setTokens(stale.tokens || []);
       setBreakdown(new Map(stale.breakdown || []));
     } else {
@@ -295,12 +342,15 @@ export default function Portfolio() {
     try {
       const { totalUsd, tokens, breakdown } = await buildPortfolioDetailed(wallets, { only: mode, force });
       setTotalUsd(totalUsd);
+      persistTotal(totalUsd);
       setTokens(tokens);
       setBreakdown(breakdown);
 
       const payload = { totalUsd, tokens, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
+      // Optional legacy keys
+      saveTotalsToLS(totalUsd, 0);
     } catch (e) {
       setError(e?.message || 'Failed to load portfolio');
     } finally {
@@ -328,6 +378,10 @@ export default function Portfolio() {
     setExpanded(next);
   };
 
+  const lastUpdatedLabel = lastUpdated
+    ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
   return (
     <>
       <Styles />
@@ -348,6 +402,7 @@ export default function Portfolio() {
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span className="text-success">24h: +0.00%</span>
                     <span className="text-muted">• Wallets: {walletCount}</span>
+                    <span className="text-muted">• Updated: {lastUpdatedLabel}{loading ? ' (refreshing...)' : ''}</span>
                   </div>
                 </div>
 
@@ -369,7 +424,6 @@ export default function Portfolio() {
           />
         </Col>
         <Col md={6} className="text-md-end">
-          {/* Refresh pill now uses the same chip styles */}
           <button
             type="button"
             className="k-chain-btn"
@@ -467,16 +521,11 @@ export default function Portfolio() {
 
                     {open && (
                       <div className="kw-break">
-                        {/* Header row under the token name; columns mirror header (inc. action placeholder) */}
                         <div className="kw-break-hdr">
                           <div className="kw-break-title text-muted">Balance Breakdown</div>
-                          <div /> {/* price spacer */}
-                          <div /> {/* amount hdr placeholder */}
-                          <div /> {/* value hdr placeholder */}
-                          <div /> {/* action spacer */}
+                          <div /> <div /> <div /> <div />
                         </div>
 
-                        {/* Rows: [names | (price spacer) | amount | value | action spacer] */}
                         {rows.length === 0 && (
                           <div className="kw-break-row">
                             <div className="text-muted">No holdings.</div>
@@ -486,10 +535,10 @@ export default function Portfolio() {
                         {rows.map((r, idx)=>(
                           <div key={idx} className="kw-break-row">
                             <div className="kw-break-name">{walletName(r.wallet)}</div>
-                            <div></div> {/* price spacer */}
+                            <div></div>
                             <div className="kw-right">{fmtAmt(r.amount)} {t.symbol}</div>
                             <div className="kw-right">{fmtUSD((Number(r.amount)||0) * price)}</div>
-                            <div></div> {/* action spacer */}
+                            <div></div>
                           </div>
                         ))}
                       </div>

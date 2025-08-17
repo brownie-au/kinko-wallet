@@ -1,6 +1,7 @@
 // src/services/pulsechainService.js
 // PulseChain: Blockscout (balances + icons + prices) first, Dexscreener as fallback, with caching.
 
+import { isBlockedToken } from '../data/tokenBlocklist';
 import axios from 'axios';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
@@ -231,6 +232,9 @@ async function fetchPulsechainTokensLive(address) {
   if (!tokens.length) {
     try { tokens = await fetchTokensGraphQL(address); } catch {}
   }
+
+  // 🚫 remove spam contracts early
+  tokens = tokens.filter(t => !isBlockedToken(t.address));
 
   // 2) native PLS priced from WPLS basket
   const [plsBal, plsUsd] = await Promise.all([getPLSBalance(address), getPLSPriceUSD()]);

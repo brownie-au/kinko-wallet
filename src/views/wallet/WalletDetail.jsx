@@ -193,6 +193,37 @@ const LoadingStyles = () => (
   `}</style>
 );
 
+/* ---- chip styles (high-specificity so Bootstrap can't override) ---- */
+const ChipStyles = () => (
+  <style>{`
+    /* base chip */
+    .k-chip, .k-chip.k-chip-ghost { 
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:.5rem .8rem; line-height:1; font-size:.85rem;
+      border-radius:9999px; border:1px solid transparent;
+      user-select:none; cursor:pointer;
+      transition:background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+      text-decoration:none;
+    }
+    /* ghost variant (dark default) */
+    .k-chip.k-chip-ghost {
+      background: transparent !important;
+      border-color: rgba(255,255,255,.18) !important;
+      color: rgba(255,255,255,.85) !important;
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,.04);
+    }
+    .k-chip.k-chip-ghost:hover  { background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.28) !important; }
+    .k-chip.k-chip-ghost:active { background: rgba(255,255,255,.12) !important; }
+    /* light theme fallback */
+    html[data-theme="light"] .k-chip.k-chip-ghost {
+      border-color: rgba(0,0,0,.15) !important;
+      color: rgba(0,0,0,.8) !important;
+    }
+    html[data-theme="light"] .k-chip.k-chip-ghost:hover  { background: rgba(0,0,0,.06) !important; border-color: rgba(0,0,0,.25) !important; }
+    html[data-theme="light"] .k-chip.k-chip-ghost:active { background: rgba(0,0,0,.10) !important; }
+  `}</style>
+);
+
 const LoadingRow = ({ label = 'Loading…', colSpan = 5 }) => (
   <tr>
     <td colSpan={colSpan} className="px-3 py-3">
@@ -560,6 +591,7 @@ export default function WalletDetail() {
   return (
     <>
       <LoadingStyles /> {/* inject shimmer CSS */}
+      <ChipStyles />    {/* chip styles */}
 
       {/* HEADER */}
       <Row className="mb-4">
@@ -603,14 +635,17 @@ export default function WalletDetail() {
           />
         </Col>
         <Col md={6} className="text-md-end">
-          <button
-            type="button"
-            className="badge k-chip-ghost"
+          {/* Use span to avoid button defaults, match View All pill */}
+          <span
+            role="button"
+            tabIndex={0}
+            className="k-chip k-chip-ghost"
             onClick={onRefresh}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onRefresh()}
             title="Refresh"
           >
             Refresh
-          </button>
+          </span>
         </Col>
       </Row>
 
