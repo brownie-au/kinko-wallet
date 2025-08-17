@@ -6,6 +6,9 @@ import { Row, Col, Card } from 'react-bootstrap';
 import wallets from '../data/wallets.js';
 import { getWalletCache } from '../utils/walletCache';
 
+// optional: render the big portfolio line chart in the middle
+import PortfolioBalanceChart from '../sections/dashboard/crypto/default/PortfolioBalanceChart.jsx';
+
 // ---------- formats ----------
 const fmtUsd = (n) =>
   `USD $${(Number(n) || 0).toLocaleString(undefined, {
@@ -90,11 +93,20 @@ export default function PortfolioDashboard() {
         </Card>
       </Col>
 
+      {/* ===== Main Balance Chart ===== */}
+      <Col xs={12}>
+        <Card className="mb-3">
+          <Card.Body>
+            <PortfolioBalanceChart />
+          </Card.Body>
+        </Card>
+      </Col>
+
       {/* ===== Removed junk =====
           - Social "Total Likes" cards
           - Rating stars breakdown
           - Ideas / Location counts
-          Those tiles have been deleted so only the KPIs remain.
+          These tiles are intentionally gone.
       */}
     </Row>
   );
