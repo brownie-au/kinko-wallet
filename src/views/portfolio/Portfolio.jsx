@@ -2,14 +2,17 @@
 /* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Form } from 'react-bootstrap';
-import { getPortfolioTotalUsd, /* read cache */
-         setPortfolioTotalUsd } from '../../utils/portfolioTotal';
+import { getPortfolioTotalUsd, /* read cache */ setPortfolioTotalUsd } from '../../utils/portfolioTotal';
 import { useWallets } from '../../contexts/WalletContext';
 import walletsStatic from '../../data/wallets.js';
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 
 // shared chain UI (chips + small chain badge)
 import { ChainSelector, ChainBadge } from '../../components/ChainUI';
+import TokenLogo from '../../components/TokenLogo';
+
+// 🔒 reuse existing global token blocklist
+import { isBlockedToken } from '../../data/tokenBlocklist';
 
 // --- shared keys so other pages can read the total ---
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
@@ -21,7 +24,7 @@ function saveTotalsToLS(totalUsd, changePct24h = 0) {
     localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
     localStorage.setItem(LS_PCT_KEY, String(Number(changePct24h) || 0));
     localStorage.setItem(LS_UPDATED_KEY, String(Date.now()));
-  } catch {}
+  } catch { }
 }
 
 // ---------- formats ----------
@@ -37,8 +40,8 @@ const fmtAmt = (n, p = 6) => {
   return !isFinite(x)
     ? '0'
     : x >= 1
-    ? x.toLocaleString(undefined, { maximumFractionDigits: 4 })
-    : x.toPrecision(p);
+      ? x.toLocaleString(undefined, { maximumFractionDigits: 4 })
+      : x.toPrecision(p);
 };
 const keyFor = (t) =>
   `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
@@ -46,6 +49,10 @@ const keyFor = (t) =>
 // ---- minimal junk filter ----
 const DENY = new Set(['ETHG', 'AICC']);
 function isJunkToken(t) {
+  // ✅ first: global address/contract blocklist
+  const addr = String(t.address || t.contract || '').toLowerCase();
+  if (addr && isBlockedToken && isBlockedToken(addr)) return true;
+
   const sym = String(t.symbol || '').toUpperCase().trim();
   if (DENY.has(sym)) return true;
   if (t.possible_spam === true || t.is_spam === true) return true;
@@ -55,19 +62,6 @@ function isJunkToken(t) {
   if (!isFinite(amount) || amount < 0) return true;
   return false;
 }
-
-// Extract a grand total in USD from the aggregator result
-const getTotalUsd = (res) => {
-  if (res?.totals?.usd != null) return Number(res.totals.usd);
-  if (res?.totalUsd != null) return Number(res.totalUsd);
-  if (Array.isArray(res?.rows)) {
-    return res.rows.reduce(
-      (sum, r) => sum + (Number(r.amount) * Number(r.priceUsd ?? r.price ?? 0)),
-      0
-    );
-  }
-  return 0;
-};
 
 // ---------------- Loading shimmer + layout helpers ----------------
 const Styles = () => (
@@ -84,22 +78,38 @@ const Styles = () => (
     .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
 
-    /* ------- scope + shared column geometry ------- */
     .kw-scope{
       --kw-price: 140px;
       --kw-amount: 170px;
       --kw-value: 140px;
-      /* reserve the same space used by the Expand/Hide button in header */
       --kw-action: 84px;
       --kw-gap: 18px;
     }
 
-    .kw-row { padding: 8px 0; }
-    .kw-left { display:flex; align-items:center; gap:10px; min-width: 0; }
-    .kw-dot { flex: 0 0 18px; width:18px; height:18px; border-radius:50%; background: var(--bs-secondary); opacity:.6; }
+    /* ---- ROW + HOVER (keep faint highlighter) ---- */
+    .kw-row { padding: 8px 12px; border-bottom: 1px solid var(--bs-border-color);
+      border-radius: 8px; transition: background-color .15s ease, box-shadow .15s ease; }
+    .kw-row:hover { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    :root:not([data-pc-theme='dark']) .kw-row:hover { background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+
+    /* ---- LEFT SIDE: grid with explicit buffer column ---- */
+    .kw-left { 
+      display: grid;
+      grid-template-columns: 36px 12px minmax(0, 1fr); /* logo | spacer | name */
+      align-items: center;
+      min-width: 0;
+    }
+    .kw-logo { width: 36px; height: 36px; display: flex; align-items: center; }
+    .kw-spacer { width: 12px; } /* the buffer that aligns all tickers/chips */
+
     .kw-name { min-width:0; }
     .kw-symbol { font-weight:600; white-space:nowrap; }
     .kw-sub { font-size:12px; color: var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .kw-name-inline{ font-weight:400; font-size:12px; color: var(--bs-secondary-color); }
+    [data-pc-theme='dark'] .kw-name-inline{ color: rgba(255,255,255,.70); }
+
+    .kw-ticker{ font-size: 1.1rem; font-weight: 700; }
 
     .kw-cols { display:flex; align-items:center; gap: var(--kw-gap); }
     .kw-col { text-align:right; }
@@ -110,7 +120,6 @@ const Styles = () => (
     .kw-delta.down { color: #e55353; }
     [data-pc-theme='dark'] .kw-sub{ color: rgba(255,255,255,.65); }
 
-    /* ------- breakdown under token label; columns align to header ------- */
     .kw-break { margin-top: 4px; }
     .kw-break-hdr{
       display:grid;
@@ -153,7 +162,6 @@ const Styles = () => (
       font-size: var(--k-chip-font, .9rem);
       line-height: 1;
       cursor: pointer;
-
       border: 1px solid var(--bs-border-color);
       background: var(--k-chip-bg, var(--bs-secondary-bg));
       color: var(--k-chip-fg, var(--bs-body-color));
@@ -250,30 +258,40 @@ function getChangePct(t) {
   return typeof val === 'number' ? val : null;
 }
 
+// ---- chainId resolver for TokenLogo ----
+function chainIdOf(chain) {
+  switch (String(chain || '').toLowerCase()) {
+    case 'pulse': return 369;   // PulseChain
+    case 'base': return 8453;   // Base
+    case 'eth':
+    case 'ethereum':
+    default: return 1;          // Ethereum
+  }
+}
+
 export default function Portfolio() {
   // Context (safe if provider missing)
   let ctx;
   try { ctx = useWallets(); } catch { ctx = undefined; }
-  const replaceWallets = ctx?.replaceWallets ?? (() => {});
+  const replaceWallets = ctx?.replaceWallets ?? (() => { });
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
 
-  const fromLS  = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
+  const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
   const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
   const walletsSig = walletsSigOf(wallets);
 
-  // Keep WalletContext in sync with the page's wallet list (drives dashboard totals)
   useEffect(() => {
     if (wallets && wallets.length) replaceWallets(wallets);
   }, [walletsSig, replaceWallets]);
 
   // 'all' | 'eth' | 'pulse' | 'base'
   const [mode, setMode] = useState('all');
-  const [loading, setLoading] = useState(true);
+
+  const [booting, setBooting] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // seed total from sticky cache so the header never shows $0
   const [totalUsd, setTotalUsd] = useState(() => getPortfolioTotalUsd());
-  // track "last updated" label that moves when we persist a new total
   const [lastUpdated, setLastUpdated] = useState(() => {
     try { return Number(localStorage.getItem('kw:lastPortfolioTotalUsdAt') || 0); } catch { return 0; }
   });
@@ -283,8 +301,7 @@ export default function Portfolio() {
   const [expanded, setExpanded] = useState(new Set());
   const [q, setQ] = useState('');
 
-  // in-memory cache
-  const memCacheRef = useRef(new Map()); // key -> {totalUsd,tokens,breakdown,updatedAt}
+  const memCacheRef = useRef(new Map());
 
   const walletCount = wallets.length;
 
@@ -293,7 +310,6 @@ export default function Portfolio() {
       (w) => (w.address || '').toLowerCase() === (addr || '').toLowerCase()
     )?.name || 'Wallet';
 
-  // helper: persist sticky + bump "last updated" state
   const persistTotal = (v) => {
     setPortfolioTotalUsd(v);
     setLastUpdated(Date.now());
@@ -304,30 +320,29 @@ export default function Portfolio() {
 
     const memKey = mode + '|' + walletsSig;
 
-    // 1) Try memory cache
     const memHit = memCacheRef.current.get(memKey);
     if (!force && memHit && now() - memHit.updatedAt < CACHE_TTL) {
       setTotalUsd(memHit.totalUsd);
       persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
-      setLoading(false);
+      setBooting(false);
+      setRefreshing(false);
       return;
     }
 
-    // 2) Try localStorage cache (fresh)
     const ls = readCache(mode, walletsSig);
     if (!force && ls && ls.fresh) {
       setTotalUsd(ls.totalUsd);
       persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
-      setLoading(false);
+      setBooting(false);
+      setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
       return;
     }
 
-    // 3) Show stale quickly while refreshing
     if (!force && (memHit || ls)) {
       const stale = memHit || ls;
       const st = stale.totalUsd || 0;
@@ -335,32 +350,42 @@ export default function Portfolio() {
       persistTotal(st);
       setTokens(stale.tokens || []);
       setBreakdown(new Map(stale.breakdown || []));
+      setBooting(false);
+      setRefreshing(true);
     } else {
-      setLoading(true);
+      setBooting(true);
+      setRefreshing(false);
     }
 
     try {
       const { totalUsd, tokens, breakdown } = await buildPortfolioDetailed(wallets, { only: mode, force });
       setTotalUsd(totalUsd);
       persistTotal(totalUsd);
-      setTokens(tokens);
+
+      const tokensWithValue = (tokens || []).map((t) => {
+        const price = Number(t.priceUsd ?? t.price ?? 0);
+        const amount = Number(t.amount ?? 0);
+        const valueUsd = Number(t.valueUsd ?? (t.usd ?? (amount * price)));
+        return { ...t, valueUsd };
+      });
+
+      setTokens(tokensWithValue);
       setBreakdown(breakdown);
 
-      const payload = { totalUsd, tokens, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
+      const payload = { totalUsd, tokens: tokensWithValue, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
-      // Optional legacy keys
       saveTotalsToLS(totalUsd, 0);
     } catch (e) {
       setError(e?.message || 'Failed to load portfolio');
     } finally {
-      setLoading(false);
+      setBooting(false);
+      setRefreshing(false);
     }
   }
 
   useEffect(() => { load(false); /* eslint-disable-next-line */ }, [walletCount, walletsSig, mode]);
 
-  // search + junk filter
   const visibleTokens = useMemo(() => {
     const base = tokens.filter((t) => !isJunkToken(t));
     const s = (q || '').trim().toLowerCase();
@@ -402,11 +427,12 @@ export default function Portfolio() {
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span className="text-success">24h: +0.00%</span>
                     <span className="text-muted">• Wallets: {walletCount}</span>
-                    <span className="text-muted">• Updated: {lastUpdatedLabel}{loading ? ' (refreshing...)' : ''}</span>
+                    <span className="text-muted">
+                      • Updated: {lastUpdatedLabel}{refreshing ? ' (refreshing...)' : ''}
+                    </span>
                   </div>
                 </div>
 
-                {/* Chain selector (uniform across app) */}
                 <ChainSelector value={mode} onChange={setMode} />
               </div>
             </Card.Body>
@@ -430,7 +456,7 @@ export default function Portfolio() {
             onClick={() => load(true)}
             title="Refresh"
           >
-            Refresh
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </Col>
       </Row>
@@ -442,8 +468,8 @@ export default function Portfolio() {
             {mode === 'all'
               ? 'All chains — ERC-20 & PRC-20 tokens'
               : mode === 'pulse'
-              ? 'PulseChain — PRC-20 tokens'
-              : `${mode === 'base' ? 'Base' : 'Ethereum'} — ERC-20 tokens`}
+                ? 'PulseChain — PRC-20 tokens'
+                : `${mode === 'base' ? 'Base' : 'Ethereum'} — ERC-20 tokens`}
           </small>
         </Col>
       </Row>
@@ -458,13 +484,13 @@ export default function Portfolio() {
           <Card className="shadow-sm kw-scope">
             <Card.Header><strong>Top Tokens</strong></Card.Header>
             <Card.Body>
-              {loading && (
+              {booting && (
                 <LoadingBlock label={`Loading ${mode === 'pulse' ? 'PRC-20' : mode === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} />
               )}
 
-              {!loading && visibleTokens.length === 0 && <div className="text-muted">No tokens found.</div>}
+              {!booting && visibleTokens.length === 0 && <div className="text-muted">No tokens found.</div>}
 
-              {!loading && visibleTokens.map((t,i)=>{
+              {!booting && visibleTokens.map((t, i) => {
                 const k = keyFor(t);
                 const open = expanded.has(k);
                 const rows = breakdown.get(k) || [];
@@ -475,21 +501,36 @@ export default function Portfolio() {
 
                 const label =
                   (t.chain === 'pulse') ? 'Pulse' :
-                  (t.chain === 'base')  ? 'Base'  : 'ETH';
+                    (t.chain === 'base') ? 'Base' : 'ETH';
+
+                const logoChainId = chainIdOf(t.chain);
+                // IMPORTANT: keep checksum casing if present
+                const logoAddr = (t.address || t.contract || '') || null;
 
                 return (
-                  <div key={`${k}:${i}`} className="kw-row border-bottom">
+                  <div key={`${k}:${i}`} className="kw-row">
                     <div className="d-flex align-items-center justify-content-between">
-                      {/* LEFT: avatar dot + chain badge + symbol/name */}
+                      {/* LEFT: icon + spacer + symbol/name (chips sit on line 2) */}
                       <div className="kw-left">
-                        <div className="kw-dot" />
-                        {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
+                        <div className="kw-logo">
+                          <TokenLogo
+                            chainId={logoChainId}
+                            address={logoAddr}
+                            symbol={t.symbol}
+                            size={36}
+                          />
+                        </div>
+                        <div className="kw-spacer" />
                         <div className="kw-name">
                           <div className="kw-symbol">
-                            {t.symbol || '—'}
+                            <strong className="kw-ticker">{t.symbol || '—'}</strong>
+                            <span className="kw-name-inline">
+                              {' - '}
+                              {t.name || (t.address ? `${t.address.slice(0, 6)}…${t.address.slice(-4)}` : 'Native')}
+                            </span>
                           </div>
                           <div className="kw-sub">
-                            {t.name || (t.address ? `${t.address.slice(0,6)}…${t.address.slice(-4)}` : 'Native')}
+                            {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
                           </div>
                         </div>
                       </div>
@@ -509,10 +550,10 @@ export default function Portfolio() {
                         </div>
                         <div className="kw-col kw-value">
                           <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
-                          <div className="fw-semibold">{fmtUSD(t.valueUsd)}</div>
+                          <div className="fw-semibold">{fmtUSD(Number(t.valueUsd ?? (Number(t.amount || 0) * price)))}</div>
                         </div>
                         <div style={{ width: 'var(--kw-action)' }}>
-                          <button className="btn btn-sm btn-outline-secondary w-100" onClick={()=>toggleExpand(k)}>
+                          <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => toggleExpand(k)}>
                             {open ? 'Hide' : 'Expand'}
                           </button>
                         </div>
@@ -532,12 +573,12 @@ export default function Portfolio() {
                             <div></div><div></div><div></div><div></div>
                           </div>
                         )}
-                        {rows.map((r, idx)=>(
+                        {rows.map((r, idx) => (
                           <div key={idx} className="kw-break-row">
                             <div className="kw-break-name">{walletName(r.wallet)}</div>
                             <div></div>
                             <div className="kw-right">{fmtAmt(r.amount)} {t.symbol}</div>
-                            <div className="kw-right">{fmtUSD((Number(r.amount)||0) * price)}</div>
+                            <div className="kw-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
                             <div></div>
                           </div>
                         ))}

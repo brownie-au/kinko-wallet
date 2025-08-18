@@ -11,7 +11,9 @@ import { fetchEthereumTokens } from '../../services/ethereumService.js';
 import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 
 // Shared, theme-aware chain UI
-import { ChainSelector } from '../../components/ChainUI';
+import { ChainSelector, ChainChip } from '../../components/ChainUI';
+// use the same logo component as the portfolio page
+import TokenLogo from '../../components/TokenLogo';
 
 import wallets from '../../data/wallets.js';
 import {
@@ -49,6 +51,17 @@ const addrStyle = {
   lineHeight: '24px',
   display: 'inline-block',
   verticalAlign: 'middle'
+};
+
+// helper to translate chain code -> numeric chainId for TokenLogo
+const chainIdOf = (chain) => {
+  switch (String(chain || '').toLowerCase()) {
+    case 'pulse': return 369;
+    case 'base': return 8453;
+    case 'eth':
+    case 'ethereum':
+    default: return 1;
+  }
 };
 
 // ---------------- wallet name/chain resolver (robust) ----------------
@@ -99,7 +112,7 @@ function findAnyWalletRecord(addressLower) {
 function normalizeChain(x) {
   const s = (x ?? '').toString().toLowerCase();
   if (s.includes('pulse') || s === '369') return 'pulse';
-  if (s.includes('base')  || s === '8453') return 'base';
+  if (s.includes('base') || s === '8453') return 'base';
   return 'eth';
 }
 
@@ -139,7 +152,7 @@ const IconButton = ({ title, onClick, children }) => (
 
 const CopyIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
@@ -147,9 +160,9 @@ const CopyIcon = () => (
 
 const QrIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-    <rect x="3" y="3"   width="6" height="6" rx="1" />
-    <rect x="15" y="3"  width="6" height="6" rx="1" />
-    <rect x="3" y="15"  width="6" height="6" rx="1" />
+    <rect x="3" y="3" width="6" height="6" rx="1" />
+    <rect x="15" y="3" width="6" height="6" rx="1" />
+    <rect x="3" y="15" width="6" height="6" rx="1" />
     <rect x="15" y="15" width="2" height="2" />
     <rect x="19" y="15" width="2" height="2" />
     <rect x="15" y="19" width="2" height="2" />
@@ -196,7 +209,6 @@ const LoadingStyles = () => (
 /* ---- chip styles (high-specificity so Bootstrap can't override) ---- */
 const ChipStyles = () => (
   <style>{`
-    /* base chip */
     .k-chip, .k-chip.k-chip-ghost { 
       display:inline-flex; align-items:center; justify-content:center;
       padding:.5rem .8rem; line-height:1; font-size:.85rem;
@@ -205,7 +217,6 @@ const ChipStyles = () => (
       transition:background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
       text-decoration:none;
     }
-    /* ghost variant (dark default) */
     .k-chip.k-chip-ghost {
       background: transparent !important;
       border-color: rgba(255,255,255,.18) !important;
@@ -214,13 +225,32 @@ const ChipStyles = () => (
     }
     .k-chip.k-chip-ghost:hover  { background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.28) !important; }
     .k-chip.k-chip-ghost:active { background: rgba(255,255,255,.12) !important; }
-    /* light theme fallback */
     html[data-theme="light"] .k-chip.k-chip-ghost {
       border-color: rgba(0,0,0,.15) !important;
       color: rgba(0,0,0,.8) !important;
     }
     html[data-theme="light"] .k-chip.k-chip-ghost:hover  { background: rgba(0,0,0,.06) !important; border-color: rgba(0,0,0,.25) !important; }
     html[data-theme="light"] .k-chip.k-chip-ghost:active { background: rgba(0,0,0,.10) !important; }
+  `}</style>
+);
+
+/* ---- compact token cell styles ---- */
+const TokenCellStyles = () => (
+  <style>{`
+    .kw-cell { display:flex; align-items:center; gap:10px; min-width:0; }
+    .kw-logo { flex:0 0 28px; }
+    .kw-name { min-width:0; }
+    .kw-symbol { white-space:nowrap; font-weight:700; color: var(--bs-body-color); }
+    .kw-name-inline { font-size:12px; color: var(--bs-secondary-color); }
+    .kw-sub { margin-top:2px; font-size:12px; color: var(--bs-secondary-color); }
+
+    /* Dark theme readability */
+    [data-pc-theme='dark'] .kw-name-inline { color: rgba(255,255,255,.72); }
+    [data-pc-theme='dark'] .kw-sub         { color: rgba(255,255,255,.60); }
+
+    /* Optional: if your theme also sets html[data-theme='dark'] */
+    html[data-theme='dark'] .kw-name-inline { color: rgba(255,255,255,.72); }
+    html[data-theme='dark'] .kw-sub         { color: rgba(255,255,255,.60); }
   `}</style>
 );
 
@@ -270,7 +300,7 @@ export default function WalletDetail() {
       try {
         const gid = resolveGroupId(address);
         setWalletNetChip(gid, 'all');
-      } catch {}
+      } catch { }
       prevAddrRef.current = address;
     }
   }, [address]);
@@ -280,7 +310,7 @@ export default function WalletDetail() {
   // Normalise any token for cache format
   const mapTokenForCache = (t, chainHint) => {
     const priceUsd = Number(t.priceUsd ?? t.price ?? 0);
-    const amount   = Number(t.amount ?? 0);
+    const amount = Number(t.amount ?? 0);
     const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
     return {
       symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
@@ -302,17 +332,17 @@ export default function WalletDetail() {
 
     const nat = pls
       ? {
-          name: 'PulseChain',
-          symbol: 'PLS',
-          amount: Number(pls.balance || 0),
-          price: Number(pls.price || 0),
-          priceUsd: Number(pls.price || 0),
-          value: Number(pls.value || 0),
-          valueUsd: Number(pls.value || 0),
-          contract: 'native',
-          logo: pls.iconUrl || null,
-          chain: 'pulse'
-        }
+        name: 'PulseChain',
+        symbol: 'PLS',
+        amount: Number(pls.balance || 0),
+        price: Number(pls.price || 0),
+        priceUsd: Number(pls.price || 0),
+        value: Number(pls.value || 0),
+        valueUsd: Number(pls.value || 0),
+        contract: 'native',
+        logo: pls.iconUrl || null,
+        chain: 'pulse'
+      }
       : null;
 
     const toks = list.map((r) => {
@@ -342,8 +372,8 @@ export default function WalletDetail() {
     const list = Array.isArray(rows)
       ? rows.slice()
       : Array.isArray(rows?.tokens)
-      ? rows.tokens.slice()
-      : [];
+        ? rows.tokens.slice()
+        : [];
 
     const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
     const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
@@ -397,20 +427,20 @@ export default function WalletDetail() {
     const res = await getPortfolioWithPrices(address, chainCode);
     const nat = res?.native
       ? {
-          ...res.native,
-          chain: chainCode,
-          priceUsd: Number(res?.native?.priceUsd ?? res?.native?.price ?? 0),
-          valueUsd: Number(res?.native?.valueUsd ?? res?.native?.value ?? 0)
-        }
+        ...res.native,
+        chain: chainCode,
+        priceUsd: Number(res?.native?.priceUsd ?? res?.native?.price ?? 0),
+        valueUsd: Number(res?.native?.valueUsd ?? res?.native?.value ?? 0)
+      }
       : null;
 
     const toks = Array.isArray(res?.tokens)
       ? res.tokens.map((t) => {
-          const price = Number(t.priceUsd ?? t.price ?? 0);
-          const amt   = Number(t.amount ?? 0);
-          const val   = Number(t.valueUsd ?? t.value ?? amt * price);
-          return { ...t, chain: chainCode, priceUsd: price, valueUsd: val };
-        })
+        const price = Number(t.priceUsd ?? t.price ?? 0);
+        const amt = Number(t.amount ?? 0);
+        const val = Number(t.valueUsd ?? t.value ?? amt * price);
+        return { ...t, chain: chainCode, priceUsd: price, valueUsd: val };
+      })
       : [];
 
     const totalUSD = Number(res?.totalUSD || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0));
@@ -528,11 +558,11 @@ export default function WalletDetail() {
     const s = (q || '').trim().toLowerCase();
     const filtered = s
       ? base.filter(
-          (t) =>
-            (t.name || '').toLowerCase().includes(s) ||
-            (t.symbol || '').toLowerCase().includes(s) ||
-            (t.contract || '').toLowerCase().includes(s)
-        )
+        (t) =>
+          (t.name || '').toLowerCase().includes(s) ||
+          (t.symbol || '').toLowerCase().includes(s) ||
+          (t.contract || '').toLowerCase().includes(s)
+      )
       : base;
 
     const cmp = (a, b) => {
@@ -540,18 +570,18 @@ export default function WalletDetail() {
         sortKey === 'name'
           ? (a.name || a.symbol || '').toLowerCase()
           : sortKey === 'price'
-          ? (a.price ?? a.priceUsd ?? 0)
-          : sortKey === 'amount'
-          ? (a.amount ?? 0)
-          : (a.value ?? a.valueUsd ?? 0);
+            ? (a.price ?? a.priceUsd ?? 0)
+            : sortKey === 'amount'
+              ? (a.amount ?? 0)
+              : (a.value ?? a.valueUsd ?? 0);
       const vb =
         sortKey === 'name'
           ? (b.name || b.symbol || '').toLowerCase()
           : sortKey === 'price'
-          ? (b.price ?? b.priceUsd ?? 0)
-          : sortKey === 'amount'
-          ? (b.amount ?? 0)
-          : (b.value ?? b.valueUsd ?? 0);
+            ? (b.price ?? b.priceUsd ?? 0)
+            : sortKey === 'amount'
+              ? (b.amount ?? 0)
+              : (b.value ?? b.valueUsd ?? 0);
       if (va < vb) return sortDir === 'asc' ? -1 : 1;
       if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -572,7 +602,7 @@ export default function WalletDetail() {
     });
   };
 
-  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
+  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => { });
 
   const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
 
@@ -592,6 +622,7 @@ export default function WalletDetail() {
     <>
       <LoadingStyles /> {/* inject shimmer CSS */}
       <ChipStyles />    {/* chip styles */}
+      <TokenCellStyles /> {/* token cell styles */}
 
       {/* HEADER */}
       <Row className="mb-4">
@@ -656,8 +687,8 @@ export default function WalletDetail() {
             {activeChain === 'all'
               ? 'All chains — ERC-20 & PRC-20 tokens'
               : activeChain === 'pulse'
-              ? 'PulseChain — PRC-20 tokens'
-              : `${activeChain === 'base' ? 'Base' : 'Ethereum'} — ERC-20 tokens`}
+                ? 'PulseChain — PRC-20 tokens'
+                : `${activeChain === 'base' ? 'Base' : 'Ethereum'} — ERC-20 tokens`}
           </small>
         </Col>
       </Row>
@@ -719,37 +750,31 @@ export default function WalletDetail() {
                       const value = (t.value ?? t.valueUsd ?? (amount * price));
                       const c = (t.chain || activeChain);
 
+                      // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
+                      const addrForLogo = (t.contract && t.contract !== 'native') ? t.contract : null;
+
                       return (
                         <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
                           <td>
-                            <div className="d-flex align-items-center gap-2">
-                              <div
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: 6,
-                                  overflow: 'hidden',
-                                  background: 'var(--bs-secondary-bg, #e9ecef)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                              >
-                                {t.logo ? (
-                                  <img src={t.logo} alt="" style={{ width: 28, height: 28, objectFit: 'cover' }} />
-                                ) : (
-                                  <span style={{ fontSize: 12, opacity: 0.7 }}>
-                                    {(t.symbol || '?').slice(0, 3)}
+                            <div className="kw-cell">
+                              <TokenLogo
+                                chainId={chainIdOf(c)}
+                                address={addrForLogo}
+                                symbol={t.symbol}
+                                logoURI={t.logo}
+                                size={28}                 // set to 36 if you want it larger
+                                className="kw-logo"
+                              />
+                              <div className="kw-name">
+                                <div className="kw-symbol">
+                                  <strong>{t.symbol || '—'}</strong>
+                                  <span className="kw-name-inline">
+                                    {' - '}{t.name || short(t.contract)}
                                   </span>
-                                )}
-                              </div>
-                              <div className="d-flex flex-column">
-                                <strong>{t.name}</strong>
-                                <small className="text-muted">
-                                  {t.symbol}
-                                  {activeChain === 'all' && t.symbol ? ' • ' : ''}
-                                  {activeChain === 'all' && <span className="badge bg-secondary ms-0">{chainName(c)}</span>}
-                                </small>
+                                </div>
+                                <div className="kw-sub">
+                                  {activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}
+                                </div>
                               </div>
                             </div>
                           </td>

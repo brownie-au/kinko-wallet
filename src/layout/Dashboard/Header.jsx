@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 
 import Button from 'react-bootstrap/Button';
 import Dropdown from 'react-bootstrap/Dropdown';
-import Form from 'react-bootstrap/Form';
 import Image from 'react-bootstrap/Image';
 import Nav from 'react-bootstrap/Nav';
 import Stack from 'react-bootstrap/Stack';
@@ -38,7 +37,7 @@ export default function Header() {
     setResolvedTheme(mode);
   }, [mode]);
 
-  // 🔑 keep template behaviour: add/remove body class so sidebar CSS works
+  // keep template behaviour: add/remove body class so sidebar CSS works
   useEffect(() => {
     document.body.classList.toggle('mob-sidebar-active', drawerOpen);
     return () => document.body.classList.remove('mob-sidebar-active');
@@ -87,16 +86,7 @@ export default function Header() {
               </Nav.Link>
             </Nav.Item>
 
-            <Dropdown className="pc-h-item dropdown">
-              <Dropdown.Toggle variant="link" className="pc-head-link arrow-none m-0 trig-drp-search" id="dropdown-search">
-                <i className="ph ph-magnifying-glass" />
-              </Dropdown.Toggle>
-              <Dropdown.Menu className="pc-h-dropdown drp-search">
-                <Form className="px-3 py-2">
-                  <Form.Control type="search" placeholder="Search here. . ." className="border-0 shadow-none" />
-                </Form>
-              </Dropdown.Menu>
-            </Dropdown>
+            {/* Search dropdown removed */}
           </Nav>
         </div>
 
@@ -211,7 +201,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 📱 mobile overlay to close sidebar when tapping outside */}
+      {/* mobile overlay to close sidebar when tapping outside */}
       {drawerOpen && <div className="pc-md-overlay" onClick={closeIfMobile} />}
     </header>
   );

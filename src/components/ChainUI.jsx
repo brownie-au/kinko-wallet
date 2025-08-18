@@ -9,28 +9,69 @@ export const CHAIN_COLORS = {
   base:  '#3498db'
 };
 
-/** Tiny rounded badge for token rows (left-hand coloured chips) */
+// --- helpers ---
+export function normalizeChain(input) {
+  if (input == null) return 'eth';
+  const s = String(input).toLowerCase();
+
+  // ids
+  if (s === '1') return 'eth';
+  if (s === '369') return 'pulse';
+  if (s === '8453') return 'base';
+
+  // names/aliases
+  if (s === 'all') return 'all';
+  if (s.includes('pulse') || s === 'pls' || s === 'plsx') return 'pulse';
+  if (s.includes('base')) return 'base';
+  if (s.includes('eth') || s === 'ehex') return 'eth';
+
+  return 'eth';
+}
+
+/** Small inline chain chip (for token rows) */
+export function ChainChip({ chain = 'eth', className = '', style }) {
+  const key = normalizeChain(chain);
+  const bg = CHAIN_COLORS[key] || CHAIN_COLORS.eth;
+  const baseStyle = {
+    display: 'inline-block',
+    padding: '1px 6px',     // in-between padding
+    borderRadius: 6,        // subtle rounded
+    fontSize: 10,           // halfway between 8.5 and old ~12
+    lineHeight: 1.2,
+    fontWeight: 500,
+    color: '#fff',
+    background: bg,
+    marginLeft: 5
+  };
+  return (
+    <span className={`k-chain-chip ${className}`} style={{ ...baseStyle, ...style }}>
+      {key.toUpperCase()}
+    </span>
+  );
+}
+
+/** Larger badge (used in some layouts) */
 export function ChainBadge({ chain = 'eth', children }) {
-  const bg = CHAIN_COLORS[chain] || CHAIN_COLORS.eth;
+  const key = normalizeChain(chain);
+  const bg = CHAIN_COLORS[key] || CHAIN_COLORS.eth;
   const style = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    padding: '2px 8px',
+    padding: '3px 10px',
     borderRadius: 999,
     fontSize: 12,
     lineHeight: 1,
     color: '#fff',
     background: bg,
     boxShadow: '0 1px 0 rgba(0,0,0,.15)',
-    // make all chips the same visual width (ETH/Base vs Pulse)
     minWidth: 56
   };
-  return <span className="k-chain-badge" style={style}>{children ?? chain.toUpperCase()}</span>;
+  return <span className="k-chain-badge" style={style}>{children ?? key.toUpperCase()}</span>;
 }
 
-/** Selector pill used in headers; consistent across pages */
+/** Selector pill used in headers */
 export function ChainSelector({
   value = 'all',
   onChange,
@@ -38,19 +79,17 @@ export function ChainSelector({
   size = 'sm'
 }) {
   const baseVars = {
-    // spacing/size via CSS so themes can tweak if needed
     '--k-chip-padding-y': '6px',
     '--k-chip-padding-x': '12px',
     '--k-chip-radius': '12px',
-    '--k-chip-font': size === 'sm' ? '0.85rem' : '1rem'
+    '--k-chip-font': size === 'sm' ? '0.9rem' : '1rem'
   };
 
-  // Active: we only pass the accent color as a CSS var; the rest is styled in CSS
   const btnStyle = (active, chain) =>
     active
       ? {
           ...baseVars,
-          '--k-chip-active-bg': CHAIN_COLORS[chain] || CHAIN_COLORS.all
+          '--k-chip-active-bg': CHAIN_COLORS[normalizeChain(chain)] || CHAIN_COLORS.all
         }
       : baseVars;
 

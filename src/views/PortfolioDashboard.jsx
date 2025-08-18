@@ -1,6 +1,6 @@
 // src/views/PortfolioDashboard.jsx
 /* eslint-disable import/no-relative-parent-imports */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Row, Col, Card } from 'react-bootstrap';
 
 import wallets from '../data/wallets.js';
@@ -16,8 +16,17 @@ const fmtUsd = (n) =>
     maximumFractionDigits: 2
   })}`;
 
-// Sum whatever the app already cached for each wallet.
-// Do NOT enforce staleness here — show “last known” immediately.
+// helper to read sticky total (what View All writes)
+function getStickyTotal() {
+  try {
+    const v = localStorage.getItem('kw:lastTotalUsd');
+    return Number(v) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// fallback: sum whatever the app already cached for each wallet
 function getCachedPortfolioUsd() {
   try {
     const list = Array.isArray(wallets) ? wallets : [];
@@ -28,14 +37,11 @@ function getCachedPortfolioUsd() {
       if (!addr) continue;
 
       const wc = getWalletCache(addr, { maxAge: Number.MAX_SAFE_INTEGER }) || {};
-
-      // Be liberal with field names we may have written previously
       const t =
         wc?.totals?.usd ??
         wc?.totals?.totalUsd ??
         wc?.totalUsd ??
         0;
-
       total += Number(t) || 0;
     }
     return total;
@@ -45,8 +51,31 @@ function getCachedPortfolioUsd() {
 }
 
 export default function PortfolioDashboard() {
-  // Render instantly with cached total to avoid flashing $0.00
-  const [cachedTotal] = useState(getCachedPortfolioUsd());
+  // seed from sticky; if empty fall back to wallet caches
+  const [total, setTotal] = useState(() => {
+    const sticky = getStickyTotal();
+    return sticky > 0 ? sticky : getCachedPortfolioUsd();
+  });
+
+  useEffect(() => {
+    // watch for localStorage updates from View All
+    const tick = () => {
+      const v = getStickyTotal();
+      if (v > 0) setTotal(v);
+    };
+
+    const onStorage = (e) => {
+      if (e.key === 'kw:lastPortfolioTotalUsdAt' || e.key === 'kw:lastTotalUsd') tick();
+    };
+
+    window.addEventListener('storage', onStorage);
+    const id = setInterval(tick, 4000); // catch same-tab changes too
+    tick();
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(id);
+    };
+  }, []);
 
   return (
     <Row className="g-3">
@@ -55,7 +84,7 @@ export default function PortfolioDashboard() {
         <Card className="mb-3">
           <Card.Body>
             <div className="text-muted mb-1">Total Portfolio Value</div>
-            <div className="fs-4 fw-semibold">{fmtUsd(cachedTotal)}</div>
+            <div className="fs-4 fw-semibold">{fmtUsd(total)}</div>
             <div className="text-success small mt-1">▲ 0.00% (24h)</div>
           </Card.Body>
         </Card>

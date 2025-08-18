@@ -24,7 +24,7 @@ export default function LandingPage() {
             style={{ marginLeft: 'auto', marginRight: 'auto', width: 'fit-content' }}
           >
             <Link to="/dashboard/default" className="btn btn-primary btn-lg">
-              Get Started
+              ENTER
             </Link>
 
             <button

@@ -5,7 +5,8 @@
 .pc-header {
   background: var(--pc-header-background);
   color: var(--pc-header-color);
-  min-height: $header-height;
+  min-height: 40px;          // compact header
+  height: 40px;
   box-shadow: var(--pc-header-shadow);
   backdrop-filter: blur(7px);
   position: fixed;
@@ -20,20 +21,20 @@
   }
 
   .m-header {
-    height: $header-height;
+    height: 40px;            // match header height
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: $sidebar-width;
-    padding: 16px 10px 16px 24px;
+    padding: 0 10px 0 16px;  // tighter vertical padding
   }
 
   .header-wrapper {
     display: flex;
-    padding: 0 25px;
+    padding: 0 12px;         // tighter side padding
     flex-grow: 1;
     @include media-breakpoint-down(sm) {
-      padding: 0 15px;
+      padding: 0 10px;
     }
   }
 
@@ -74,7 +75,7 @@
   }
 
   .pc-h-item {
-    min-height: $header-height;
+    min-height: 40px;        // was $header-height
     display: flex;
     align-items: center;
     position: relative;
@@ -88,8 +89,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 36px;             // was 44px
+    height: 36px;            // was 44px
     border-radius: $border-radius;
     color: var(--pc-header-color);
     overflow: hidden;
@@ -117,12 +118,12 @@
     }
 
     > i {
-      font-size: 24px;
+      font-size: 20px;       // was 24px
     }
 
     > svg {
-      width: 20px;
-      height: 20px;
+      width: 18px;           // was 20px
+      height: 18px;
     }
 
     &.active,
@@ -495,8 +496,7 @@
     }
 
     &.mob-header-active {
-      top: $header-height;
-
+      top: 40px;  // was $header-height
       .header-wrapper {
         background: var(--pc-header-background);
         position: relative;
@@ -567,8 +567,8 @@
 @include media-breakpoint-down(sm) {
   .pc-header {
     .pc-head-link {
-      padding: 0.65rem;
-      margin: 0 5px;
+      padding: 0.5rem;      // slightly tighter
+      margin: 0 4px;
     }
 
     .pc-h-item {
@@ -594,7 +594,7 @@
   .pc-header .pc-sidebar-collapse { display: none !important; } /* hide desktop hamburger on mobile */
 }
 
-/* --- Mobile/off‑canvas behavior fix ----------------------------------- */
+/* --- Mobile/off-canvas behavior fix ----------------------------------- */
 @media (max-width: 1024px) {
   /* Sidebar is off-canvas by default */
   .pc-sidebar {
