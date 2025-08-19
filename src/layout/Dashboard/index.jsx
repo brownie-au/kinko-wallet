@@ -1,6 +1,6 @@
+// src/layout/Dashboard/index.jsx
 import { Outlet } from 'react-router-dom';
 
-// project-imports
 import Drawer from './Drawer';
 import Footer from './Footer';
 import Header from './Header';
@@ -9,7 +9,7 @@ import Breadcrumbs from 'components/Breadcrumbs';
 import useConfig from 'hooks/useConfig';
 import NavigationScroll from 'components/NavigationScroll';
 
-// ==============================|| MAIN LAYOUT ||============================== //
+import TickerBar from 'components/TickerBar';
 
 export default function MainLayout() {
   const { container } = useConfig();
@@ -18,15 +18,21 @@ export default function MainLayout() {
     <>
       <Customizer />
       <Drawer />
+
+      {/* 🔝 Ticker first so it sits at the very top; header/hamburger comes below */}
+      <TickerBar />
+
       <Header />
+
       <div className="pc-container">
-        <div className={`pc-content ${container && 'container'} `}>
+        <div className={`pc-content ${container ? 'container' : ''}`}>
           <Breadcrumbs />
           <NavigationScroll>
             <Outlet />
           </NavigationScroll>
         </div>
       </div>
+
       <Footer />
     </>
   );

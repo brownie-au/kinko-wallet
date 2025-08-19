@@ -1,0 +1,83 @@
+/* --- Crypto Ticker --- */
+.kw-ticker {
+    width: 100%;
+    display: block;
+    overflow: hidden;
+    border-top: 1px solid var(--bs-border-color, rgba(255, 255, 255, 0.1));
+    border-bottom: 1px solid var(--bs-border-color, rgba(255, 255, 255, 0.1));
+    background: var(--bs-body-bg);
+}
+
+.kw-ticker__wrap {
+    display: flex;
+    width: max-content;
+    gap: 64px;
+    /* space between the two tracks */
+    will-change: transform;
+    animation: kw-ticker-scroll 60s linear infinite;
+}
+
+.kw-ticker:hover .kw-ticker__wrap {
+    animation-play-state: paused;
+}
+
+.kw-ticker__wrap--static {
+    animation: none !important;
+}
+
+.kw-ticker__track {
+    display: inline-flex;
+    gap: 20px;
+    padding: 6px 12px;
+}
+
+.kw-ticker__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0.95;
+}
+
+.kw-ticker__symbol {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    opacity: 0.95;
+}
+
+.kw-ticker__price,
+.kw-ticker__change {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Smooth, continuous marquee */
+@keyframes kw-ticker-scroll {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+
+    /* two tracks = 50% loop */
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .kw-ticker__wrap {
+        animation: none !important;
+        transform: none !important;
+    }
+}
+
+/* --- Sticky placement for the global ticker --- */
+.kw-ticker.sticky {
+    position: sticky;
+    top: 0;
+    /* if your header is fixed and tall, replace with its height (e.g., 56px) */
+    z-index: 1000;
+    /* below offcanvas/sidebar overlays; high enough above content */
+}

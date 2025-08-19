@@ -1,0 +1,95 @@
+/* src/components/TickerBar.module.css */
+
+/* Root container */
+.kwTicker {
+    width: 100%;
+    display: block;
+    overflow: hidden;
+    background: var(--bs-body-bg);
+    border: 0;
+    /* remove thin lines above/below */
+}
+
+/* Sticky placement */
+.sticky {
+    position: sticky;
+    top: 0;
+    z-index: 1010;
+    /* above content overlays, below sidebar/offcanvas */
+}
+
+/* Track wrapper */
+.wrap {
+    display: flex;
+    width: max-content;
+    gap: 64px;
+    /* space between the two tracks */
+    will-change: transform;
+    animation: kw_ticker_scroll 60s linear infinite;
+}
+
+.wrapStatic {
+    animation: none !important;
+}
+
+/* Two mirrored tracks for seamless loop */
+.track {
+    display: inline-flex;
+    gap: 20px;
+    padding: 6px 12px;
+}
+
+/* Items */
+.item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0.95;
+}
+
+.symbol {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    opacity: 0.95;
+}
+
+.price,
+.change {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Smooth, continuous marquee */
+@keyframes kw_ticker_scroll {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+
+    /* two tracks = 50% loop */
+}
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+    .wrap {
+        animation: none !important;
+        transform: none !important;
+    }
+}
+
+/* Pause the scroll when hovering the ticker */
+.kwTicker:hover .wrap {
+    animation-play-state: paused;
+}
+
+/* On touch devices there's no hover — keep it running */
+@media (hover: none) {
+    .kwTicker:hover .wrap {
+        animation-play-state: running;
+    }
+}
