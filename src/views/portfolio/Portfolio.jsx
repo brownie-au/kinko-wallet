@@ -14,6 +14,9 @@ import TokenLogo from '../../components/TokenLogo';
 // 🔒 reuse existing global token blocklist
 import { isBlockedToken } from '../../data/tokenBlocklist';
 
+// ✅ NEW: publish Top‑5 for Dashboard
+import { writeTopTokensCache } from '../../services/topTokensService';
+
 // --- shared keys so other pages can read the total ---
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
@@ -315,6 +318,36 @@ export default function Portfolio() {
     setLastUpdated(Date.now());
   };
 
+  // === PATCH helper: expand a token if Dashboard set focus keys ===
+  const maybeExpandFromFocus = (list) => {
+    try {
+      const want = (localStorage.getItem('kw:focusToken') || '').trim();
+      const wantKey = (localStorage.getItem('kw:focusTokenKey') || '').trim();
+      if (!want && !wantKey) return;
+
+      const match = (list || []).find((tt) =>
+        (wantKey && keyFor(tt).toLowerCase() === wantKey.toLowerCase()) ||
+        (want && (
+          (tt.symbol || '').toLowerCase() === want.toLowerCase() ||
+          ((tt.address || tt.contract || '').toLowerCase() === want.toLowerCase())
+        ))
+      );
+
+      if (match) {
+        const k = keyFor(match);
+        setExpanded((prev) => {
+          const n = new Set(prev);
+          n.add(k);
+          return n;
+        });
+        // clear only after a successful match so we can retry if needed
+        localStorage.removeItem('kw:focusToken');
+        localStorage.removeItem('kw:focusTokenKey');
+      }
+    } catch { /* noop */ }
+  };
+  // === END PATCH helper ===
+
   async function load(force = false) {
     setError(null);
 
@@ -326,6 +359,9 @@ export default function Portfolio() {
       persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
+      // === PATCH: expand from focus when serving from memory cache
+      maybeExpandFromFocus(memHit.tokens);
+      // === END PATCH
       setBooting(false);
       setRefreshing(false);
       return;
@@ -337,9 +373,32 @@ export default function Portfolio() {
       persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
+      // === PATCH: expand from focus when serving from LS cache
+      maybeExpandFromFocus(ls.tokens);
+      // === END PATCH
       setBooting(false);
       setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
+      // ✅ publish Top‑5 from cached data if we're on All chains
+      if (mode === 'all') {
+        try {
+          const top5 = [...(ls.tokens || [])]
+            .filter((t) => !isJunkToken(t) && (Number(t.valueUsd) || 0) > 0)
+            .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
+            .slice(0, 5)
+            .map((t) => ({
+              symbol: t.symbol,
+              name: t.name || t.symbol,
+              chain: t.chain,
+              address: t.address || t.contract || '',
+              logo: t.logo || t.icon || '',
+              valueUsd: Number(t.valueUsd) || 0,
+              change24hPct: getChangePct(t),
+              dexUrl: t.dexUrl || null
+            }));
+          writeTopTokensCache(top5);
+        } catch { }
+      }
       return;
     }
 
@@ -371,11 +430,35 @@ export default function Portfolio() {
 
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
+      // === PATCH: expand from focus when serving fresh build
+      maybeExpandFromFocus(tokensWithValue);
+      // === END PATCH
 
       const payload = { totalUsd, tokens: tokensWithValue, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
       saveTotalsToLS(totalUsd, 0);
+
+      // ✅ publish Top‑5 for Dashboard (ONLY when viewing the full portfolio)
+      if (mode === 'all') {
+        try {
+          const top5 = [...tokensWithValue]
+            .filter((t) => !isJunkToken(t) && (Number(t.valueUsd) || 0) > 0)
+            .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
+            .slice(0, 5)
+            .map((t) => ({
+              symbol: t.symbol,
+              name: t.name || t.symbol,
+              chain: t.chain,
+              address: t.address || t.contract || '',
+              logo: t.logo || t.icon || '',
+              valueUsd: Number(t.valueUsd) || 0,
+              change24hPct: getChangePct(t),
+              dexUrl: t.dexUrl || null
+            }));
+          writeTopTokensCache(top5);
+        } catch { }
+      }
     } catch (e) {
       setError(e?.message || 'Failed to load portfolio');
     } finally {
@@ -385,6 +468,13 @@ export default function Portfolio() {
   }
 
   useEffect(() => { load(false); /* eslint-disable-next-line */ }, [walletCount, walletsSig, mode]);
+
+  // === PATCH: retry expand whenever tokens update (in case timing was off)
+  useEffect(() => {
+    maybeExpandFromFocus(tokens);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens]);
+  // === END PATCH
 
   const visibleTokens = useMemo(() => {
     const base = tokens.filter((t) => !isJunkToken(t));
