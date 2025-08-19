@@ -1,51 +1,34 @@
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* You can keep or add custom styles here */
-/* --- Kinko chips (global, used by Refresh etc.) --- */
-.k-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: .5rem .8rem;
-  line-height: 1;
-  font-size: .85rem;
-  border-radius: 9999px;
-  border: 1px solid transparent;
-  user-select: none;
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
-  cursor: pointer;
+// src/index.jsx
+import {
+  createRoot
 }
 
-.k-chip-ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, .18);
-  color: rgba(255, 255, 255, .85);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .04);
+from 'react-dom/client';
+
+// styles
+import './index.scss';
+
+// project-imports
+import App from './App';
+
+import {
+  ConfigProvider
 }
 
-.k-chip-ghost:hover {
-  background: rgba(255, 255, 255, .06);
-  border-color: rgba(255, 255, 255, .28);
+from 'contexts/ConfigContext';
+
+import {
+  WalletProvider
 }
 
-.k-chip-ghost:active {
-  background: rgba(255, 255, 255, .12);
-}
+from 'contexts/WalletContext.jsx';
 
-/* Light theme fallback */
-html[data-theme="light"] .k-chip-ghost {
-  border-color: rgba(0, 0, 0, .15);
-  color: rgba(0, 0, 0, .8);
-}
+import '@fontsource/open-sans/300.css';
+import '@fontsource/open-sans/400.css';
+import '@fontsource/open-sans/500.css';
+import '@fontsource/open-sans/600.css';
 
-html[data-theme="light"] .k-chip-ghost:hover {
-  background: rgba(0, 0, 0, .06);
-  border-color: rgba(0, 0, 0, .25);
-}
+const container=document.getElementById('root');
+const root=createRoot(container);
 
-html[data-theme="light"] .k-chip-ghost:active {
-  background: rgba(0, 0, 0, .10);
-}
+root.render(<ConfigProvider> <WalletProvider> <App /> </WalletProvider> </ConfigProvider>);
