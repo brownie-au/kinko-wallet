@@ -1,53 +1,83 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="Web site created using create-react-app" />
-    <title>Datta Able React Admin Dashboard</title>
 
-    <!-- 0) Prefer dark UI controls while loading -->
-    <meta name="color-scheme" content="dark light" />
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Web site created using create-react-app" />
+  <title>Datta Able React Admin Dashboard</title>
 
-    <!-- 1) Set theme ASAP so DOM has the right mode before any CSS/JS -->
-    <script>
-      (() => {
-        const KEY = 'datta-able-react-ts-config';
-        let mode = 'dark';
-        try {
-          const raw = localStorage.getItem(KEY);
-          if (raw) {
-            const saved = JSON.parse(raw);
-            if (saved && saved.mode) mode = saved.mode;
-          } else {
-            localStorage.setItem(KEY, JSON.stringify({ mode: 'dark' }));
-          }
-        } catch {}
-        document.documentElement.setAttribute('data-theme', mode);
-        document.documentElement.classList.toggle('dark', mode === 'dark');
-      })();
-    </script>
+  <!-- 0) Prefer dark UI controls while loading -->
+  <meta name="color-scheme" content="dark light" />
 
-    <!-- 2) Critical paint styles to prevent white flash BEFORE your app CSS loads -->
-    <style>
-      /* Default paint: dark, very low specificity so your app CSS wins later */
-      html, body { background: #000; color: #fff; }
-      /* If user has light saved, flip it immediately */
-      html[data-theme="light"] body { background: #fff; color: #000; }
-      /* Avoid layout shift from scrollbars while loading */
-      html { min-height: 100%; }
-      body { min-height: 100vh; margin: 0; }
-    </style>
+  <!-- 1) Set theme ASAP so DOM has the right mode before any CSS/JS -->
+  <script>
+    (() => {
+      const KEY = 'datta-able-react-ts-config';
+      let mode = 'dark';
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved && saved.mode) mode = saved.mode;
+        } else {
+          localStorage.setItem(KEY, JSON.stringify({ mode: 'dark' }));
+        }
+      } catch { }
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+    })();
+  </script>
 
-    <!-- Old Safari tablet fix -->
-    <script src="https://cdn.jsdelivr.net/npm/resize-observer-polyfill@1.5.1/dist/ResizeObserver.min.js"></script>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+  <!-- 2) Critical paint styles to prevent white flash BEFORE your app CSS loads -->
+  <style>
+    /* Default paint: dark, very low specificity so your app CSS wins later */
+    html,
+    body {
+      background: #000;
+      color: #fff;
+    }
 
-    <script type="module" src="/src/index.jsx"></script>
-  </body>
+    /* If user has light saved, flip it immediately */
+    html[data-theme="light"] body {
+      background: #fff;
+      color: #000;
+    }
+
+    /* Avoid layout shift from scrollbars while loading */
+    html {
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    /* 🔒 Privacy mode styles: blur sensitive elements when body[data-privacy="on"] */
+    body[data-privacy="on"] .privacy-blur {
+      filter: blur(6px);
+      transition: filter 0.25s ease;
+    }
+
+    body[data-privacy="on"] .privacy-blur:hover {
+      filter: blur(0);
+    }
+  </style>
+
+  <!-- Old Safari tablet fix -->
+  <script src="https://cdn.jsdelivr.net/npm/resize-observer-polyfill@1.5.1/dist/ResizeObserver.min.js"></script>
+</head>
+
+<!-- Privacy ON by default so scrubbed elements blur even before React mounts -->
+
+<body data-privacy="on">
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+
+  <script type="module" src="/src/index.jsx"></script>
+</body>
+
 </html>

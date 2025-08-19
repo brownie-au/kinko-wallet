@@ -1,4 +1,3 @@
-import './index.css';
 
 @tailwind base;
 @tailwind components;
@@ -22,17 +21,31 @@ import './index.css';
 
 .k-chip-ghost {
   background: transparent;
-  border-color: rgba(255,255,255,.18);
-  color: rgba(255,255,255,.85);
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,.04);
+  border-color: rgba(255, 255, 255, .18);
+  color: rgba(255, 255, 255, .85);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .04);
 }
-.k-chip-ghost:hover  { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.28); }
-.k-chip-ghost:active { background: rgba(255,255,255,.12); }
+
+.k-chip-ghost:hover {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .28);
+}
+
+.k-chip-ghost:active {
+  background: rgba(255, 255, 255, .12);
+}
 
 /* Light theme fallback */
 html[data-theme="light"] .k-chip-ghost {
-  border-color: rgba(0,0,0,.15);
-  color: rgba(0,0,0,.8);
+  border-color: rgba(0, 0, 0, .15);
+  color: rgba(0, 0, 0, .8);
 }
-html[data-theme="light"] .k-chip-ghost:hover  { background: rgba(0,0,0,.06); border-color: rgba(0,0,0,.25); }
-html[data-theme="light"] .k-chip-ghost:active { background: rgba(0,0,0,.10); }
+
+html[data-theme="light"] .k-chip-ghost:hover {
+  background: rgba(0, 0, 0, .06);
+  border-color: rgba(0, 0, 0, .25);
+}
+
+html[data-theme="light"] .k-chip-ghost:active {
+  background: rgba(0, 0, 0, .10);
+}

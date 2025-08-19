@@ -84,8 +84,8 @@ export default function PortfolioDashboard() {
         <Card className="mb-3">
           <Card.Body>
             <div className="text-muted mb-1">Total Portfolio Value</div>
-            <div className="fs-4 fw-semibold">{fmtUsd(total)}</div>
-            <div className="text-success small mt-1">▲ 0.00% (24h)</div>
+            <div className="fs-4 fw-semibold" data-scrub="true">{fmtUsd(total)}</div>
+            <div className="text-success small mt-1" data-scrub="true">▲ 0.00% (24h)</div>
           </Card.Body>
         </Card>
       </Col>
@@ -94,7 +94,7 @@ export default function PortfolioDashboard() {
         <Card className="mb-3">
           <Card.Body>
             <div className="text-muted mb-1">PnL</div>
-            <div className="fs-4 fw-semibold">+ $6,842</div>
+            <div className="fs-4 fw-semibold" data-scrub="true">+ $6,842</div>
             <div className="small mt-2">
               <span className="badge bg-secondary me-2">7D</span>
               <span className="badge bg-secondary me-2">1M</span>

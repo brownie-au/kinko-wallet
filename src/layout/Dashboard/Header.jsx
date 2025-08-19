@@ -1,3 +1,4 @@
+// src/layout/Dashboard/Header.jsx
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -20,6 +21,9 @@ import Img3 from 'assets/images/user/avatar-3.png';
 import Img4 from 'assets/images/user/avatar-4.png';
 import Img5 from 'assets/images/user/avatar-5.png';
 
+// Privacy hook
+import { usePrivacy } from 'contexts/PrivacyContext.jsx';
+
 const notifications = [
   { id: 1, avatar: Img1, time: '2 min ago', title: 'UI/UX Design', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Today' },
   { id: 2, avatar: Img2, time: '1 hour ago', title: 'Message', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Today' },
@@ -32,6 +36,8 @@ export default function Header() {
   const { i18n, onChangeLocalization, onChangeMode, mode } = useConfig();
   const { menuMaster } = useGetMenuMaster();
   const drawerOpen = !!menuMaster?.isDashboardDrawerOpened;
+
+  const { privacyOn, togglePrivacy } = usePrivacy();
 
   useEffect(() => {
     setResolvedTheme(mode);
@@ -92,6 +98,21 @@ export default function Header() {
 
         <div className="ms-auto">
           <Nav className="list-unstyled">
+            {/* Privacy: Phosphor eye/eye-slash so it matches theme */}
+            <Nav.Item className="pc-h-item">
+              <a
+                href="#"
+                className="pc-head-link me-0"
+                onClick={(e) => { e.preventDefault(); togglePrivacy(); }}
+                title={privacyOn ? 'Show balances' : 'Hide balances'}
+                aria-label={privacyOn ? 'Show balances' : 'Hide balances'}
+                aria-pressed={privacyOn}
+                role="button"
+              >
+                <i className={privacyOn ? 'ph ph-eye-slash' : 'ph ph-eye'} />
+              </a>
+            </Nav.Item>
+
             <Dropdown className="pc-h-item" align="end">
               <Dropdown.Toggle className="pc-head-link me-0 arrow-none" variant="link" id="dropdown-basic">
                 <i className="ph ph-sun-dim" />
