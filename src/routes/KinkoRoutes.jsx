@@ -6,11 +6,14 @@ import { WalletProvider } from 'contexts/WalletContext';
 
 // Wallet pages
 const WalletDashboard = Loadable(lazy(() => import('views/wallet/WalletDashboard')));
-const WalletManage    = Loadable(lazy(() => import('views/wallet/WalletManage')));
-const WalletDetail    = Loadable(lazy(() => import('views/wallet/WalletDetail')));
+const WalletManage = Loadable(lazy(() => import('views/wallet/WalletManage')));
+const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
 
-// View All (NEW)
-const Portfolio       = Loadable(lazy(() => import('views/portfolio/Portfolio')));
+// View All (Portfolio)
+const Portfolio = Loadable(lazy(() => import('views/portfolio/Portfolio')));
+
+// NEW: HEX Staking page
+const KwHexStaking = Loadable(lazy(() => import('views/kw-staking/kw-HexStaking')));
 
 const KinkoRoutes = {
   path: '/',
@@ -31,6 +34,16 @@ const KinkoRoutes = {
       element: (
         <WalletProvider>
           <Portfolio />
+        </WalletProvider>
+      )
+    },
+
+    // NEW: HEX Staking route
+    {
+      path: 'staking/hex',
+      element: (
+        <WalletProvider>
+          <KwHexStaking />
         </WalletProvider>
       )
     }

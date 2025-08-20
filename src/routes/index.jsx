@@ -42,7 +42,7 @@ const router = createBrowserRouter(
     PagesRoutes,
     OtherRoutes,
     ChartMapRoutes,
-    KinkoRoutes // ✅ /portfolio lives here
+    KinkoRoutes // ✅ /portfolio (and our staking routes) live here
   ],
   { basename: import.meta.env.VITE_APP_BASE_NAME }
 );

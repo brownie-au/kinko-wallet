@@ -59,6 +59,52 @@ const kinkoMenu = {
           className: ''
         }
       ]
+    },
+
+    // ----- Staking & Mining collapsible menu -----
+    {
+      id: 'staking-mining',
+      title: 'Staking & Mining',
+      type: 'collapse',
+      icon: 'IconCurrencyEthereum',
+      className: '',
+      children: [
+        {
+          id: 'hex-staking',
+          title: 'HEX Staking',
+          type: 'item',
+          url: '/staking/hex',
+          target: false,
+          className: ''
+        },
+        {
+          id: 'phex-staking',
+          title: 'pHEX Staking',
+          type: 'item',
+          url: '/staking/phex',
+          target: false,
+          className: '',
+          disabled: true
+        },
+        {
+          id: 'eth-staking',
+          title: 'ETH Staking',
+          type: 'item',
+          url: '/staking/eth',
+          target: false,
+          className: '',
+          disabled: true
+        },
+        {
+          id: 'etc-mining',
+          title: 'ETC Mining',
+          type: 'item',
+          url: '/staking/etc',
+          target: false,
+          className: '',
+          disabled: true
+        }
+      ]
     }
   ]
 };

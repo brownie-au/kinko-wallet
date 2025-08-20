@@ -59,6 +59,7 @@
     "cropperjs": "1.6.2",
     "date-fns": "4.1.0",
     "easymde": "2.18.0",
+    "ethers": "^5.8.0",
     "formik": "2.4.6",
     "framer-motion": "12.9.2",
     "fslightbox-react": "1.7.6",
