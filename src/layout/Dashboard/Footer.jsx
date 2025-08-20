@@ -19,9 +19,9 @@ export default function Footer() {
           {/* Footer Text */}
           <Col xs="auto" className="my-1">
             <p className="m-0">
-              {branding.brandName} ♥ Crafted By Team{' '}
-              <a href="https://codedthemes.com/" target="_blank" rel="noopener noreferrer" className="text-primary">
-                CodedThemes
+              {branding.brandName} ♥ Built by Brownie{' '}
+              <a href="https://x.com/RobBrow22393477" target="_blank" rel="noopener noreferrer" className="text-primary">
+                X
               </a>
             </p>
           </Col>

@@ -1,23 +1,23 @@
 {
-  "brandName": "Datta Able",
-  "title": "React Admin Dashboard Template",
-  "Docs": "https://codedthemes.gitbook.io/datta",
-  "changeLog": "https://codedthemes.gitbook.io/datta/changelog",
+  "brandName": "Kinko Wallet",
+  "title": "Your DeFi Command Center",
+  "Docs": "https://github.com/brownie-au/kinko-wallet",
+  "changeLog": "hhttps://github.com/brownie-au/kinko-wallet",
   "company": {
-    "name": "CodedThemes",
-    "url": "https://codedthemes.com",
-    "support": "https://codedthemes.support-hub.io/",
-    "privacyPolicy": "https://codedthemes.com/privacy-policy/",
-    "license": "https://codedthemes.com/license/",
+    "name": "Kinko Wallets",
+    "url": "https://kinkowallet.com",
+    "support": "/",
+    "privacyPolicy": "/",
+    "license": "/",
     "socialLink": {
-      "linkedin": "https://www.linkedin.com/company/codedthemes/",
-      "twitter": "https://x.com/codedthemes",
-      "instagram": "https://www.instagram.com/codedthemes/",
-      "facebook": "https://www.facebook.com/codedthemes",
-      "youtube": "https://www.youtube.com/@codedthemes",
-      "github": "https://github.com/codedthemes",
-      "dribble": "https://dribbble.com/codedthemes",
-      "discord": "https://discord.com/invite/p2E2WhCb6s"
+      "linkedin": "https://www.linkedin.com/company//",
+      "twitter": "https://x.com/",
+      "instagram": "https://www.instagram.com//",
+      "facebook": "https://www.facebook.com/",
+      "youtube": "https://www.youtube.com/@",
+      "github": "https://github.com/",
+      "dribble": "https://dribbble.com/",
+      "discord": "https://discord.com/"
     }
   },
   "logo": {
