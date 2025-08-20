@@ -1,0 +1,7 @@
+/* src/styles/kw-spacing-hotfix.css */
+
+/* Kill the theme’s forced top padding/margin */
+#root>.pc-container>.pc-content {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}

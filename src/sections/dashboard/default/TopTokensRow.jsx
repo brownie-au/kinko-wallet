@@ -89,7 +89,8 @@ function useWalletTokenLookup() {
 const Styles = () => (
     <style>{`
     .kwt5-wrap { margin-top: .25rem; }
-    .kwt5-grid { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:12px; }
+    /* Perfect fit: 6 equal columns on wide screens */
+    .kwt5-grid { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:12px; }
     @media (max-width: 1200px){ .kwt5-grid{ grid-template-columns: repeat(3,minmax(0,1fr)); } }
     @media (max-width: 768px){  .kwt5-grid{ grid-template-columns: repeat(2,minmax(0,1fr)); } }
 
@@ -187,7 +188,7 @@ function Tile({ t, totalUsd, lookup }) {
                         </div>
                     </div>
 
-                    {/* moved chart icon to the LEFT of the right cluster — it lives here and the right cluster sits below */}
+                    {/* chart icon on the left of % cluster */}
                     <div>
                         <Button
                             className="kwt5-iconbtn"
@@ -229,12 +230,12 @@ function Tile({ t, totalUsd, lookup }) {
 }
 
 export default function TopTokensRow() {
-    const top = useTopTokens(5);
+    const top = useTopTokens(6);            // fetch 6
     const totalUsd = getTotalFromLS() || 0;
     const lookup = useWalletTokenLookup();
 
     const list = useMemo(
-        () => [...(top || [])].filter(x => (Number(x.valueUsd) || 0) > 0).slice(0, 5),
+        () => [...(top || [])].filter(x => (Number(x.valueUsd) || 0) > 0).slice(0, 6),
         [top]
     );
 
@@ -253,7 +254,7 @@ export default function TopTokensRow() {
                     ? list.map((t, i) => (
                         <Tile key={(t.address || t.symbol || i) + String(i)} t={t} totalUsd={totalUsd} lookup={lookup} />
                     ))
-                    : Array.from({ length: 5 }).map((_, i) => (
+                    : Array.from({ length: 6 }).map((_, i) => (
                         <Card key={`placeholder-${i}`} className="kwt5-card">
                             <Card.Body className="d-flex align-items-center justify-content-center text-muted" style={{ minHeight: 92 }}>
                                 <small>Waiting for data…</small>

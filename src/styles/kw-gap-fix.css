@@ -1,0 +1,135 @@
+/* =========================================
+   Kinko Wallet — Gap control & header collapse hygiene
+   - Header compact = 40px
+   - Container offset when header visible = 50px (40 + 10 buffer)
+   - Tiny gap when header hidden
+   - **NEW**: universal 10px spacer BELOW ticker via .pc-content::before
+   ========================================= */
+
+:root {
+    --kw-top-gap: 6px;
+    /* tiny gap when header is hidden */
+    --kw-main-buffer: 10px;
+    /* buffer under ticker when header is visible */
+}
+
+/* ===== A) Desktop defaults (header visible) ===== */
+@media (min-width: 992px) {
+
+    /* keep header compact */
+    .pc-header:not([style*="height: 0"]),
+    .pc-header:not([style*="height: 0"]) .m-header,
+    .pc-header:not([style*="height: 0"]) .pc-h-item {
+        min-height: 40px !important;
+        height: 40px !important;
+    }
+
+    /* container sits below header + extra 10px bump */
+    body:not(.kw-header-hidden) .pc-container {
+        top: 50px !important;
+        /* 40 header + 10 buffer */
+    }
+
+    /* footer follows same offset */
+    body:not(.kw-header-hidden) .pc-footer {
+        margin-top: 50px !important;
+    }
+
+    /* clear any template top spacing and inject our own tiny spacer */
+    body:not(.kw-header-hidden) .pc-content {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* >>> This is the money-maker: adds a 10px buffer BELOW the ticker <<< */
+    body:not(.kw-header-hidden) .pc-content::before {
+        content: '';
+        display: block;
+        height: var(--kw-main-buffer);
+    }
+}
+
+/* sidebar hide alignment safety */
+@media (max-width: 1024px) {
+    .pc-header {
+        left: 0 !important;
+    }
+}
+
+/* ===== B) Header collapsed (two detectors) ===== */
+@media (min-width: 992px) {
+    .pc-header[style*="height: 0"] {
+        height: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* no offset when header hidden */
+    body.kw-header-hidden .pc-container {
+        top: 0 !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    /* tiny top gap only in hidden-header mode */
+    body.kw-header-hidden .pc-content {
+        padding-top: var(--kw-top-gap) !important;
+        margin-top: 0 !important;
+    }
+
+    /* suppress the visible-header spacer when hidden */
+    body.kw-header-hidden .pc-content::before {
+        display: none !important;
+    }
+
+    /* flatten common built-in spacers at top when hidden */
+    body.kw-header-hidden .pc-content .page-header,
+    body.kw-header-hidden .pc-content .breadcrumb-wrapper {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        min-height: 0 !important;
+        border: 0 !important;
+    }
+
+    body.kw-header-hidden .pc-content>*:first-child,
+    body.kw-header-hidden .pc-content>.row:first-child,
+    body.kw-header-hidden .pc-content>.container:first-child,
+    body.kw-header-hidden .pc-content>.container-fluid:first-child,
+    body.kw-header-hidden .pc-content>*:first-child>*:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    body.kw-header-hidden .pc-footer {
+        margin-top: 0 !important;
+    }
+}
+
+/* :has() variant for hidden header (Chromium/WebKit) */
+@media (min-width: 992px) {
+    body:has(.pc-header[style*="height: 0"]) .pc-container {
+        top: 0 !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    body:has(.pc-header[style*="height: 0"]) .pc-content {
+        padding-top: var(--kw-top-gap) !important;
+        margin-top: 0 !important;
+    }
+
+    body:has(.pc-header[style*="height: 0"]) .pc-content::before {
+        display: none !important;
+        /* don't double-gap when hidden */
+    }
+}
+
+/* Mobile unchanged so the hamburger remains usable */
+@media (max-width: 991.98px) {
+    .pc-header {
+        display: flex;
+    }
+}

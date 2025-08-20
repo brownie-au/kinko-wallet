@@ -14,13 +14,15 @@ import TokenLogo from '../../components/TokenLogo';
 // 🔒 reuse existing global token blocklist
 import { isBlockedToken } from '../../data/tokenBlocklist';
 
-// ✅ NEW: publish Top‑5 for Dashboard
+// ✅ publish Top tokens for Dashboard (now top 6 to match tiles)
 import { writeTopTokensCache } from '../../services/topTokensService';
 
 // --- shared keys so other pages can read the total ---
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
 const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
+// how many to publish for the dashboard tiles
+const TOPN_DASHBOARD = 6;
 
 function saveTotalsToLS(totalUsd, changePct24h = 0) {
   try {
@@ -318,7 +320,7 @@ export default function Portfolio() {
     setLastUpdated(Date.now());
   };
 
-  // === PATCH helper: expand a token if Dashboard set focus keys ===
+  // === helper: expand a token if Dashboard set focus keys ===
   const maybeExpandFromFocus = (list) => {
     try {
       const want = (localStorage.getItem('kw:focusToken') || '').trim();
@@ -346,7 +348,7 @@ export default function Portfolio() {
       }
     } catch { /* noop */ }
   };
-  // === END PATCH helper ===
+  // === END helper ===
 
   async function load(force = false) {
     setError(null);
@@ -359,9 +361,8 @@ export default function Portfolio() {
       persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
-      // === PATCH: expand from focus when serving from memory cache
+      // expand from focus when serving from memory cache
       maybeExpandFromFocus(memHit.tokens);
-      // === END PATCH
       setBooting(false);
       setRefreshing(false);
       return;
@@ -373,19 +374,18 @@ export default function Portfolio() {
       persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
-      // === PATCH: expand from focus when serving from LS cache
+      // expand from focus when serving from LS cache
       maybeExpandFromFocus(ls.tokens);
-      // === END PATCH
       setBooting(false);
       setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
-      // ✅ publish Top‑5 from cached data if we're on All chains
+      // ✅ publish Top‑N from cached data if we're on All chains
       if (mode === 'all') {
         try {
-          const top5 = [...(ls.tokens || [])]
+          const topN = [...(ls.tokens || [])]
             .filter((t) => !isJunkToken(t) && (Number(t.valueUsd) || 0) > 0)
             .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
-            .slice(0, 5)
+            .slice(0, TOPN_DASHBOARD)
             .map((t) => ({
               symbol: t.symbol,
               name: t.name || t.symbol,
@@ -396,7 +396,7 @@ export default function Portfolio() {
               change24hPct: getChangePct(t),
               dexUrl: t.dexUrl || null
             }));
-          writeTopTokensCache(top5);
+          writeTopTokensCache(topN);
         } catch { }
       }
       return;
@@ -430,22 +430,21 @@ export default function Portfolio() {
 
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
-      // === PATCH: expand from focus when serving fresh build
+      // expand from focus when serving fresh build
       maybeExpandFromFocus(tokensWithValue);
-      // === END PATCH
 
       const payload = { totalUsd, tokens: tokensWithValue, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
       saveTotalsToLS(totalUsd, 0);
 
-      // ✅ publish Top‑5 for Dashboard (ONLY when viewing the full portfolio)
+      // ✅ publish Top‑N for Dashboard (ONLY when viewing the full portfolio)
       if (mode === 'all') {
         try {
-          const top5 = [...tokensWithValue]
+          const topN = [...tokensWithValue]
             .filter((t) => !isJunkToken(t) && (Number(t.valueUsd) || 0) > 0)
             .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
-            .slice(0, 5)
+            .slice(0, TOPN_DASHBOARD)
             .map((t) => ({
               symbol: t.symbol,
               name: t.name || t.symbol,
@@ -456,7 +455,7 @@ export default function Portfolio() {
               change24hPct: getChangePct(t),
               dexUrl: t.dexUrl || null
             }));
-          writeTopTokensCache(top5);
+          writeTopTokensCache(topN);
         } catch { }
       }
     } catch (e) {
@@ -469,12 +468,11 @@ export default function Portfolio() {
 
   useEffect(() => { load(false); /* eslint-disable-next-line */ }, [walletCount, walletsSig, mode]);
 
-  // === PATCH: retry expand whenever tokens update (in case timing was off)
+  // Retry expand whenever tokens update (in case timing was off)
   useEffect(() => {
     maybeExpandFromFocus(tokens);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
-  // === END PATCH
 
   const visibleTokens = useMemo(() => {
     const base = tokens.filter((t) => !isJunkToken(t));
