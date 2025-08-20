@@ -8,6 +8,7 @@ const HIDDEN_ON = new Set(['/', '/hero']);
 const COINS = [
     { id: 'bitcoin', label: 'BTC' },
     { id: 'ethereum', label: 'ETH' },
+    { id: 'pulsechain', label: 'PLS' },
     { id: 'tether', label: 'USDT' },
     { id: 'binancecoin', label: 'BNB' },
     { id: 'solana', label: 'SOL' },
@@ -16,8 +17,7 @@ const COINS = [
     { id: 'dogecoin', label: 'DOGE' },
     { id: 'cardano', label: 'ADA' },
     { id: 'tron', label: 'TRX' },
-    { id: 'pulsechain', label: 'PLS' },
-    { id: 'pulsex', label: 'PLSX' },
+        { id: 'pulsex', label: 'PLSX' },
     { id: 'pulsex-incentive-token', label: 'INC' },
     { id: 'hex', label: 'eHEX' },
     { id: 'hex-pulsechain', label: 'HEX' }

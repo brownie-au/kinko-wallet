@@ -24,6 +24,36 @@ const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
 // how many to publish for the dashboard tiles
 const TOPN_DASHBOARD = 6;
 
+// === NEW (Plan B) — per-chain totals for Dashboard donut/list ===
+const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
+function publishChainTotalsFromTokens(list = []) {
+  try {
+    const totals = { eth: 0, pulse: 0, base: 0 };
+    for (const t of list) {
+      const chain = String(t?.chain || '').toLowerCase();
+      const id =
+        chain.startsWith('eth') ? 'eth' :
+          chain.startsWith('base') ? 'base' :
+            (chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')) ? 'pulse' :
+              null;
+      if (!id) continue;
+
+      const price = Number(t.priceUsd ?? t.price ?? 0);
+      const amount = Number(t.amount ?? 0);
+      const valueUsd = Number(t.valueUsd ?? (amount * price) ?? 0);
+      if (valueUsd > 0) totals[id] += valueUsd;
+    }
+    localStorage.setItem(
+      LS_CHAIN_TOTALS_KEY,
+      JSON.stringify({ updatedAt: Date.now(), totals })
+    );
+    // Notify other pages in the same tab
+    window.dispatchEvent(new StorageEvent('storage', { key: LS_CHAIN_TOTALS_KEY, newValue: 'updated' }));
+  } catch {
+    /* ignore */
+  }
+}
+
 function saveTotalsToLS(totalUsd, changePct24h = 0) {
   try {
     localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
@@ -363,6 +393,8 @@ export default function Portfolio() {
       setBreakdown(new Map(memHit.breakdown));
       // expand from focus when serving from memory cache
       maybeExpandFromFocus(memHit.tokens);
+      // NEW: publish per-chain totals for Dashboard when on "all"
+      if (mode === 'all') publishChainTotalsFromTokens(memHit.tokens);
       setBooting(false);
       setRefreshing(false);
       return;
@@ -376,6 +408,8 @@ export default function Portfolio() {
       setBreakdown(new Map(ls.breakdown || []));
       // expand from focus when serving from LS cache
       maybeExpandFromFocus(ls.tokens);
+      // NEW: publish per-chain totals for Dashboard when on "all"
+      if (mode === 'all') publishChainTotalsFromTokens(ls.tokens);
       setBooting(false);
       setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
@@ -409,6 +443,8 @@ export default function Portfolio() {
       persistTotal(st);
       setTokens(stale.tokens || []);
       setBreakdown(new Map(stale.breakdown || []));
+      // NEW: publish per-chain totals for Dashboard when on "all"
+      if (mode === 'all') publishChainTotalsFromTokens(stale.tokens || []);
       setBooting(false);
       setRefreshing(true);
     } else {
@@ -437,6 +473,9 @@ export default function Portfolio() {
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
       saveTotalsToLS(totalUsd, 0);
+
+      // NEW: publish per-chain totals for Dashboard when on "all"
+      if (mode === 'all') publishChainTotalsFromTokens(tokensWithValue);
 
       // ✅ publish Top‑N for Dashboard (ONLY when viewing the full portfolio)
       if (mode === 'all') {
