@@ -24,7 +24,7 @@ export default function LandingPage() {
             style={{ marginLeft: 'auto', marginRight: 'auto', width: 'fit-content' }}
           >
             <Link to="/dashboard/default" className="btn btn-primary btn-lg">
-              ENTER
+              Get Started
             </Link>
 
             <button
@@ -41,6 +41,18 @@ export default function LandingPage() {
         <div className="lp-copy text-center">
           © {new Date().getFullYear()} Kinko Wallet —{' '}
           <span className="nowrap">Always stay in control.</span>
+        </div>
+        <div
+          className="lp-copy text-center"
+          style={{
+            marginTop: '0.25rem',
+            maxWidth: '600px',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}
+        >
+          <strong>Disclaimer:</strong> Prices are sourced from third parties and may not be accurate. We display
+          a weighted average, but always verify with other sources before making any trading decisions.
         </div>
         <div className="lp-hero-divider" />
       </header>
