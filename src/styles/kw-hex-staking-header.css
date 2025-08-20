@@ -1,0 +1,284 @@
+/* src/styles/kw-hex-staking-header.css */
+
+/* sticky offset can be tuned globally */
+:root {
+    --kw-sticky-top: 64px;
+    /* adjust if your top nav height differs */
+    --kw-pad: 16px;
+    --kw-gap: 16px;
+}
+
+.kw-hex-stake-header.kw-sticky {
+    position: sticky;
+    top: var(--kw-sticky-top);
+    z-index: 1010;
+}
+
+.kw-hex-stake-header .kw-card {
+    background: var(--bs-card-bg);
+    border: 1px solid var(--bs-border-color-translucent, rgba(255, 255, 255, 0.1));
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+    border-radius: 12px;
+    padding: calc(var(--kw-pad) * 1.25);
+}
+
+.kw-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--kw-gap);
+    align-items: center;
+    margin-bottom: calc(var(--kw-gap) * 1.25);
+}
+
+/* title + chips */
+.kw-left .kw-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.kw-chip {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.kw-chip.subtle {
+    opacity: 0.7;
+}
+
+/* updated + refresh */
+.kw-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    color: var(--bs-secondary-color);
+    font-size: 12px;
+}
+
+/* Make Refresh readable in light & dark themes */
+.kw-refresh.btn {
+    padding: 2px 10px;
+    line-height: 1.2;
+    --bs-btn-color: var(--bs-body-color);
+    --bs-btn-border-color: var(--bs-border-color);
+    --bs-btn-hover-color: var(--bs-body-color);
+    --bs-btn-hover-border-color: var(--bs-border-color);
+    --bs-btn-bg: transparent;
+}
+
+/* yield block on the right (legacy; safe to keep) */
+.kw-yield {
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+}
+
+.kw-yield-label {
+    color: var(--bs-secondary-color);
+    font-size: 12px;
+}
+
+.kw-yield-value {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.kw-yield-value .unit {
+    opacity: 0.7;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.kw-yield-toggle .btn {
+    min-width: 72px;
+}
+
+/* metrics grid */
+.kw-metrics {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: var(--kw-gap);
+}
+
+.kw-metric {
+    position: relative;
+    /* chips are absolutely positioned inside */
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--bs-border-color-translucent, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    padding: 12px;
+    display: grid;
+    gap: 4px;
+}
+
+.kw-metric-label {
+    color: var(--bs-secondary-color);
+    font-size: 12px;
+}
+
+.kw-metric-value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+/* add bottom room ONLY on the accent (Yield) card so chips can sit under value */
+.kw-metric.accent {
+    outline: 1px solid rgba(100, 108, 255, 0.3);
+    padding-bottom: 36px;
+    /* space for the chip row below the value */
+}
+
+/* ===== Cadence chips (D / W / M / Y) — mini pills bottom-right of Yield box ===== */
+.kw-cadence-chips {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    /* sits neatly under “0 HEX” */
+    display: flex;
+    gap: 6px;
+}
+
+/* Base (inactive/grey) — sized for single letters */
+.kw-chip-btn {
+    appearance: none;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-secondary-bg);
+    /* subtle grey */
+    color: var(--bs-secondary-color);
+    border-radius: 999px;
+    /* pill */
+    height: 22px;
+    /* compact height */
+    min-width: 26px;
+    /* fits one letter */
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 22px;
+    /* centered text */
+    cursor: pointer;
+    transition: all 120ms ease;
+    text-transform: uppercase;
+}
+
+.kw-chip-btn:hover {
+    color: var(--bs-body-color);
+}
+
+/* Active (blue like your "Active" badge) */
+.kw-chip-btn.active {
+    background: var(--bs-info);
+    border-color: var(--bs-info);
+    color: #fff;
+    /* strong contrast */
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+}
+
+/* ===================== */
+/* Dark theme readability */
+/* ===================== */
+:root[data-theme="dark"] {
+    --kw-muted-dk: rgba(255, 255, 255, 0.65);
+    --kw-border-dk: rgba(255, 255, 255, 0.14);
+    --kw-chip-bg-dk: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="light"] {
+    --kw-muted-dk: var(--bs-secondary-color);
+    --kw-border-dk: var(--bs-border-color);
+    --kw-chip-bg-dk: var(--bs-secondary-bg);
+}
+
+/* labels & borders inside the summary grid */
+.kw-metric-label {
+    color: var(--kw-muted-dk);
+}
+
+.kw-metric {
+    border-color: var(--kw-border-dk);
+}
+
+/* cadence chips background in dark */
+:root[data-theme="dark"] .kw-chip-btn {
+    background: var(--kw-chip-bg-dk);
+    border-color: var(--kw-border-dk);
+}
+
+/* yield box outline contrast */
+.kw-metric.accent {
+    outline-color: rgba(100, 108, 255, 0.42);
+}
+
+/* table borders/readability */
+.table> :not(caption)>*>* {
+    border-bottom-color: var(--kw-border-dk) !important;
+}
+
+/* ===================== */
+/* Wallet name chip (green)
+/* ===================== */
+:root[data-theme="light"] {
+    --kw-green: #0a6b2d;
+    /* dark green text */
+    --kw-green-bg: rgba(10, 107, 45, .08);
+    --kw-green-br: rgba(10, 107, 45, .22);
+}
+
+:root[data-theme="dark"] {
+    --kw-green: #88ffbe;
+    /* light green text */
+    --kw-green-bg: rgba(136, 255, 190, .10);
+    --kw-green-br: rgba(136, 255, 190, .30);
+}
+
+.kw-wallet-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--kw-green);
+    background: var(--kw-green-bg);
+    border: 1px solid var(--kw-green-br);
+    letter-spacing: .1px;
+}
+
+/* responsive */
+@media (max-width: 1400px) {
+    .kw-metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 992px) {
+    .kw-row {
+        grid-template-columns: 1fr;
+    }
+
+    .kw-yield {
+        justify-items: start;
+    }
+}
+
+@media (max-width: 640px) {
+    .kw-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .kw-cadence-chips {
+        position: static;
+        margin-top: 6px;
+    }
+
+    .kw-metric.accent {
+        padding-bottom: 12px;
+    }
+
+    /* chips flow in normal doc flow on small screens */
+}
