@@ -1,5 +1,5 @@
 // src/sections/dashboard/default/PortfolioValueCard.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
 
 import KwChainAllocationPie from '../../../components/kw-ChainAllocationPie';
@@ -22,6 +22,29 @@ export default function PortfolioValueCard() {
   const [totalUsd, setTotalUsd] = useState(0);
   const [pct24h, setPct24h] = useState(0);
   const [chainTotals, setChainTotals] = useState({});
+
+  // --- NEW: width-driven show/hide for the pie (keeps your layout) ---
+  const bodyRef = useRef(null);
+  const [showPie, setShowPie] = useState(true);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+
+    // Your exact sizing:
+    // left minWidth (336) + your right gutter (36) + pie size (188)
+    // Then a small negative fudge so "normal" widths don't hide prematurely.
+    const BASE = 336 + 36 + 188;     // 560
+    const HIDE_AT = BASE - 50;       // 548  → hide below this
+    const SHOW_AT = HIDE_AT + 12;    // 560  → show again above this (hysteresis)
+
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry?.contentRect?.width || el.clientWidth || 0;
+      setShowPie(prev => (prev ? w >= HIDE_AT : w >= SHOW_AT));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const pullTotals = () => {
@@ -69,13 +92,13 @@ export default function PortfolioValueCard() {
 
   return (
     <Card className="h-100">
-      <Card.Body className="d-flex align-items-stretch">
+      <Card.Body ref={bodyRef} className="d-flex align-items-stretch">
         {/* LEFT: numbers + per-chain rows */}
         <div
           style={{
             minWidth: 336,
             flex: '1 1 336px',
-            paddingRight: 36,          // ← gutter so % doesn’t kiss the pie
+            paddingRight: 36,          // ← keep your gutter
           }}
         >
           <div className="text-muted mb-1">Total Portfolio Value</div>
@@ -84,7 +107,7 @@ export default function PortfolioValueCard() {
             {up ? '▲' : '▼'} {Math.abs(Number(pct24h) || 0).toFixed(2)}% (24h)
           </div>
 
-          {/* Right‑aligned $ and %; balanced widths & spacing */}
+          {/* Right-aligned $ and %; balanced widths & spacing */}
           <div style={{ display: 'grid', gap: 8 }}>
             {chainList.map((row) => (
               <div
@@ -112,15 +135,15 @@ export default function PortfolioValueCard() {
           </div>
         </div>
 
-        {/* RIGHT: donut — nudged right a touch for visual balance */}
+        {/* RIGHT: donut — hidden only when the card is genuinely too narrow */}
         <div
           style={{
             flex: '0 0 auto',
-            display: 'flex',
+            display: showPie ? 'flex' : 'none',
             alignItems: 'center',
             justifyContent: 'flex-end',
-            marginRight: -10,          // small nudge beyond card padding
-            paddingLeft: 8,            // keeps a tidy gap from the text block
+            marginRight: -10,          // keep your nudge
+            paddingLeft: 8,            // keep your tidy gap
             overflow: 'visible'
           }}
         >
