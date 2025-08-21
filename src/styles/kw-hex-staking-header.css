@@ -6,6 +6,35 @@
     /* adjust if your top nav height differs */
     --kw-pad: 16px;
     --kw-gap: 16px;
+
+    /* Active chain pill (purple) */
+    --kw-chain-active-bg: #7c3aed;
+    /* violet-600 style */
+    --kw-chain-active-br: rgba(124, 58, 237, 0.35);
+    --kw-chain-active-fg: #ffffff;
+    --kw-chain-active-shadow: 0 2px 10px rgba(124, 58, 237, 0.20) inset,
+        0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+
+    /* Updated timestamp colours (defaults; overridden per theme below) */
+    --kw-updated-fg: rgba(0, 0, 0, 0.65);
+}
+
+:root[data-theme="dark"] {
+    --kw-muted-dk: rgba(255, 255, 255, 0.65);
+    --kw-border-dk: rgba(255, 255, 255, 0.14);
+    --kw-chip-bg-dk: rgba(255, 255, 255, 0.06);
+
+    /* brighter in dark */
+    --kw-updated-fg: rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme="light"] {
+    --kw-muted-dk: var(--bs-secondary-color);
+    --kw-border-dk: var(--bs-border-color);
+    --kw-chip-bg-dk: var(--bs-secondary-bg);
+
+    /* softer in light */
+    --kw-updated-fg: rgba(0, 0, 0, 0.65);
 }
 
 .kw-hex-stake-header.kw-sticky {
@@ -41,10 +70,22 @@
 }
 
 .kw-chip {
+    display: inline-flex;
+    /* crisp borders on badges */
+    align-items: center;
     padding: 4px 8px;
     border-radius: 999px;
     font-size: 12px;
     line-height: 1;
+}
+
+/* Force the PULSECHAIN chip (first badge in the title) to the purple active style.
+   Needs !important to beat Bootstrap's .bg-secondary!important */
+.kw-left .kw-title>.kw-chip:first-of-type {
+    background: var(--kw-chain-active-bg) !important;
+    border: 1px solid var(--kw-chain-active-br) !important;
+    color: var(--kw-chain-active-fg) !important;
+    box-shadow: var(--kw-chain-active-shadow) !important;
 }
 
 .kw-chip.subtle {
@@ -59,6 +100,13 @@
     margin-top: 6px;
     color: var(--bs-secondary-color);
     font-size: 12px;
+}
+
+/* Brighten the Updated timestamp specifically (theme-aware) */
+.kw-meta .kw-updated {
+    color: var(--kw-updated-fg);
+    font-weight: 400;
+    /* no bolding; just brighter colour in dark */
 }
 
 /* Make Refresh readable in light & dark themes */
@@ -118,7 +166,7 @@
 }
 
 .kw-metric-label {
-    color: var(--bs-secondary-color);
+    color: var(--kw-muted-dk);
     font-size: 12px;
 }
 
@@ -180,26 +228,7 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
 }
 
-/* ===================== */
-/* Dark theme readability */
-/* ===================== */
-:root[data-theme="dark"] {
-    --kw-muted-dk: rgba(255, 255, 255, 0.65);
-    --kw-border-dk: rgba(255, 255, 255, 0.14);
-    --kw-chip-bg-dk: rgba(255, 255, 255, 0.06);
-}
-
-:root[data-theme="light"] {
-    --kw-muted-dk: var(--bs-secondary-color);
-    --kw-border-dk: var(--bs-border-color);
-    --kw-chip-bg-dk: var(--bs-secondary-bg);
-}
-
 /* labels & borders inside the summary grid */
-.kw-metric-label {
-    color: var(--kw-muted-dk);
-}
-
 .kw-metric {
     border-color: var(--kw-border-dk);
 }
