@@ -21,6 +21,8 @@ const HEARTS_DECIMALS = 1e8;
 const TSHARE_DIVISOR = 1e12;
 
 // ---------------- Cache helpers (localStorage) ----------------
+// Cache payload now supports both active + ended stakes:
+// { updatedAt, currentDay, rows, rowsEnded, payoutPerTShareDailyHex? }
 const LS_NS = 'kw:hexstakes:pls:v1';
 
 function keyFor(addresses = []) {
@@ -35,7 +37,7 @@ function keyFor(addresses = []) {
 export function readHexStakesCache(addresses = []) {
     try {
         const raw = localStorage.getItem(keyFor(addresses));
-        return raw ? JSON.parse(raw) : null; // { updatedAt, currentDay, rows }
+        return raw ? JSON.parse(raw) : null; // { updatedAt, currentDay, rows, rowsEnded? }
     } catch {
         return null;
     }
@@ -77,7 +79,11 @@ function getContract() {
     return new ethers.Contract(HEX_PLS_ADDRESS, HEX_ABI, provider);
 }
 
-/** Live: fetch all stakes for a single address */
+function toNumber(bn) {
+    try { return Number(bn.toString()); } catch { return Number(bn); }
+}
+
+/** Live: fetch all stakes for a single address (active + ended mixed) */
 export async function fetchHexStakesForAddress(address) {
     const hex = getContract();
 
@@ -110,7 +116,7 @@ export async function fetchHexStakesForAddress(address) {
     return rows;
 }
 
-/** Live: fetch all stakes for many addresses */
+/** Live: fetch all stakes for many addresses (returns flat array of all stakes) */
 export async function fetchHexStakesPulse(addresses = []) {
     const all = [];
     for (const a of addresses) {
@@ -136,24 +142,26 @@ export async function fetchHexCurrentDay() {
     return Number(d);
 }
 
-/** Convenience: fetch and write cache in one go */
+/** Convenience: fetch and write cache in one go
+ *  Now returns both active and ended stakes:
+ *  { currentDay, rows, rowsEnded }
+ */
 export async function refreshHexStakesAndCache(addresses = [], onProgress) {
     const cd = await fetchHexCurrentDay();
 
     const batchSize = 3;
-    const out = [];
+    const all = [];
     for (let i = 0; i < addresses.length; i += batchSize) {
         const part = await fetchHexStakesPulse(addresses.slice(i, i + batchSize));
-        out.push(...part);
+        all.push(...part);
         if (onProgress) onProgress(Math.min(i + batchSize, addresses.length), addresses.length);
     }
 
-    const payload = { currentDay: cd, rows: out };
+    const rows = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) === 0);   // Active
+    const rowsEnded = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) > 0); // Ended
+
+    const payload = { currentDay: cd, rows, rowsEnded };
     writeHexStakesCache(addresses, payload);
     pruneOldCaches();
     return payload;
-}
-
-function toNumber(bn) {
-    try { return Number(bn.toString()); } catch { return Number(bn); }
 }

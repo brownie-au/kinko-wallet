@@ -87,7 +87,7 @@ function extractHexPriceUsd(rows) {
     return Number.isFinite(num) ? num : null;
 }
 
-/** Sum payouts for a stake over served days to get interest in HEX */
+/** Sum payouts for a stake over served days to get interest in HEX (for active stakes) */
 function computeStakeYieldHex(stake, uiDayCounter, pps) {
     if (!stake || !Array.isArray(pps) || pps.length === 0) return 0;
 
@@ -105,6 +105,19 @@ function computeStakeYieldHex(stake, uiDayCounter, pps) {
     const tShares = Number(stake.tShares || 0);
     const interestHEX = tShares * sumPps; // tShares (T) * payoutPerTshare (HEX/T) => HEX
     return Number.isFinite(interestHEX) ? interestHEX : 0;
+}
+
+/** For ENDED stakes: sum payouts until unlockedDay (capped by maturity) */
+function computeYieldHexWithUntil(stake, pps, untilDay) {
+    if (!stake || !Array.isArray(pps) || pps.length === 0) return 0;
+    const locked = Number(stake.lockedDay || 0);
+    const stakedDays = Number(stake.stakedDays || 0);
+    const cap = locked + stakedDays;
+    const until = Math.max(locked, Math.min(Number(untilDay) || 0, cap));
+    if (until <= locked) return 0;
+    let sumPps = 0;
+    for (let d = locked; d < until && d < pps.length; d++) sumPps += pps[d] || 0;
+    return (Number(stake.tShares) || 0) * sumPps;
 }
 
 /** Compute APY based on observed yield-to-date over servedDays */
@@ -307,7 +320,8 @@ export default function KwHexStaking() {
     }, [sourceWallets]);
 
     /* Data state */
-    const [rows, setRows] = useState([]);
+    const [rows, setRows] = useState([]);          // Active
+    const [rowsEnded, setRowsEnded] = useState([]); // Ended (history)
     const [currentDay, setCurrentDay] = useState(null);
     const [payoutPerTShareDailyHex, setPayoutPerTShareDailyHex] = useState(null); // kept for header card
     const [updatedAt, setUpdatedAt] = useState(null);
@@ -374,7 +388,8 @@ export default function KwHexStaking() {
 
     /* HDS daily payouts + precomputed yields */
     const [ppsByDay, setPpsByDay] = useState([]); // retained for future views
-    const [yieldMap, setYieldMap] = useState({}); // id -> { yieldHex, apyPct }
+    const [yieldMap, setYieldMap] = useState({}); // id -> { yieldHex, apyPct } for active
+    const [yieldMapEnded, setYieldMapEnded] = useState({}); // id -> for ended
 
     /* Sorting */
     const [sort, setSort] = useState({ key: 'lockedDay', dir: 'asc' });
@@ -456,6 +471,13 @@ export default function KwHexStaking() {
         return arr;
     }, [rows, sort, currentDay, walletNameMap, hexPriceUsd, payoutPerTShareDailyHex, yieldMap]);
 
+    const sortedRowsEnded = useMemo(() => {
+        const arr = [...rowsEnded];
+        // Most recently ended first
+        arr.sort((a, b) => (b.unlockedDay || 0) - (a.unlockedDay || 0));
+        return arr;
+    }, [rowsEnded]);
+
     /* cache → background refresh (stakes + header day/payout) */
     useEffect(() => {
         let alive = true;
@@ -463,6 +485,7 @@ export default function KwHexStaking() {
         const cached = readHexStakesCache(pulseAddresses);
         if (cached) {
             setRows(cached.rows || []);
+            setRowsEnded(cached.rowsEnded || []);
             setCurrentDay(cached.currentDay ?? null);
             setPayoutPerTShareDailyHex(cached.payoutPerTShareDailyHex ?? null);
             setUpdatedAt(cached.updatedAt || null);
@@ -484,12 +507,14 @@ export default function KwHexStaking() {
                     );
                     if (!alive) return;
                     setRows(payload.rows || []);
+                    setRowsEnded(payload.rowsEnded || []);
                     setCurrentDay(payload.currentDay ?? null);
                     setPayoutPerTShareDailyHex(payload.payoutPerTShareDailyHex ?? null);
                     setUpdatedAt(new Date());
                 } else {
                     if (alive) {
                         setRows([]);
+                        setRowsEnded([]);
                         setCurrentDay(null);
                         setPayoutPerTShareDailyHex(null);
                         setUpdatedAt(null);
@@ -508,13 +533,15 @@ export default function KwHexStaking() {
         return () => { alive = false; };
     }, [pulseAddresses]);
 
-    /* Fetch HDS once and compute Yield/APY for all rows whenever rows/currentDay change */
+    /* Fetch HDS once and compute Yield/APY whenever rows/currentDay change (active + ended) */
+    const [yieldCalcVersion, setYieldCalcVersion] = useState(0); // dev aid if needed
+
     useEffect(() => {
         let alive = true;
         (async () => {
             try {
-                if (!rows.length || !Number(currentDay)) {
-                    if (alive) setYieldMap({});
+                if ((!rows.length && !rowsEnded.length) || !Number(currentDay)) {
+                    if (alive) { setYieldMap({}); setYieldMapEnded({}); }
                     return;
                 }
                 const hdsRows = await fetchHdsPls();
@@ -527,24 +554,33 @@ export default function KwHexStaking() {
                     const px = extractHexPriceUsd(hdsRows);
                     if (px && alive) {
                         setHexPriceUsd(px);
-                        setHexPriceUpdatedAt(Date.now());
+                        // no need for updatedAt UI here
                     }
                 }
 
-                const next = {};
+                const nextActive = {};
                 for (const r of rows) {
                     const yHex = computeStakeYieldHex(r, currentDay, pps);
                     const apy = computeApyPct(r, yHex, currentDay);
-                    next[r.id] = { yieldHex: yHex, apyPct: apy };
+                    nextActive[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
-                if (alive) setYieldMap(next);
+
+                const nextEnded = {};
+                for (const r of rowsEnded) {
+                    const until = Number(r.unlockedDay || 0) || currentDay;
+                    const yHex = computeYieldHexWithUntil(r, pps, until);
+                    const apy = computeApyPct(r, yHex, until);
+                    nextEnded[r.id] = { yieldHex: yHex, apyPct: apy };
+                }
+
+                if (alive) { setYieldMap(nextActive); setYieldMapEnded(nextEnded); setYieldCalcVersion(v => v + 1); }
             } catch (e) {
-                // Non-fatal: keep table without Yield/APY if HDS fails
-                if (alive) setYieldMap({});
+                // Non-fatal: keep tables even if HDS fails
+                if (alive) { setYieldMap({}); setYieldMapEnded({}); }
             }
         })();
         return () => { alive = false; };
-    }, [rows, currentDay]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [rows, rowsEnded, currentDay]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -555,6 +591,7 @@ export default function KwHexStaking() {
                 (done, total) => setProgress({ done, total })
             );
             setRows(payload.rows || []);
+            setRowsEnded(payload.rowsEnded || []);
             setCurrentDay(payload.currentDay ?? null);
             setPayoutPerTShareDailyHex(payload.payoutPerTShareDailyHex ?? null);
             setUpdatedAt(new Date());
@@ -569,6 +606,16 @@ export default function KwHexStaking() {
                     next[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
                 setYieldMap(next);
+
+                const nextEnded = {};
+                for (const r of payload.rowsEnded || []) {
+                    const until = Number(r.unlockedDay || 0) || (payload.currentDay ?? currentDay);
+                    const yHex = computeYieldHexWithUntil(r, pps, until);
+                    const apy = computeApyPct(r, yHex, until);
+                    nextEnded[r.id] = { yieldHex: yHex, apyPct: apy };
+                }
+                setYieldMapEnded(nextEnded);
+
                 // Try to refresh price directly too
                 try {
                     const fresh = await fetchDexscreenerHexPlsUsd();
@@ -647,6 +694,7 @@ export default function KwHexStaking() {
                     </Card>
                 )}
 
+                {/* Active stakes table */}
                 {!loading && rows.length > 0 && (
                     <Card>
                         <Card.Body>
@@ -798,7 +846,71 @@ export default function KwHexStaking() {
                     </Card>
                 )}
 
-                {!loading && !rows.length && !!pulseAddresses.length && !setupError && (
+                {/* Ended stakes table (history) */}
+                {!loading && rowsEnded.length > 0 && (
+                    <Card className="mt-3">
+                        <Card.Header className="pb-0">
+                            <strong>Ended Stakes</strong> <small className="text-muted">(history)</small>
+                        </Card.Header>
+                        <Card.Body>
+                            <Table responsive size="sm" className="align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th className="text-start">Wallet</th>
+                                        <th className="text-end">Principal (HEX)</th>
+                                        <th className="text-end">T-Shares</th>
+                                        <th className="text-end">Locked Day</th>
+                                        <th className="text-end">Staked Days</th>
+                                        <th className="text-end">Unlock Day</th>
+                                        <th className="text-end">Yield</th>
+                                        <th className="text-end">% APY</th>
+                                        <th className="text-end">Total (HEX)</th>
+                                        <th className="text-end">USD</th>
+                                        <th className="text-start">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedRowsEnded.map(r => {
+                                        const addr = (r.wallet || '');
+                                        const shortAddr = `0x…${addr.slice(-4)}`;
+                                        const friendlyName = walletNameMap[addr.toLowerCase()];
+                                        const walletDisplay = friendlyName ? `${shortAddr} — ${friendlyName}` : shortAddr;
+
+                                        const yInfo = yieldMapEnded[r.id];
+                                        const yieldHex = yInfo?.yieldHex ?? null;
+                                        const apyPct = yInfo?.apyPct ?? null;
+
+                                        const totalHex = (Number(r.principalHex) || 0) + Number(yieldHex || 0);
+                                        const price = Number(hexPriceUsd);
+                                        const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
+
+                                        const unlockTooltip = formatAestDate(dateForHexDay(r.unlockedDay, currentDay));
+
+                                        return (
+                                            <tr key={`ended-${r.id}`}>
+                                                <td className="text-start"><span className="kw-wallet-chip">{walletDisplay}</span></td>
+                                                <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
+                                                <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
+                                                <td className="text-end">{r.lockedDay ?? '—'}</td>
+                                                <td className="text-end">{r.stakedDays ?? '—'}</td>
+                                                <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>
+                                                    {r.unlockedDay || '—'}
+                                                </td>
+                                                <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
+                                                <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
+                                                <td className="text-end">{fmt0(totalHex)}</td>
+                                                <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
+                                                <td className="text-start"><Badge bg="secondary">Ended</Badge></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </Table>
+                        </Card.Body>
+                    </Card>
+                )}
+
+                {!loading && !rows.length && !rowsEnded.length && !!pulseAddresses.length && !setupError && (
                     <Card><Card.Body>No stakes detected for current wallets.</Card.Body></Card>
                 )}
             </Col>

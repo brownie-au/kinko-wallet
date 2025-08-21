@@ -6,6 +6,15 @@ import '../styles/kw-hex-staking-header.css';
 // ---------- utils ----------
 const nf = (v, opts = {}) =>
     new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, ...opts }).format(Number(v || 0));
+
+const nfc = (v) =>
+    new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Number(v || 0));
+
 const plural = (n, s) => `${n} ${s}${Number(n) === 1 ? '' : 's'}`;
 
 /**
@@ -21,9 +30,7 @@ export function getCurrentHexDayAEST(nowTs = Date.now()) {
     const day1 = new Date('2019-12-03T10:00:00+10:00'); // AEST anchor
 
     // Convert "now" into Brisbane local time by re-parsing a locale string in that TZ
-    const nowLocal = new Date(
-        new Date(nowTs).toLocaleString('en-US', { timeZone: tz })
-    );
+    const nowLocal = new Date(new Date(nowTs).toLocaleString('en-US', { timeZone: tz }));
 
     // Floor difference in full 24h "HEX days", then +1 because anchor is Day 1
     const msPerDay = 24 * 60 * 60 * 1000;
@@ -44,6 +51,7 @@ function useHexDay() {
 
 // ---------- component ----------
 export default function KwHexStakingHeader({
+    // metrics
     activeStakes = 0,
     totalTShares = 0,
     avgApyPct = 0,
@@ -55,9 +63,18 @@ export default function KwHexStakingHeader({
     yieldPerWeek = 0,
     yieldPerMonth = 0,
     yieldPerYear = 0,
+
+    // new price/total props from container
+    hexPriceUsd = 0,
+    totalUsd = 0,
+    totalHex = 0,
+
+    // controls + layout
     updatedAt,
     onRefresh,
-    sticky = true
+    sticky = true,
+    alignControlsRight = true,
+    showUsdUnderTitle = true
 }) {
     const [cadence, setCadence] = useState('day'); // 'day' | 'week' | 'month' | 'year'
     const hexDay = useHexDay();
@@ -86,27 +103,54 @@ export default function KwHexStakingHeader({
         return `${hh}:${mm}`;
     }, [updatedAt]);
 
+    // Derived display bits for the USD line
+    const usdDisplay = useMemo(() => {
+        if (!showUsdUnderTitle) return null;
+
+        // When price missing, still show USD $0.00 to keep layout stable
+        const main = nfc(totalUsd || 0);
+
+        // Small subline with HEX amount and price if available
+        const sub =
+            (totalHex > 0 || hexPriceUsd > 0)
+                ? `${nf(totalHex, { maximumFractionDigits: 0 })} HEX • ${hexPriceUsd > 0 ? `@ ${nfc(hexPriceUsd)}` : 'price updating…'}`
+                : null;
+
+        return (
+            <div className="kw-usd-wrap">
+                <div className="kw-usd-title">USD {main.replace('USD', '').trim()}</div>
+                {sub && <div className="kw-usd-sub">{sub}</div>}
+            </div>
+        );
+    }, [showUsdUnderTitle, totalUsd, totalHex, hexPriceUsd]);
+
     return (
         <div className={`kw-hex-stake-header ${sticky ? 'kw-sticky' : ''}`}>
             <Card className="kw-card">
+                {/* Header row: title + chips on left, controls on right */}
                 <div className="kw-row">
                     <div className="kw-left">
                         <div className="kw-title">
                             <span>HEX Staking</span>
                             <Badge bg="secondary" className="kw-chip">PulseChain</Badge>
-                            {/* Replaces the old watch‑only chip */}
                             <Badge bg="secondary" className="kw-chip">Day {hexDay}</Badge>
                         </div>
-                        <div className="kw-meta">
-                            {/* Slightly stronger contrast for dark mode */}
-                            <span className="kw-updated fw-semibold">Updated: {updatedLabel}</span>
+
+                        {/* Big USD line sits under the title */}
+                        {usdDisplay}
+                    </div>
+
+                    {alignControlsRight && (
+                        <div className="kw-right">
+                            <span className="kw-updated fw-semibold me-2">Updated: {updatedLabel}</span>
                             <Button size="sm" variant="outline-secondary" className="kw-refresh" onClick={onRefresh}>
                                 Refresh
                             </Button>
                         </div>
-                    </div>
+                    )}
                 </div>
 
+                {/* Metrics grid */}
                 <div className="kw-metrics">
                     <Metric label="Active Stakes" value={nf(activeStakes, { maximumFractionDigits: 0 })} />
                     <Metric label="Total T‑Shares" value={nf(totalTShares, { maximumFractionDigits: 0 })} />
@@ -116,7 +160,7 @@ export default function KwHexStakingHeader({
                     <Metric label="Total Yield" value={`${nf(totalYieldHex, { maximumFractionDigits: 0 })} HEX`} />
                     <Metric label="Average Stake Length" value={`${nf(avgStakeYears, { maximumFractionDigits: 1 })} yrs`} />
 
-                    {/* Yield metric with chips above */}
+                    {/* Yield metric with cadence chips */}
                     <Metric
                         label={`Yield (${labelForCadence(cadence)})`}
                         value={`${nf(cadenceHex, { maximumFractionDigits: 0 })} HEX`}
