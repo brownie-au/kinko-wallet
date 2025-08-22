@@ -31,22 +31,17 @@ const navigation = {
           type: 'item',
           url: '/portfolio'
         },
-        ...wallets.map((w) => ({
-          id: `wallet-${(w.address || '').slice(-4)}`,
+        ...wallets.map((w, idx) => ({
+          id: `wallet-${(w.address || '').slice(-6)}-${idx}`,
           title: `0x...${(w.address || '').slice(-4)} – ${w.name || 'Unnamed'}`,
           type: 'item',
           url: `/wallet/${w.address}`
-        })),
-        {
-          id: 'wallet-manage',
-          title: 'Manage Wallets',
-          type: 'item',
-          url: '/wallets/manage'
-        }
+        }))
+        // NOTE: "Manage Wallets" moved out of here to be a top-level item at bottom
       ]
     },
 
-    // NEW: Staking & Mining section
+    // Staking & Mining section
     {
       id: 'staking-mining',
       title: 'Staking & Mining',
@@ -74,6 +69,15 @@ const navigation = {
           disabled: true
         }
       ]
+    },
+
+    // Moved to bottom as a top-level item
+    {
+      id: 'manage-wallets',
+      title: 'Manage Wallets',
+      type: 'item',
+      url: '/wallets/manage',
+      icon: <i className="ph ph-gear-six" />
     }
   ]
 };

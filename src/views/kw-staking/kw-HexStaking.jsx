@@ -260,7 +260,7 @@ function ShimmerTable() {
                             <th className="text-end">Staked Days</th>
                             <th className="text-end">Unlock Day</th>
                             <th className="text-end">Days Remaining</th>
-                            <th className="text-end">Yield</th>
+                            <th className="text-end">Yield (HEX)</th>
                             <th className="text-end">% APY</th>
                             <th className="text-end">Total (HEX)</th>
                             <th className="text-end">USD</th>
@@ -479,7 +479,7 @@ export default function KwHexStaking() {
     const [yieldMapEnded, setYieldMapEnded] = useState({});
 
     /* Sorting */
-    const [sort, setSort] = useState({ key: 'lockedDay', dir: 'asc' });
+    const [sort, setSort] = useState({ key: 'daysRemaining', dir: 'asc' }); // ✅ default to Days Remaining ASC
     const toggleSort = (key) => {
         setSort(prev =>
             prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
@@ -828,7 +828,7 @@ export default function KwHexStaking() {
                                         </th>
                                         <th aria-sort={ariaSort('yieldHexTotal')} className="text-end">
                                             <button type="button" className="kw-sort-plain" onClick={() => toggleSort('yieldHexTotal')}>
-                                                Yield {sort.key === 'yieldHexTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                Yield (HEX) {sort.key === 'yieldHexTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
                                             </button>
                                         </th>
                                         <th aria-sort={ariaSort('%apy')} className="text-end">

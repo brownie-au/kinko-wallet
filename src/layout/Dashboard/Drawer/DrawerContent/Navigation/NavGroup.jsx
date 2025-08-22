@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, matchPath, useLocation } from 'react-router-dom';
 
 // react-bootstrap
@@ -84,10 +84,18 @@ export default function NavGroup({
     [pathname, currentItem, checkOpenForParent, setSelectedID]
   );
 
+  // ---------------- PERSISTENCE FIX ----------------
+  // Do NOT re-run selection logic on route changes.
+  // This prevents the sidebar from auto-collapsing/expanding on navigation.
+  const didInitRef = useRef(false);
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
     checkSelectedOnload(currentItem);
     if (openMini) setAnchorEl(null);
-  }, [pathname, currentItem, checkSelectedOnload, openMini, setAnchorEl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // -------------------------------------------------
 
   useEffect(() => {
     if (item.children?.length) {
@@ -170,7 +178,9 @@ export default function NavGroup({
                 }
               }}
             >
-              {state?.icon && <i className={`f-20  ${typeof state?.icon === 'string' ? state?.icon : state?.icon?.props.className}`} />}
+              {state?.icon && (
+                <i className={`f-20  ${typeof state?.icon === 'string' ? state?.icon : state?.icon?.props.className}`} />
+              )}
             </Link>
           </OverlayTrigger>
         </li>
