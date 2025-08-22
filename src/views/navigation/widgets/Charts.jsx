@@ -15,7 +15,8 @@ import { EarningChart, UsersMap } from 'sections/dashboard/default';
 import { NewsStatisticsChart, PhoneCallChart } from 'sections/dashboard/crm';
 import { ReplyChart, StatisticsChart } from 'sections/dashboard/project';
 import { StatisticsAreaChart, StatisticsLineChart } from 'sections/dashboard/crypto';
-import { YearlyEarningChart, YearlySummaryChart } from 'sections/dashboard/e-commerce';
+// 🔥 FIXED: corrected the path to match actual folder casing
+import { YearlyEarningChart, YearlySummaryChart } from 'sections/dashboard/ecommerce';
 
 import {
   ActivityPulseChart,
