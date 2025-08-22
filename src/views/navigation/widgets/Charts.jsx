@@ -1,3 +1,5 @@
+// src/views/navigation/widgets/Charts.jsx
+
 // react-bootstrap
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
@@ -15,8 +17,6 @@ import { EarningChart, UsersMap } from 'sections/dashboard/default';
 import { NewsStatisticsChart, PhoneCallChart } from 'sections/dashboard/crm';
 import { ReplyChart, StatisticsChart } from 'sections/dashboard/project';
 import { StatisticsAreaChart, StatisticsLineChart } from 'sections/dashboard/crypto';
-// 🔥 FIXED: corrected the path to match actual folder casing
-import { YearlyEarningChart, YearlySummaryChart } from 'sections/dashboard/ecommerce';
 
 import {
   ActivityPulseChart,
@@ -79,10 +79,7 @@ export default function ChartsMainPage() {
         <EarningChart />
       </Col>
 
-      {/* row - 5 */}
-      <Col md={6} xl={4}>
-        <YearlyEarningChart />
-      </Col>
+      {/* row - 5 (removed YearlyEarningChart) */}
       <Col md={6} xl={4}>
         <ReplyChart />
       </Col>
@@ -98,12 +95,9 @@ export default function ChartsMainPage() {
         <DeviceDistributionChart />
       </Col>
 
-      {/* row - 7 */}
+      {/* row - 7 (removed YearlySummaryChart) */}
       <Col md={6} xl={4}>
         <WalletCategoryChart />
-      </Col>
-      <Col md={12} xl={8}>
-        <YearlySummaryChart height={285} />
       </Col>
 
       {/* row - 8 */}
