@@ -1,19 +1,21 @@
 // src/layout/Dashboard/Drawer/DrawerContent/index.jsx
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SimpleBarScroll from 'components/third-party/SimpleBar';
 import navigation from 'menu-items/navigation';
 
+// ---------- utils ----------
 const normalizePath = (p = '') => {
   const base = p.split('#')[0].split('?')[0];
   if (!base) return '/';
   return base === '/' ? '/' : base.replace(/\/+$/, '');
 };
+const isExact = (a, b) => normalizePath(a) === normalizePath(b);
 
 export default function DrawerContent() {
   const location = useLocation();
   const pathname = normalizePath(location.pathname);
-  const isActive = (url) => url && pathname === normalizePath(url);
+  const isActive = (url) => url && isExact(url, pathname);
 
   // ---------- build menu, promote Manage Wallets ----------
   const topItems = useMemo(() => {
@@ -23,6 +25,7 @@ export default function DrawerContent() {
       children: Array.isArray(it.children) ? it.children.map((c) => ({ ...c })) : []
     }));
 
+    // promote "Manage Wallets" as a top-level leaf item
     const wpIdx = cloned.findIndex((it) => it?.id === 'wallet-portfolio');
     let manageWalletsChild = null;
 
@@ -60,24 +63,48 @@ export default function DrawerContent() {
     return ordered;
   }, [pathname]);
 
-  // ---------- wallet-route detector ----------
+  // ---------- route helpers ----------
   const isWalletDetailRoute = pathname.startsWith('/wallet/'); // individual wallet pages ONLY
 
-  // manual toggle state
-  const [openMap, setOpenMap] = useState({});
+  // ---------- OPEN STATE (always collapsed by default; no persistence) ----------
+  const [openMap, setOpenMap] = useState({}); // start closed every time
+  const setGroupOpen = (id, next) =>
+    setOpenMap((prev) => ({ ...prev, [id]: !!next }));
+  const toggleOpen = (id) =>
+    setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // Auto-collapse when leaving wallet area (dashboard/manage/etc.)
+  // One-time deep-link: if current route sits inside a group, open that group (don’t touch others)
+  const didInitRef = useRef(false);
   useEffect(() => {
-    const leavingWalletArea =
-      !isWalletDetailRoute &&
-      normalizePath(pathname) !== '/wallets' &&
-      normalizePath(pathname) !== '/wallets/'; // harmless if 'wallets/' never occurs
-    if (leavingWalletArea) {
-      setOpenMap((prev) => ({ ...prev, 'wallet-portfolio': false }));
-    }
-  }, [pathname, isWalletDetailRoute]);
+    if (didInitRef.current) return;
+    didInitRef.current = true;
 
-  const toggleOpen = (id) => setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
+    const norm = (p = '') => normalizePath(p || '/');
+
+    const containsPath = (node, path) => {
+      if (!node) return false;
+      if (Array.isArray(node.children) && node.children.length) {
+        if (node.children.some((c) => (c?.url || c?.link) && norm(c.url || c.link) === path)) return true;
+        return node.children.some((c) => containsPath(c, path));
+      }
+      return (node?.url || node?.link) ? norm(node.url || node.link) === path : false;
+    };
+
+    const parentIdForPath = (nodes = [], path) => {
+      for (const n of nodes) {
+        if (Array.isArray(n?.children) && n.children.length) {
+          if (containsPath(n, path)) return n.id;
+        }
+      }
+      return null;
+    };
+
+    const parent = parentIdForPath(navigation?.children || [], pathname);
+    if (parent) setGroupOpen(parent, true);
+
+    // also open Wallet Portfolio when on a wallet detail page
+    if (isWalletDetailRoute) setGroupOpen('wallet-portfolio', true);
+  }, [pathname, isWalletDetailRoute]);
 
   // ---------- render helpers ----------
   const renderLeafItem = (item) => (
@@ -91,26 +118,23 @@ export default function DrawerContent() {
 
   const renderCollapse = (item) => {
     const children = Array.isArray(item.children) ? item.children : [];
-
-    // For Wallet Portfolio: open if ANY child is active (including "View All"),
-    // or if on a wallet detail route, or if the user manually toggled it open.
     const isPortfolio = item.id === 'wallet-portfolio';
 
-    let anyChildActive = false;
-    if (isPortfolio) {
-      const current = pathname;
-      anyChildActive = children.some((c) => {
+    // Portfolio special: consider "View All" (/wallets) and any wallet sub-route
+    const anyChildActive = isPortfolio
+      ? children.some((c) => {
         const u = normalizePath(c?.url || '');
         if (!u) return false;
-        if (current === u) return true;            // exact match (e.g., /wallets)
-        if (current.startsWith(u + '/')) return true; // child under a deeper subpath
+        if (pathname === u) return true;       // exact (e.g. /wallets)
+        if (pathname.startsWith(u + '/')) return true;
         return false;
-      });
-    }
+      })
+      : children.some((c) => isExact(c?.url, pathname));
 
-    const isOpen = isPortfolio
-      ? anyChildActive || isWalletDetailRoute || !!openMap[item.id]
-      : !!openMap[item.id];
+    const isOpen =
+      (openMap[item.id] ?? false) ||
+      anyChildActive ||
+      (isPortfolio && isWalletDetailRoute);
 
     return (
       <div key={item.id} className={`pc-item pc-hasmenu${isOpen ? ' pc-trigger active' : ''}`}>

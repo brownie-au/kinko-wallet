@@ -1,5 +1,6 @@
+// src/layout/Dashboard/Drawer/DrawerContent/Navigation/NavCollapse.jsx
 import PropTypes from 'prop-types';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom';
 
 // react-bootstrap
@@ -17,138 +18,122 @@ import { useGetMenuMaster } from 'api/menu';
 import useConfig from 'hooks/useConfig';
 import { MenuOrientation, ThemeDirection } from 'config';
 
-// ==============================|| NAVIGATION - COLLAPSE ||============================== //
+// ------------- PERSISTENT OPEN-STATE (no accordion) -----------------
+const LS_KEY = 'kw:sidebarOpen:v2';
+const readOpenMap = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
+  } catch {
+    return {};
+  }
+};
+const writeOpenMap = (map) => {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(map || {}));
+  } catch { }
+};
+// -------------------------------------------------------------------
 
-export default function NavCollapse({ menu, level, parentId, setSelectedItems, selectedItems, setSelectedLevel, selectedLevel }) {
+export default function NavCollapse({
+  menu,
+  level,
+  parentId,
+  // kept for API compatibility, but not used for accordion anymore
+  setSelectedItems,
+  selectedItems,
+  setSelectedLevel,
+  selectedLevel
+}) {
   const { menuMaster } = useGetMenuMaster();
   const navigation = useNavigate();
   const drawerOpen = menuMaster?.isDashboardDrawerOpened;
 
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(null);
   const { menuOrientation, themeDirection } = useConfig();
   const location = useLocation();
-  const currentPath = location.pathname;
+  const pathname = location.pathname;
 
-  const isMenuActive = (menu, currentPath) => {
-    if (menu.type === 'item') {
-      return menu.url === currentPath;
-    }
-    if (menu.type === 'collapse' && Array.isArray(menu.children)) {
-      return menu.children.some((child) => isMenuActive(child, currentPath));
+  // Determine if any descendant matches current path (used only once on mount)
+  const isMenuActive = (node, currentPath) => {
+    if (!node) return false;
+    if (node.type === 'item') return (node.url || node.link) === currentPath;
+    if (node.type === 'collapse' && Array.isArray(node.children)) {
+      return node.children.some((child) => isMenuActive(child, currentPath));
     }
     return false;
   };
 
-  const active = isMenuActive(menu, currentPath);
+  // ---- open state is per group, persisted in localStorage ----
+  const [openMap, setOpenMap] = useState(() => readOpenMap());
+  const open = !!openMap[menu.id];
 
+  const setOpen = (next) => {
+    setOpenMap((m) => {
+      const n = { ...m, [menu.id]: !!next };
+      writeOpenMap(n);
+      return n;
+    });
+  };
+
+  const toggleOpen = () => setOpen(!open);
+
+  // One-time deep-link convenience: if current route is inside this group, open it.
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+    if (isMenuActive(menu, pathname)) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Click handler (mobile/desktop consistent): toggle this group only; never closes siblings.
   const handleClick = (isRedirect) => {
     const isMobile = window.innerWidth <= 1024;
-    setSelectedLevel(level);
+    setSelectedLevel?.(level);
 
-    if (isMobile || !drawerOpen) {
-      setOpen(!open);
-      setSelected(!selected ? menu.id : null);
-      setSelectedItems(!selected ? menu : selectedItems);
-      if (menu.url && isRedirect) navigation(`${menu.url}`);
+    // Always allow toggling this group. We no longer collapse siblings.
+    toggleOpen();
+
+    // Optional redirect when the header itself has a URL (rare).
+    if ((isMobile || !drawerOpen) && menu.url && isRedirect) {
+      navigation(`${menu.url}`);
     }
   };
 
-  useMemo(() => {
-    if (selected === selectedItems?.id) {
-      if (level === 1) {
-        setOpen(true);
-      }
-    } else {
-      if (level === selectedLevel) {
-        setOpen(false);
-
-        if (drawerOpen) {
-          setSelected(null);
+  // Children render (unchanged)
+  const navCollapse = useMemo(
+    () =>
+      menu.children?.map((item) => {
+        switch (item.type) {
+          case 'collapse':
+            return (
+              <NavCollapse
+                key={item.id}
+                setSelectedItems={setSelectedItems}
+                setSelectedLevel={setSelectedLevel}
+                selectedLevel={selectedLevel}
+                selectedItems={selectedItems}
+                menu={item}
+                level={level + 1}
+                parentId={parentId}
+              />
+            );
+          case 'item':
+            return <NavItem key={item.id} item={item} level={level + 1} />;
+          default:
+            return (
+              <h6 key={item.id} color="error" className="align-center">
+                Fix - Collapse or Item
+              </h6>
+            );
         }
-      }
-    }
-  }, [selectedItems, level, selected, drawerOpen, selectedLevel]);
-
-  const { pathname } = useLocation();
-
-  useEffect(() => {
-    if (pathname === menu.url) {
-      setSelected(menu.id);
-    }
-  }, [pathname, menu.id, menu.url]);
-
-  const checkOpenForParent = useCallback(
-    (child, id) => {
-      child.forEach((item) => {
-        if (item.url === pathname) {
-          setOpen(true);
-          setSelected(id);
-        }
-      });
-    },
-    [pathname]
+      }),
+    [menu.children, level, parentId, selectedItems, selectedLevel, setSelectedItems, setSelectedLevel]
   );
-
-  // menu collapse for sub-levels
-  useEffect(() => {
-    setOpen(false);
-    if (menu.children) {
-      menu.children.forEach((item) => {
-        if (item.children?.length) {
-          checkOpenForParent(item.children, menu.id);
-        }
-
-        if (item.link && !!matchPath({ path: item?.link, end: false }, pathname)) {
-          setSelected(menu.id);
-          setOpen(true);
-        }
-
-        if (item.url === pathname) {
-          setSelected(menu.id);
-          setOpen(true);
-        }
-      });
-    }
-  }, [pathname, menu.id, menu.children, checkOpenForParent]);
-
-  useEffect(() => {
-    if (menu.url === pathname) {
-      setSelected(menu.id);
-      setOpen(true);
-    }
-  }, [pathname, menu]);
-
-  const navCollapse = menu.children?.map((item) => {
-    switch (item.type) {
-      case 'collapse':
-        return (
-          <NavCollapse
-            key={item.id}
-            setSelectedItems={setSelectedItems}
-            setSelectedLevel={setSelectedLevel}
-            selectedLevel={selectedLevel}
-            selectedItems={selectedItems}
-            menu={item}
-            level={level + 1}
-            parentId={parentId}
-          />
-        );
-      case 'item':
-        return <NavItem key={item.id} item={item} level={level + 1} />;
-      default:
-        return (
-          <h6 key={item.id} color="error" className="align-center">
-            Fix - Collapse or Item
-          </h6>
-        );
-    }
-  });
 
   return (
     <>
       {menuOrientation !== MenuOrientation.TAB ? (
-        <ListGroup className={`pc-item pc-hasmenu ${open && 'pc-trigger'}`}>
+        <ListGroup className={`pc-item pc-hasmenu ${open ? 'pc-trigger' : ''}`}>
           <a className="pc-link" href="#!" onClick={() => handleClick(true)}>
             {menu.icon && (
               <span className="pc-micon">
@@ -159,16 +144,16 @@ export default function NavCollapse({ menu, level, parentId, setSelectedItems, s
               <FormattedMessage id={menu.title} />
             </span>
             <span className="pc-arrow">
-              <i className={`ti ti-chevron-right`} />
+              <i className="ti ti-chevron-right" />
             </span>
             {menu.badge && <Badge className="pc-badge">{menu.badge}</Badge>}
           </a>
-          {open === true && <ul className={`pc-submenu ${themeDirection === ThemeDirection.RTL && 'edge'}`}>{navCollapse}</ul>}
+          {open && <ul className={`pc-submenu ${themeDirection === ThemeDirection.RTL ? 'edge' : ''}`}>{navCollapse}</ul>}
         </ListGroup>
       ) : (
         <>
           {menuOrientation !== MenuOrientation.TAB && (
-            <ListGroup className={`pc-item pc-hasmenu ${open ?? 'pc-trigger'} ${active ? 'active' : ''}`}>
+            <ListGroup className={`pc-item pc-hasmenu ${open ? 'pc-trigger' : ''} ${isMenuActive(menu, pathname) ? 'active' : ''}`}>
               <OverlayTrigger
                 placement="right"
                 overlay={
