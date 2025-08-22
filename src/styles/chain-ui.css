@@ -1,18 +1,210 @@
 /* src/styles/chain-ui.css */
 
-/* Dark-mode legibility for unselected chips (and ghost chips like Refresh) */
+/* Dark-mode legibility for generic chip text */
 :root[data-pc-theme='dark'] {
-  --k-chip-fg: rgba(255,255,255,0.92); /* stronger text on dark for inactive chips */
+  --k-chip-fg: rgba(255, 255, 255, 0.92);
 }
 
 /* Optional sticky legend if you use it */
-.k-chain-legend { position: sticky; top: 84px; }
+.k-chain-legend {
+  position: sticky;
+  top: 84px;
+}
 
-/* Ghost chip used for "Refresh" */
+/* Ghost chip used for "Refresh" (unchanged) */
 .k-chip-ghost {
   border: 1px solid var(--bs-border-color);
   border-radius: 10px;
   padding: 6px 12px;
   background: var(--bs-secondary-bg);
   color: var(--k-chip-fg, var(--bs-body-color));
+}
+
+/* =======================================================
+   WALLET COLUMN CHIP → Pulse purple (table cells only)
+   (kept as-is; does NOT affect the filter chips)
+   ======================================================= */
+
+:root {
+  --kw-pulse-purple: #ffffffc2;
+  --kw-pulse-purple-bg: rgba(177, 72, 219, 0.288);
+  --kw-pulse-purple-br: rgba(179, 149, 231, 0.35);
+}
+
+.kw-wallet-col .badge,
+.kw-wallet-col .chip,
+.kw-wallet-col .btn,
+.kw-wallet-col .kw-chip,
+.kw-wallet-col .kw-wallet-chip,
+.kw-wallet-col .bg-success-subtle,
+.kw-wallet-col .text-success,
+td.wallet .badge,
+td.wallet .chip,
+td.wallet .kw-chip,
+td.wallet .bg-success-subtle,
+td.wallet .text-success,
+td[data-col="wallet"] .badge,
+td[data-col="wallet"] .chip,
+td[data-col="wallet"] .kw-chip,
+td[data-col="wallet"] .bg-success-subtle,
+td[data-col="wallet"] .text-success {
+  background-color: var(--kw-pulse-purple-bg) !important;
+  color: var(--kw-pulse-purple) !important;
+  border: 1px solid var(--kw-pulse-purple-br) !important;
+  border-radius: 999px;
+}
+
+/* Explicit wallet chip (used in table rows) */
+.kw-wallet-chip {
+  background-color: var(--kw-pulse-purple-bg) !important;
+  color: var(--kw-pulse-purple) !important;
+  border: 1px solid var(--kw-pulse-purple-br) !important;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  display: inline-block;
+}
+
+/* =======================================================
+   FILTER CHIPS (Wallet filter bar) — MATCH PORTFOLIO CHIPS
+   ======================================================= */
+
+:root {
+  /* Align with Portfolio Balance chip look */
+  --kw-chip-height: 28px;
+  --kw-chip-font-size: 12px;
+  --kw-chip-font-weight: 700;
+  --kw-chip-radius: 6px;
+  --kw-chip-letterspace: .2px;
+
+  /* Active fills use brand/info colour (same as chart) */
+  --kw-chip-active-bg: var(--bs-info);
+  --kw-chip-active-fg: #fff;
+  --kw-chip-active-br: var(--bs-info);
+
+  /* Neutral (light) */
+  --kw-chip-bg-li: var(--bs-body-bg);
+  /* white */
+  --kw-chip-br-li: var(--bs-border-color);
+  /* light outline */
+  --kw-chip-fg-li: var(--bs-secondary-color);
+  /* muted label */
+  --kw-chip-hover-bg-li: var(--bs-secondary-bg);
+  /* soft grey */
+  --kw-chip-hover-br-li: color-mix(in oklab, var(--bs-border-color), #000 10%);
+  --kw-chip-hover-fg-li: var(--bs-body-color);
+
+  /* Neutral (dark) */
+  --kw-chip-bg-dk: #1b1e23;
+  /* deep neutral */
+  --kw-chip-br-dk: #2a2e35;
+  /* subtle outline */
+  --kw-chip-fg-dk: rgba(255, 255, 255, .88);
+  --kw-chip-hover-bg-dk: #23262c;
+  /* slight lift */
+  --kw-chip-hover-br-dk: #343943;
+  --kw-chip-hover-fg-dk: #ffffff;
+}
+
+/* Layout for the filter bar */
+.kw-wallet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+/* Base chip anatomy */
+.kw-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--kw-chip-height);
+  min-width: 40px;
+  padding: 0 10px;
+  border-radius: var(--kw-chip-radius);
+  border: 1px solid;
+  font-size: var(--kw-chip-font-size);
+  font-weight: var(--kw-chip-font-weight);
+  line-height: var(--kw-chip-height);
+  letter-spacing: var(--kw-chip-letterspace);
+  text-transform: uppercase;
+  /* matches Portfolio chips */
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 100ms ease;
+}
+
+/* ---------- Light theme (matches Portfolio chips) ---------- */
+:root:not([data-theme="dark"]):not([data-pc-theme="dark"]) .kw-chip {
+  background: var(--kw-chip-bg-li);
+  border-color: var(--kw-chip-br-li);
+  color: var(--kw-chip-fg-li);
+}
+
+:root:not([data-theme="dark"]):not([data-pc-theme="dark"]) .kw-chip:hover {
+  background: var(--kw-chip-hover-bg-li);
+  border-color: var(--kw-chip-hover-br-li);
+  color: var(--kw-chip-hover-fg-li);
+  transform: translateY(-0.5px);
+}
+
+:root:not([data-theme="dark"]):not([data-pc-theme="dark"]) .kw-chip.is-active {
+  background: var(--kw-chip-active-bg);
+  border-color: var(--kw-chip-active-br);
+  color: var(--kw-chip-active-fg);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+}
+
+/* ---------- Dark theme (matches Portfolio chips) ---------- */
+:root[data-theme="dark"] .kw-chip,
+:root[data-pc-theme="dark"] .kw-chip,
+[data-theme="dark"] .kw-chip,
+[data-pc-theme="dark"] .kw-chip,
+.dark .kw-chip {
+  background: var(--kw-chip-bg-dk) !important;
+  border-color: var(--kw-chip-br-dk) !important;
+  color: var(--kw-chip-fg-dk) !important;
+}
+
+:root[data-theme="dark"] .kw-chip:hover,
+:root[data-pc-theme="dark"] .kw-chip:hover,
+[data-theme="dark"] .kw-chip:hover,
+[data-pc-theme="dark"] .kw-chip:hover,
+.dark .kw-chip:hover {
+  background: var(--kw-chip-hover-bg-dk) !important;
+  border-color: var(--kw-chip-hover-br-dk) !important;
+  color: var(--kw-chip-hover-fg-dk) !important;
+  transform: translateY(-0.5px);
+}
+
+:root[data-theme="dark"] .kw-chip.is-active,
+:root[data-pc-theme="dark"] .kw-chip.is-active,
+[data-theme="dark"] .kw-chip.is-active,
+[data-pc-theme="dark"] .kw-chip.is-active,
+.dark .kw-chip.is-active {
+  background: var(--kw-chip-active-bg) !important;
+  /* same vibrant blue as chart */
+  border-color: var(--kw-chip-active-br) !important;
+  color: var(--kw-chip-active-fg) !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset !important;
+}
+
+/* Focus ring */
+.kw-chip:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--bs-info), #fff 10%);
+  outline-offset: 2px;
+  border-radius: var(--kw-chip-radius);
+}
+
+/* “All” chip uses same styling rules */
+.kw-chip.kw-chip--all {
+  opacity: 1;
 }

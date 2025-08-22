@@ -22,7 +22,7 @@
     --kw-chip-minwidth: 26px;
     --kw-chip-font: 11px;
 
-    /* Neutral chip colours (unselected) – align with table header theme */
+    /* Neutral chip colours (unselected) */
     --kw-chip-neutral-bg: var(--bs-tertiary-bg);
     --kw-chip-neutral-br: var(--bs-border-color);
     --kw-chip-neutral-fg: var(--bs-secondary-color);
@@ -36,10 +36,13 @@
     /* brighter in dark */
     --kw-updated-fg: rgba(255, 255, 255, 0.78);
 
-    /* keep the same neutral mapping in dark so it matches table headers */
-    --kw-chip-neutral-bg: var(--bs-tertiary-bg);
-    --kw-chip-neutral-br: var(--kw-border-dk);
-    --kw-chip-neutral-fg: var(--kw-muted-dk);
+    /* Darker neutral pills so text is readable */
+    --kw-chip-neutral-bg: rgba(255, 255, 255, 0.12);
+    /* darker background */
+    --kw-chip-neutral-br: rgba(255, 255, 255, 0.20);
+    /* stronger border */
+    --kw-chip-neutral-fg: rgba(255, 255, 255, 0.85);
+    /* brighter text */
 }
 
 :root[data-theme="light"] {
@@ -83,7 +86,6 @@
 
 .kw-chip {
     display: inline-flex;
-    /* crisp borders on badges */
     align-items: center;
     padding: 4px 8px;
     border-radius: 999px;
@@ -107,11 +109,8 @@
 .kw-meta {
     display: flex;
     flex-direction: column;
-    /* <<< stack */
     align-items: flex-start;
-    /* left-align */
     gap: 4px;
-    /* tighter */
     margin-top: 6px;
     color: var(--bs-secondary-color);
     font-size: 12px;
@@ -175,8 +174,6 @@
     padding: 12px;
     display: grid;
     gap: 4px;
-
-    /* container query support */
     container-type: inline-size;
 }
 
@@ -193,7 +190,6 @@
 .kw-metric.accent {
     outline: 1px solid rgba(100, 108, 255, 0.3);
     padding-bottom: 36px;
-    /* space for the chip row below the value */
 }
 
 /* ===== Cadence chips (D / W / M / Y) ===== */
@@ -205,7 +201,6 @@
     gap: 6px;
 }
 
-/* Base (unselected) — same visual weight as table headers */
 .kw-chip-btn {
     appearance: none;
     border: 1px solid var(--kw-chip-neutral-br) !important;
@@ -228,7 +223,6 @@
     color: var(--bs-body-color);
 }
 
-/* Active (blue pill with white text) */
 .kw-chip-btn.active {
     background: var(--bs-info) !important;
     border-color: var(--bs-info) !important;
@@ -236,24 +230,20 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
 }
 
-/* Hide the cadence chips if the tile is too narrow (prevents overflow) */
 @container (max-width: 110px) {
     .kw-cadence-chips {
         display: none;
     }
 }
 
-/* labels & borders inside the summary grid */
 .kw-metric {
     border-color: var(--kw-border-dk);
 }
 
-/* yield box outline contrast */
 .kw-metric.accent {
     outline-color: rgba(100, 108, 255, 0.42);
 }
 
-/* table borders/readability */
 .table> :not(caption)>*>* {
     border-bottom-color: var(--kw-border-dk) !important;
 }
@@ -322,7 +312,6 @@
     border-top: 6px solid var(--bs-body-color);
 }
 
-/* responsive */
 @media (max-width: 1400px) {
     .kw-metrics {
         grid-template-columns: repeat(4, minmax(0, 1fr));

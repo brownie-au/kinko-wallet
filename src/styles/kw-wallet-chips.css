@@ -1,0 +1,73 @@
+/* src/styles/kw-wallet-chips.css */
+
+.kw-wallet-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+}
+
+/* Base chip */
+.kw-chip {
+    --chip-bg: var(--bs-secondary-bg);
+    --chip-fg: var(--k-chip-fg, var(--bs-body-color));
+    --chip-br: var(--bs-border-color);
+    --chip-active-bg: var(--kw-chain-active-bg, #7c3aed);
+    /* purple theme */
+    --chip-active-fg: var(--kw-chain-active-fg, #ffffff);
+    --chip-active-br: var(--kw-chain-active-br, rgba(124, 58, 237, 0.35));
+
+    appearance: none;
+    border: 1px solid var(--chip-br);
+    color: var(--chip-fg);
+    background: var(--chip-bg);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+
+    /* subtle shadow + transition for polish */
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+    transition:
+        background-color 140ms ease,
+        color 140ms ease,
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        transform 100ms ease;
+}
+
+.kw-chip:hover {
+    border-color: color-mix(in oklab, var(--chip-br), #fff 18%);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    transform: translateY(-0.5px);
+}
+
+.kw-chip.is-active {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-fg);
+    border-color: var(--chip-active-br);
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.18) inset, 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.kw-chip.is-active:hover {
+    box-shadow: 0 3px 18px rgba(124, 58, 237, 0.22) inset, 0 0 0 1px rgba(255, 255, 255, 0.10);
+}
+
+/* "All" chip can be slightly ghosted when inactive for clarity */
+.kw-chip--all:not(.is-active) {
+    opacity: 0.85;
+}
+
+/* Dark-mode tweak for unselected chips to ensure contrast on dark */
+:root[data-pc-theme='dark'] .kw-chip:not(.is-active) {
+    --chip-bg: color-mix(in oklab, var(--bs-secondary-bg), #000 8%);
+    --chip-br: color-mix(in oklab, var(--bs-border-color), #000 14%);
+    --chip-fg: rgba(255, 255, 255, 0.92);
+}
+
+/* Focus ring for keyboard users */
+.kw-chip:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--chip-active-bg), #fff 10%);
+    outline-offset: 2px;
+}
