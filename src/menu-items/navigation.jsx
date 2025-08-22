@@ -31,13 +31,13 @@ const navigation = {
           type: 'item',
           url: '/portfolio'
         },
-        ...wallets.map((w, idx) => ({
-          id: `wallet-${(w.address || '').slice(-6)}-${idx}`,
+        ...wallets.map((w) => ({
+          id: `wallet-${(w.address || '').slice(-4)}`,
           title: `0x...${(w.address || '').slice(-4)} – ${w.name || 'Unnamed'}`,
           type: 'item',
           url: `/wallet/${w.address}`
         }))
-        // NOTE: "Manage Wallets" moved out of here to be a top-level item at bottom
+        // NOTE: "Manage Wallets" is now top-level at the bottom
       ]
     },
 
@@ -46,7 +46,7 @@ const navigation = {
       id: 'staking-mining',
       title: 'Staking & Mining',
       type: 'collapse',
-      icon: <i className="ph ph-chart-line-up" />, // pick any ph icon you like
+      icon: <i className="ph ph-chart-line-up" />,
       children: [
         {
           id: 'hex-staking',
@@ -71,13 +71,14 @@ const navigation = {
       ]
     },
 
-    // Moved to bottom as a top-level item
+    // --- Manage Wallets (TOP-LEVEL, LAST) ---
     {
-      id: 'manage-wallets',
+      id: 'wallet-manage',
       title: 'Manage Wallets',
       type: 'item',
       url: '/wallets/manage',
-      icon: <i className="ph ph-gear-six" />
+      icon: <i className="ph ph-gear" /> // <— added back the gear icon
+      // if you prefer the six-tooth version: className="ph ph-gear-six"
     }
   ]
 };

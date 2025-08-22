@@ -159,30 +159,72 @@ function getStakeStatus({ lockedDay, stakedDays, unlockedDay, currentDay }) {
 
 const statusSortWeight = { Active: 3, Ready: 2, Overdue: 1, Ended: 0 };
 
-/* ---------------- Read any legacy HEX price (USD) from localStorage ---------------- */
-function readHexPriceUsdFromLS() {
-    const keys = ['kw:hexPriceUsd', 'kw:lastHexPriceUsd', 'kw:price:HEX', 'kw:price:hex', 'kw:lastPrice:HEX'];
-    for (const k of keys) {
-        try {
-            const raw = localStorage.getItem(k);
+/* ---------------- Read unified HEX price caches (same as Portfolio) ---------------- */
+/** Mirrors the header container’s cache lookup so both read the SAME price. */
+function readUnifiedHexPriceUsd() {
+    try {
+        // Strong single-value cache first
+        const k1 = localStorage.getItem('kw:lastHexPriceUsd');
+        if (k1) { const v = Number(k1); if (v > 0) return v; }
+
+        // Common maps used across the app/portfolio
+        for (const key of [
+            'kw:dexscreener:prices:v1', // { HEX: 1.23 }
+            'kw:dex:prices:v1',
+            'kw:tokenPrices:v1',
+            'kw:prices:bySymbol',
+            'kw:prices:spot:v1'
+        ]) {
+            const raw = localStorage.getItem(key);
             if (!raw) continue;
-            const parsed = JSON.parse(raw);
-            if (typeof parsed === 'number') return parsed;
-            if (parsed && typeof parsed.usd === 'number') return parsed.usd;
-            const asNum = Number(raw);
-            if (!Number.isNaN(asNum)) return asNum;
-        } catch { }
-    }
-    return null;
+            const obj = JSON.parse(raw);
+            const val =
+                Number(obj?.HEX ?? obj?.hex ?? obj?.['hex:pls'] ??
+                    (Array.isArray(obj?.tokens)
+                        ? Number(obj.tokens.find(t => (t?.symbol || '').toUpperCase() === 'HEX')?.priceUsd)
+                        : undefined));
+            if (val > 0) return val;
+        }
+
+        // Old/local fallback
+        const old = localStorage.getItem('kw:price:hex:pls:v1');
+        if (old) {
+            const obj = JSON.parse(old);
+            const v = Number(obj?.priceUsd);
+            if (v > 0) return v;
+        }
+
+        if (typeof window !== 'undefined') {
+            const v = Number(window.__KW_HEX_PRICE_USD);
+            if (v > 0) return v;
+        }
+    } catch { }
+    return 0;
 }
 
-/* ---------------- DexScreener PulseChain HEX price w/ cache ---------------- */
+/** When we fetch fresh price, write it back to the unified caches so everything stays consistent. */
+function writeUnifiedHexPriceUsd(priceUsd) {
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) return;
+    try {
+        localStorage.setItem('kw:lastHexPriceUsd', String(priceUsd));
+        // Merge into dexscreener price map
+        const k = 'kw:dexscreener:prices:v1';
+        const map = (() => {
+            try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; }
+        })();
+        map.HEX = priceUsd;
+        localStorage.setItem(k, JSON.stringify(map));
+    } catch { }
+}
+
+/* ---------------- DexScreener PulseChain HEX price (fallback fetch) ---------------- */
 const PLS_HEX_ADDRESS =
     import.meta.env.VITE_PLS_HEX_ADDRESS ||
     '0x2b591e99aFe9F32eaa6214f7B7629768c40eeb39'; // canonical HEX
 
+// Keep these here (used only as a fallback; do not rely on this cache for display)
 const priceLSKey = 'kw:price:hex:pls:v1';
-const PRICE_TTL_MS = 60 * 1000; // 60s
+const PRICE_TTL_MS = 60 * 1000;
 
 function readPriceCache() {
     try { return JSON.parse(localStorage.getItem(priceLSKey) || 'null'); } catch { return null; }
@@ -421,30 +463,67 @@ export default function KwHexStaking() {
     const [setupError, setSetupError] = useState('');
     const [progress, setProgress] = useState({ done: 0, total: 0 });
 
-    /* Pricing (DexScreener) */
-    const legacyPrice = readHexPriceUsdFromLS();
+    /* ---------- Unified HEX price (read-only from portfolio caches) ---------- */
     const initialPrice = (() => {
+        const v = readUnifiedHexPriceUsd();
+        if (Number.isFinite(v) && v > 0) return v;
+
+        // Fallback to old local cache (kept for safety)
         const c = readPriceCache();
         if (c && Number.isFinite(c.priceUsd)) return c.priceUsd;
-        if (Number.isFinite(legacyPrice)) return legacyPrice;
+
         return null;
     })();
 
     const [hexPriceUsd, setHexPriceUsd] = useState(initialPrice);
     const [hexPriceUpdatedAt, setHexPriceUpdatedAt] = useState(() => (readPriceCache()?.updatedAt || 0));
 
+    // Keep price in sync with portfolio by listening for writes to shared caches
+    useEffect(() => {
+        const importantKeys = new Set([
+            'kw:lastHexPriceUsd',
+            'kw:dexscreener:prices:v1',
+            'kw:dex:prices:v1',
+            'kw:tokenPrices:v1',
+            'kw:prices:bySymbol',
+            'kw:prices:spot:v1',
+            // migration: still respond to the old per-page cache
+            'kw:price:hex:pls:v1'
+        ]);
+        const onStorage = (e) => {
+            if (!e?.key || !importantKeys.has(e.key)) return;
+            const v = readUnifiedHexPriceUsd();
+            if (v > 0) {
+                setHexPriceUsd(v);
+                setHexPriceUpdatedAt(Date.now());
+            }
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+    }, []);
+
+    // If we still have no price, do a one-shot DexScreener fetch,
+    // then write it back to the unified caches so EVERYTHING sees the same value.
     useEffect(() => {
         let alive = true;
+        if (Number.isFinite(hexPriceUsd) && hexPriceUsd > 0) return;
+
         (async () => {
             try {
                 const r = await getHexUsdFast(PRICE_TTL_MS);
                 if (!alive) return;
                 setHexPriceUsd(r.priceUsd);
                 setHexPriceUpdatedAt(r.updatedAt);
+
+                // Write to unified caches so portfolio/header see it too
+                writeUnifiedHexPriceUsd(r.priceUsd);
+
+                // Also refresh with an uncached call if fromCache
                 if (r.fromCache) {
                     fetchDexscreenerHexPlsUsd()
                         .then((fresh) => {
                             writePriceCache(fresh);
+                            writeUnifiedHexPriceUsd(fresh.priceUsd);
                             if (alive) {
                                 setHexPriceUsd(fresh.priceUsd);
                                 setHexPriceUpdatedAt(fresh.updatedAt);
@@ -452,26 +531,11 @@ export default function KwHexStaking() {
                         })
                         .catch(() => { });
                 }
-            } catch { /* ignore; HDS fallback will kick in */ }
+            } catch { /* HDS fallback below may kick in */ }
         })();
-        return () => { alive = false; };
-    }, []);
 
-    useEffect(() => {
-        const onStorage = (e) => {
-            if (e?.key === priceLSKey && e.newValue) {
-                try {
-                    const obj = JSON.parse(e.newValue);
-                    if (Number.isFinite(obj?.priceUsd)) {
-                        setHexPriceUsd(obj.priceUsd);
-                        setHexPriceUpdatedAt(obj.updatedAt || Date.now());
-                    }
-                } catch { }
-            }
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
-    }, []);
+        return () => { alive = false; };
+    }, []); // run once
 
     /* HDS daily payouts + precomputed yields */
     const [ppsByDay, setPpsByDay] = useState([]);
@@ -625,7 +689,11 @@ export default function KwHexStaking() {
 
                 if (!Number.isFinite(hexPriceUsd)) {
                     const px = extractHexPriceUsd(hdsRows);
-                    if (px && alive) setHexPriceUsd(px);
+                    if (px && alive) {
+                        setHexPriceUsd(px);
+                        setHexPriceUpdatedAt(Date.now());
+                        writeUnifiedHexPriceUsd(px); // keep caches consistent if HDS gave us a solid price
+                    }
                 }
 
                 const nextActive = {};
@@ -687,6 +755,7 @@ export default function KwHexStaking() {
                 try {
                     const fresh = await fetchDexscreenerHexPlsUsd();
                     writePriceCache(fresh);
+                    writeUnifiedHexPriceUsd(fresh.priceUsd); // ← sync unified caches
                     setHexPriceUsd(fresh.priceUsd);
                     setHexPriceUpdatedAt(fresh.updatedAt);
                 } catch {
@@ -695,6 +764,7 @@ export default function KwHexStaking() {
                         if (px) {
                             setHexPriceUsd(px);
                             setHexPriceUpdatedAt(Date.now());
+                            writeUnifiedHexPriceUsd(px); // keep caches consistent
                         }
                     }
                 }
@@ -736,6 +806,8 @@ export default function KwHexStaking() {
                         updatedAt={updatedAt}
                         onRefresh={handleRefresh}
                         sticky
+                        /* keep title USD aligned with table USD */
+                        hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
                     />
                 </Col>
             )}
