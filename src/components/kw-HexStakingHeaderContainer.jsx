@@ -84,10 +84,7 @@ function readAggsFromGridRows(gridRows = []) {
         if (apyPct || apyPct === 0) { apySum += apyPct; apyCount += 1; }
 
         // "YIELD" column
-        const yieldRaw = pick(r, [
-            'yieldHex', 'yield', 'interestHex', 'interest', 'payoutHex', 'accruedHex',
-            'yieldDisplay'
-        ]);
+        const yieldRaw = pick(r, ['yieldHex', 'yield', 'interestHex', 'interest', 'payoutHex', 'accruedHex', 'yieldDisplay']);
         const yieldHex = toNum(yieldRaw);
         yieldSum += yieldHex;
 
@@ -116,7 +113,6 @@ function rowApyYieldOrDerive(row, currentDay, payoutPerTShareDailyHex) {
         toNum(pick(row, ['principalHex', 'principal'])) ||
         (toNum(pick(row, ['stakedHearts'])) / HEARTS_PER_HEX);
 
-    // Infer yield from total - principal if needed
     if (!yieldHex) {
         const totalHex = toNum(pick(row, ['totalHex', 'total']));
         if (totalHex && principalHex && totalHex >= principalHex) yieldHex = totalHex - principalHex;
@@ -162,7 +158,7 @@ function readAggsFromRawStakes(stakes = [], currentDay, payoutPerTShareDailyHex)
     };
 }
 
-/* ----------------- NEW: Read from the rendered table (visible rows) ----------------- */
+/* ----------------- DOM helpers (visible table & ticker) ----------------- */
 function findHeaderIndex(table, matchFn) {
     const thead = table.tHead || table.querySelector('thead');
     if (!thead) return -1;
@@ -174,10 +170,9 @@ function findHeaderIndex(table, matchFn) {
     }
     return -1;
 }
-
 function parseCellNumber(text) {
     if (!text) return 0;
-    const s = String(text).replace(/,/g, '').replace(/HEX/i, '').replace(/%/g, '').trim();
+    const s = String(text).replace(/,/g, '').replace(/\bHEX\b/i, '').replace(/%/g, '').trim();
     const n = Number(s);
     return Number.isFinite(n) ? n : 0;
 }
@@ -186,13 +181,12 @@ function readAvgApyFromDom() {
     try {
         const tables = Array.from(document.querySelectorAll('table'));
         for (const table of tables) {
-            const apyIdx = findHeaderIndex(table, h => h.toUpperCase().includes('APY')); // matches "% APY"
+            const apyIdx = findHeaderIndex(table, h => h.toUpperCase().includes('APY'));
             if (apyIdx === -1) continue;
             const tbody = table.tBodies?.[0] || table.querySelector('tbody');
             if (!tbody) continue;
             const rows = Array.from(tbody.rows);
             if (!rows.length) continue;
-
             let sum = 0, count = 0;
             for (const tr of rows) {
                 const cell = tr.cells[apyIdx];
@@ -205,27 +199,67 @@ function readAvgApyFromDom() {
     } catch { }
     return null;
 }
-
 function readTotalYieldFromDom() {
     try {
         const tables = Array.from(document.querySelectorAll('table'));
         for (const table of tables) {
-            // Prefer header exactly 'YIELD' (avoid '% APY' and 'TOTAL (HEX)')
             const yieldIdx = findHeaderIndex(table, h => h.trim().toUpperCase() === 'YIELD');
             if (yieldIdx === -1) continue;
-
             const tbody = table.tBodies?.[0] || table.querySelector('tbody');
             if (!tbody) continue;
             const rows = Array.from(tbody.rows);
             if (!rows.length) continue;
-
             let sum = 0;
             for (const tr of rows) {
                 const cell = tr.cells[yieldIdx];
                 if (!cell) continue;
                 sum += parseCellNumber(cell.innerText || cell.textContent);
             }
-            return sum; // total of visible YIELD column
+            return sum;
+        }
+    } catch { }
+    return null;
+}
+function readTotalHexFromDom() {
+    try {
+        const tables = Array.from(document.querySelectorAll('table'));
+        for (const table of tables) {
+            const totalHexIdx = findHeaderIndex(table, h => h.trim().toUpperCase() === 'TOTAL (HEX)');
+            if (totalHexIdx === -1) continue;
+            const tbody = table.tBodies?.[0] || table.querySelector('tbody');
+            if (!tbody) continue;
+            const rows = Array.from(tbody.rows);
+            if (!rows.length) continue;
+            let sum = 0;
+            for (const tr of rows) {
+                const cell = tr.cells[totalHexIdx];
+                if (!cell) continue;
+                sum += parseCellNumber(cell.innerText || cell.textContent);
+            }
+            return sum; // total of visible TOTAL (HEX) column
+        }
+    } catch { }
+    return null;
+}
+function readHexPriceUsdFromDomTicker() {
+    try {
+        const scopes = document.querySelectorAll('header, .kw-ticker, .ticker, .app-header, body');
+        for (const scope of scopes) {
+            const txt = (scope.innerText || scope.textContent || '').toUpperCase();
+
+            // ✅ HEX only (won't match eHEX)
+            const m1 = txt.match(/\bHEX\s+USD\s*\$?\s*([0-9]*\.?[0-9]+)/);
+            if (m1 && m1[1]) {
+                const n = Number(m1[1]);
+                if (Number.isFinite(n) && n > 0) return n;
+            }
+
+            // Fallback: "HEX $0.0123" when USD is omitted
+            const m2 = txt.match(/\bHEX\s+\$?\s*([0-9]*\.?[0-9]+)/);
+            if (m2 && m2[1]) {
+                const n = Number(m2[1]);
+                if (Number.isFinite(n) && n > 0) return n;
+            }
         }
     } catch { }
     return null;
@@ -264,18 +298,12 @@ export default function KwHexStakingHeaderContainer({
 
     // Keep your existing computed stats for counts/cadence tiles
     const stats = useMemo(
-        () => computeHexStakingStats(stakes, {
-            currentDay: currentHexDay,
-            payoutPerTShareDailyHex
-        }),
+        () => computeHexStakingStats(stakes, { currentDay: currentHexDay, payoutPerTShareDailyHex }),
         [stakes, currentHexDay, payoutPerTShareDailyHex]
     );
 
     // 1) Prefer aggregates from the actual grid rows
-    const aggsFromGrid = useMemo(
-        () => readAggsFromGridRows(gridRows),
-        [gridRows]
-    );
+    const aggsFromGrid = useMemo(() => readAggsFromGridRows(gridRows), [gridRows]);
 
     // 2) Fallback to aggregates derived from raw stakes
     const aggsFromRaw = useMemo(
@@ -286,9 +314,11 @@ export default function KwHexStakingHeaderContainer({
     const aggs = aggsFromGrid || aggsFromRaw || { avgApyPct: 0, totalYieldHex: 0, totalPrincipalHex: 0, source: 'none' };
     console.debug('[KW HEX Header] aggregates', aggs);
 
-    /* ---------- NEW: compute from the rendered table (visible rows) ---------- */
+    /* ---------- compute from the rendered table & ticker (visible rows) ---------- */
     const [avgApyDom, setAvgApyDom] = useState(null);
     const [totalYieldDom, setTotalYieldDom] = useState(null);
+    const [totalHexDom, setTotalHexDom] = useState(null);
+    const [hexPriceDom, setHexPriceDom] = useState(null);
 
     useEffect(() => {
         const id = setTimeout(() => {
@@ -302,28 +332,44 @@ export default function KwHexStakingHeaderContainer({
                 console.debug('[KW HEX Header] totalYieldHex (from DOM YIELD)', yld);
                 setTotalYieldDom(yld);
             }
-        }, 150); // small delay to ensure the table has rendered
+            const tot = readTotalHexFromDom();
+            if (tot !== null && tot !== undefined) {
+                console.debug('[KW HEX Header] totalHex (from DOM TOTAL (HEX))', tot);
+                setTotalHexDom(tot);
+            }
+            const px = (typeof hexPriceUsdOverride === 'number' && hexPriceUsdOverride > 0)
+                ? hexPriceUsdOverride
+                : readHexPriceUsdFromDomTicker();
+            if (px !== null && px !== undefined) {
+                console.debug('[KW HEX Header] hexPriceUsd (from DOM ticker)', px);
+                setHexPriceDom(px);
+            }
+        }, 150);
         return () => clearTimeout(id);
-    }, [gridRows?.length, stakes?.length, updatedAt]);
+    }, [gridRows?.length, stakes?.length, updatedAt, hexPriceUsdOverride]);
 
     // Prefer DOM-derived values when available
     const finalAvgApyPct = (avgApyDom !== null && avgApyDom !== undefined) ? avgApyDom : aggs.avgApyPct;
-    const finalTotalYieldHex = (totalYieldDom !== null && totalYieldDom !== undefined) ? totalYieldDom : aggs.totalYieldHex;
+    const finalTotalYield = (totalYieldDom !== null && totalYieldDom !== undefined) ? totalYieldDom : aggs.totalYieldHex;
+    const finalTotalHex = (totalHexDom !== null && totalHexDom !== undefined)
+        ? totalHexDom
+        : (aggs.totalPrincipalHex + finalTotalYield);
 
-    // Price for USD headline (left intact)
-    const hexPriceUsd = useMemo(
+    const hexPriceFromCache = useMemo(
         () => readHexPriceUsdFromCaches(hexPriceUsdOverride, updatedAt),
         [hexPriceUsdOverride, updatedAt]
     );
+    const finalHexPriceUsd = (hexPriceDom !== null && hexPriceDom !== undefined && hexPriceDom > 0)
+        ? hexPriceDom
+        : hexPriceFromCache;
 
-    const totalHex = aggs.totalPrincipalHex + finalTotalYieldHex;
-    const totalUsd = (hexPriceUsd > 0) ? totalHex * hexPriceUsd : 0;
+    const totalUsd = (finalHexPriceUsd > 0) ? finalTotalHex * finalHexPriceUsd : 0;
 
     console.debug('[KW HEX Header] totals', {
-        hexPriceUsd,
+        hexPriceUsd: finalHexPriceUsd,
         totalPrincipalHex: aggs.totalPrincipalHex,
-        totalYieldHex: finalTotalYieldHex,
-        totalHex,
+        totalYieldHex: finalTotalYield,
+        totalHex: finalTotalHex,
         totalUsd,
         source: aggs.source
     });
@@ -340,15 +386,15 @@ export default function KwHexStakingHeaderContainer({
             yieldPerMonth={stats.yieldPerMonth}
             yieldPerYear={stats.yieldPerYear}
 
-            /* ✅ Average APY & Total Yield from the displayed table */
+            /* table-aligned tiles */
             avgApyPct={finalAvgApyPct}
             totalPrincipalHex={aggs.totalPrincipalHex}
-            totalYieldHex={finalTotalYieldHex}
+            totalYieldHex={finalTotalYield}
 
-            /* USD headline (unchanged) */
-            hexPriceUsd={hexPriceUsd}
+            /* USD headline */
+            hexPriceUsd={finalHexPriceUsd}
             totalUsd={totalUsd}
-            totalHex={totalHex}
+            totalHex={finalTotalHex}
 
             /* UI */
             updatedAt={updatedAt}

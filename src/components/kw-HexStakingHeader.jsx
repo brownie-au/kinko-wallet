@@ -11,9 +11,24 @@ const nfc = (v) =>
     new Intl.NumberFormat(undefined, {
         style: 'currency',
         currency: 'USD',
+        currencyDisplay: 'narrowSymbol', // "$" instead of "US$"
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     }).format(Number(v || 0));
+
+/** More precision for small prices (used in "HEX @ price") */
+const nfcPrice = (v) => {
+    const n = Number(v || 0);
+    const base = { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' };
+    if (n < 1) {
+        return new Intl.NumberFormat(undefined, {
+            ...base,
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 6
+        }).format(n);
+    }
+    return new Intl.NumberFormat(undefined, { ...base, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+};
 
 const plural = (n, s) => `${n} ${s}${Number(n) === 1 ? '' : 's'}`;
 
@@ -113,12 +128,19 @@ export default function KwHexStakingHeader({
         // Small subline with HEX amount and price if available
         const sub =
             (totalHex > 0 || hexPriceUsd > 0)
-                ? `${nf(totalHex, { maximumFractionDigits: 0 })} HEX • ${hexPriceUsd > 0 ? `@ ${nfc(hexPriceUsd)}` : 'price updating…'}`
+                ? `${nf(totalHex, { maximumFractionDigits: 0 })} HEX • ${hexPriceUsd > 0 ? `@ ${nfcPrice(hexPriceUsd)}` : 'price updating…'
+                }`
                 : null;
 
         return (
             <div className="kw-usd-wrap">
-                <div className="kw-usd-title">USD {main.replace('USD', '').trim()}</div>
+                {/* Bigger & bolder price; strip any stray "US$"/"USD" from formatted string */}
+                <div
+                    className="kw-usd-title"
+                    style={{ fontSize: '2.00rem', fontWeight: 800, lineHeight: 1.1 }}
+                >
+                    USD {main.replace(/US\$|USD/g, '').trim()}
+                </div>
                 {sub && <div className="kw-usd-sub">{sub}</div>}
             </div>
         );
@@ -153,7 +175,7 @@ export default function KwHexStakingHeader({
                 {/* Metrics grid */}
                 <div className="kw-metrics">
                     <Metric label="Active Stakes" value={nf(activeStakes, { maximumFractionDigits: 0 })} />
-                    <Metric label="Total T‑Shares" value={nf(totalTShares, { maximumFractionDigits: 0 })} />
+                    <Metric label="Total T-Shares" value={nf(totalTShares, { maximumFractionDigits: 0 })} />
                     <Metric label="Average APY" value={`${nf(avgApyPct, { maximumFractionDigits: 1 })}%`} />
                     <Metric label="Next End Stake" value={`Due in ${plural(nextEndInDays, 'day')}`} />
                     <Metric label="Total Principal" value={`${nf(totalPrincipalHex, { maximumFractionDigits: 0 })} HEX`} />

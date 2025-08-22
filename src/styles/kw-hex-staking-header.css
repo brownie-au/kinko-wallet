@@ -9,7 +9,6 @@
 
     /* Active chain pill (purple) */
     --kw-chain-active-bg: #7c3aed;
-    /* violet-600 style */
     --kw-chain-active-br: rgba(124, 58, 237, 0.35);
     --kw-chain-active-fg: #ffffff;
     --kw-chain-active-shadow: 0 2px 10px rgba(124, 58, 237, 0.20) inset,
@@ -17,23 +16,36 @@
 
     /* Updated timestamp colours (defaults; overridden per theme below) */
     --kw-updated-fg: rgba(0, 0, 0, 0.65);
+
+    /* Cadence chip sizing — original look */
+    --kw-chip-height: 22px;
+    --kw-chip-minwidth: 26px;
+    --kw-chip-font: 11px;
+
+    /* Neutral chip colours (unselected) – align with table header theme */
+    --kw-chip-neutral-bg: var(--bs-tertiary-bg);
+    --kw-chip-neutral-br: var(--bs-border-color);
+    --kw-chip-neutral-fg: var(--bs-secondary-color);
 }
 
 :root[data-theme="dark"] {
     --kw-muted-dk: rgba(255, 255, 255, 0.65);
-    --kw-border-dk: rgba(255, 255, 255, 0.14);
+    --kw-border-dk: rgba(255, 255, 255, 0.18);
     --kw-chip-bg-dk: rgba(255, 255, 255, 0.06);
 
     /* brighter in dark */
     --kw-updated-fg: rgba(255, 255, 255, 0.78);
+
+    /* keep the same neutral mapping in dark so it matches table headers */
+    --kw-chip-neutral-bg: var(--bs-tertiary-bg);
+    --kw-chip-neutral-br: var(--kw-border-dk);
+    --kw-chip-neutral-fg: var(--kw-muted-dk);
 }
 
 :root[data-theme="light"] {
     --kw-muted-dk: var(--bs-secondary-color);
     --kw-border-dk: var(--bs-border-color);
     --kw-chip-bg-dk: var(--bs-secondary-bg);
-
-    /* softer in light */
     --kw-updated-fg: rgba(0, 0, 0, 0.65);
 }
 
@@ -79,8 +91,7 @@
     line-height: 1;
 }
 
-/* Force the PULSECHAIN chip (first badge in the title) to the purple active style.
-   Needs !important to beat Bootstrap's .bg-secondary!important */
+/* Force the PULSECHAIN chip (first badge in the title) to purple active style */
 .kw-left .kw-title>.kw-chip:first-of-type {
     background: var(--kw-chain-active-bg) !important;
     border: 1px solid var(--kw-chain-active-br) !important;
@@ -92,24 +103,25 @@
     opacity: 0.7;
 }
 
-/* updated + refresh */
+/* updated + refresh (STACKED: Refresh below the time) */
 .kw-meta {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    /* <<< stack */
+    align-items: flex-start;
+    /* left-align */
+    gap: 4px;
+    /* tighter */
     margin-top: 6px;
     color: var(--bs-secondary-color);
     font-size: 12px;
 }
 
-/* Brighten the Updated timestamp specifically (theme-aware) */
 .kw-meta .kw-updated {
     color: var(--kw-updated-fg);
     font-weight: 400;
-    /* no bolding; just brighter colour in dark */
 }
 
-/* Make Refresh readable in light & dark themes */
 .kw-refresh.btn {
     padding: 2px 10px;
     line-height: 1.2;
@@ -120,7 +132,7 @@
     --bs-btn-bg: transparent;
 }
 
-/* yield block on the right (legacy; safe to keep) */
+/* yield block on the right */
 .kw-yield {
     display: grid;
     justify-items: end;
@@ -154,15 +166,18 @@
     gap: var(--kw-gap);
 }
 
+/* Enable container queries on metric tiles */
 .kw-metric {
     position: relative;
-    /* chips are absolutely positioned inside */
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--bs-border-color-translucent, rgba(255, 255, 255, 0.08));
     border-radius: 10px;
     padding: 12px;
     display: grid;
     gap: 4px;
+
+    /* container query support */
+    container-type: inline-size;
 }
 
 .kw-metric-label {
@@ -175,67 +190,61 @@
     font-weight: 700;
 }
 
-/* add bottom room ONLY on the accent (Yield) card so chips can sit under value */
 .kw-metric.accent {
     outline: 1px solid rgba(100, 108, 255, 0.3);
     padding-bottom: 36px;
     /* space for the chip row below the value */
 }
 
-/* ===== Cadence chips (D / W / M / Y) — mini pills bottom-right of Yield box ===== */
+/* ===== Cadence chips (D / W / M / Y) ===== */
 .kw-cadence-chips {
     position: absolute;
     right: 8px;
     bottom: 8px;
-    /* sits neatly under “0 HEX” */
     display: flex;
     gap: 6px;
 }
 
-/* Base (inactive/grey) — sized for single letters */
+/* Base (unselected) — same visual weight as table headers */
 .kw-chip-btn {
     appearance: none;
-    border: 1px solid var(--bs-border-color);
-    background: var(--bs-secondary-bg);
-    /* subtle grey */
-    color: var(--bs-secondary-color);
+    border: 1px solid var(--kw-chip-neutral-br) !important;
+    background: var(--kw-chip-neutral-bg) !important;
+    color: var(--kw-chip-neutral-fg) !important;
     border-radius: 999px;
-    /* pill */
-    height: 22px;
-    /* compact height */
-    min-width: 26px;
-    /* fits one letter */
+    height: var(--kw-chip-height);
+    min-width: var(--kw-chip-minwidth);
     padding: 0 6px;
-    font-size: 11px;
+    font-size: var(--kw-chip-font);
     font-weight: 700;
-    line-height: 22px;
-    /* centered text */
+    line-height: var(--kw-chip-height);
     cursor: pointer;
-    transition: all 120ms ease;
     text-transform: uppercase;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 60ms ease;
 }
 
 .kw-chip-btn:hover {
+    filter: brightness(0.98);
     color: var(--bs-body-color);
 }
 
-/* Active (blue like your "Active" badge) */
+/* Active (blue pill with white text) */
 .kw-chip-btn.active {
-    background: var(--bs-info);
-    border-color: var(--bs-info);
-    color: #fff;
-    /* strong contrast */
+    background: var(--bs-info) !important;
+    border-color: var(--bs-info) !important;
+    color: #fff !important;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+}
+
+/* Hide the cadence chips if the tile is too narrow (prevents overflow) */
+@container (max-width: 110px) {
+    .kw-cadence-chips {
+        display: none;
+    }
 }
 
 /* labels & borders inside the summary grid */
 .kw-metric {
-    border-color: var(--kw-border-dk);
-}
-
-/* cadence chips background in dark */
-:root[data-theme="dark"] .kw-chip-btn {
-    background: var(--kw-chip-bg-dk);
     border-color: var(--kw-border-dk);
 }
 
@@ -249,19 +258,15 @@
     border-bottom-color: var(--kw-border-dk) !important;
 }
 
-/* ===================== */
-/* Wallet name chip (green)
-/* ===================== */
+/* Wallet name chip (green) */
 :root[data-theme="light"] {
     --kw-green: #0a6b2d;
-    /* dark green text */
     --kw-green-bg: rgba(10, 107, 45, .08);
     --kw-green-br: rgba(10, 107, 45, .22);
 }
 
 :root[data-theme="dark"] {
     --kw-green: #88ffbe;
-    /* light green text */
     --kw-green-bg: rgba(136, 255, 190, .10);
     --kw-green-br: rgba(136, 255, 190, .30);
 }
@@ -278,20 +283,15 @@
     letter-spacing: .1px;
 }
 
-/* ===================== */
-/* Polished table headers: tiny arrow only on active sorted column */
-/* ===================== */
+/* Polished table headers */
 .kw-sort-plain {
     all: unset;
-    /* remove default button look */
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    /* small breathing room before the arrow */
     cursor: pointer;
     color: var(--bs-body-color);
     font-weight: 600;
-    /* matches table header weight */
     line-height: 1.1;
 }
 
@@ -301,7 +301,6 @@
     border-radius: 4px;
 }
 
-/* Tiny caret placed right beside the label — only rendered for active column */
 .kw-sort-arrow {
     width: 0;
     height: 0;
@@ -309,21 +308,18 @@
     vertical-align: middle;
     position: relative;
     top: -1px;
-    /* optical alignment */
 }
 
 .kw-sort-arrow.asc {
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     border-bottom: 6px solid var(--bs-body-color);
-    /* ▲ */
 }
 
 .kw-sort-arrow.desc {
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     border-top: 6px solid var(--bs-body-color);
-    /* ▼ */
 }
 
 /* responsive */
@@ -356,6 +352,4 @@
     .kw-metric.accent {
         padding-bottom: 12px;
     }
-
-    /* chips flow in normal doc flow on small screens */
 }
