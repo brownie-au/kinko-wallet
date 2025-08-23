@@ -79,7 +79,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.2px;
 }
@@ -144,7 +144,7 @@
 }
 
 .kw-yield-value {
-    font-size: 20px;
+    font-size: 0px;
     font-weight: 700;
 }
 
@@ -183,7 +183,7 @@
 }
 
 .kw-metric-value {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
 }
 

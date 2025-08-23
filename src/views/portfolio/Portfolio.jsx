@@ -17,6 +17,9 @@ import { isBlockedToken } from '../../data/tokenBlocklist';
 // ✅ publish Top tokens for Dashboard (now top 6 to match tiles)
 import { writeTopTokensCache } from '../../services/topTokensService';
 
+// ✅ NEW: publish this page’s total to the global PortfolioValueContext
+import { usePortfolioValue, PORTFOLIO_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+
 // --- shared keys so other pages can read the total ---
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
@@ -413,7 +416,7 @@ export default function Portfolio() {
       setBooting(false);
       setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
-      // ✅ publish Top‑N from cached data if we're on All chains
+      // ✅ publish Top-N from cached data if we're on All chains
       if (mode === 'all') {
         try {
           const topN = [...(ls.tokens || [])]
@@ -477,7 +480,7 @@ export default function Portfolio() {
       // NEW: publish per-chain totals for Dashboard when on "all"
       if (mode === 'all') publishChainTotalsFromTokens(tokensWithValue);
 
-      // ✅ publish Top‑N for Dashboard (ONLY when viewing the full portfolio)
+      // ✅ publish Top-N for Dashboard (ONLY when viewing the full portfolio)
       if (mode === 'all') {
         try {
           const topN = [...tokensWithValue]
@@ -512,6 +515,23 @@ export default function Portfolio() {
     maybeExpandFromFocus(tokens);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
+
+  // ====== NEW: publish this page’s total into the global context ======
+  const { setSource, removeSource } = usePortfolioValue();
+
+  // Only publish the "All Wallets" figure to the global total.
+  useEffect(() => {
+    if (mode === 'all') {
+      setSource(PORTFOLIO_SOURCE, Number(totalUsd) || 0);
+    }
+    // do not overwrite when on filtered modes; keeps last known "all" value
+  }, [mode, totalUsd, setSource]);
+
+  // Clean up registration on unmount (nice-to-have)
+  useEffect(() => {
+    return () => removeSource(PORTFOLIO_SOURCE);
+  }, [removeSource]);
+  // ====== END new context wiring ======
 
   const visibleTokens = useMemo(() => {
     const base = tokens.filter((t) => !isJunkToken(t));
@@ -549,7 +569,8 @@ export default function Portfolio() {
                     All Wallets
                   </div>
 
-                  <h2 className="mb-1" style={{ fontWeight: 800 }}>{fmtUSD(totalUsd)}</h2>
+                  {/* Unified with Dashboard/Index: kw-grand-total */}
+                  <h2 className="mb-1 kw-grand-total">{fmtUSD(totalUsd)}</h2>
 
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span className="text-success">24h: +0.00%</span>

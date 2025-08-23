@@ -26,7 +26,15 @@ function getStoredWallets() {
         const list = (arr || [])
           .map((w) => ({
             name: w?.name || w?.label || w?.title || 'Wallet',
-            address: w?.address || w?.addr || w?.account || w?.publicKey || w?.public_key || w?.hash || w?.id || w?.wallet,
+            address:
+              w?.address ||
+              w?.addr ||
+              w?.account ||
+              w?.publicKey ||
+              w?.public_key ||
+              w?.hash ||
+              w?.id ||
+              w?.wallet,
             chain: w?.chain || 'eth'
           }))
           .filter((w) => w.address);
@@ -68,7 +76,9 @@ function SummaryBar({ totalUsd = 0, walletCount = 0, change24h = 0 }) {
       className="container"
     >
       <div className="d-flex flex-wrap gap-3 align-items-center">
-        <strong style={{ fontSize: 18 }}>Total:&nbsp;${totalUsd.toLocaleString()}</strong>
+        {/* Unified grand total typography */}
+        <strong className="kw-grand-total">USD {totalUsd.toLocaleString()}</strong>
+
         <span>
           •&nbsp;24h:&nbsp;
           <span style={{ color: change24h >= 0 ? '#16c784' : '#ea3943' }}>
@@ -109,21 +119,29 @@ function TokenRow({ token }) {
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.08)' }} />
           <div>
             <div style={{ fontWeight: 600 }}>{token.symbol}</div>
-            <div className="text-muted" style={{ fontSize: 12 }}>{token.name || token.symbol}</div>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              {token.name || token.symbol}
+            </div>
           </div>
         </div>
 
         <div className="d-flex gap-4">
           <div className="text-end">
-            <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Price
+            </div>
             <div>${(token.priceUsd ?? 0).toLocaleString()}</div>
           </div>
           <div className="text-end">
-            <div className="text-muted" style={{ fontSize: 12 }}>Amount</div>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Amount
+            </div>
             <div>{(token.amount ?? 0).toLocaleString()}</div>
           </div>
           <div className="text-end">
-            <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              Value
+            </div>
             <div>${(token.valueUsd ?? 0).toLocaleString()}</div>
           </div>
           <button className="btn btn-sm btn-outline-secondary" onClick={() => setOpen((v) => !v)}>
@@ -134,7 +152,9 @@ function TokenRow({ token }) {
 
       {open && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(255,255,255,0.08)' }}>
-          <div className="text-muted mb-2" style={{ fontSize: 12 }}>Balance Breakdown</div>
+          <div className="text-muted mb-2" style={{ fontSize: 12 }}>
+            Balance Breakdown
+          </div>
           {(token.breakdown || []).map((row, i) => (
             <BreakdownRow key={i} name={row.label} value={row.value} />
           ))}
@@ -188,7 +208,7 @@ function aggregateTokensFromWallets(walletTokensMap) {
 export default function PortfolioOverview() {
   const [wallets, setWallets] = useState([]);
   const [tokenRows, setTokenRows] = useState([]);
-  const [loading, setLoading] = useState(false);   // shows only during background refresh
+  const [loading, setLoading] = useState(false); // shows only during background refresh
 
   // Load wallet list
   useEffect(() => {
@@ -235,7 +255,9 @@ export default function PortfolioOverview() {
       }
     }
     refresh();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [wallets]);
 
   const totalUsd = useMemo(() => tokenRows.reduce((s, t) => s + (t.valueUsd || 0), 0), [tokenRows]);

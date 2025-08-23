@@ -4,6 +4,7 @@ import { Row, Col, Card, Badge, Table, Alert, Placeholder } from 'react-bootstra
 import { useWallets } from '../../contexts/WalletContext';
 import { loadWallets } from '../../utils/walletStorage';
 import { readHexStakesCache, refreshHexStakesAndCache } from '../../services/kw-hexPulseService';
+import { usePortfolioValue, HEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
 
 import KwHexStakingHeaderContainer from '../../components/kw-HexStakingHeaderContainer.jsx';
 import '../../styles/kw-hex-staking-header.css';
@@ -793,6 +794,24 @@ export default function KwHexStaking() {
         const set = new Set(selectedAddrs.map(a => a.toLowerCase()));
         return (sortedRowsEnded || []).filter(r => set.has((r.wallet || '').toLowerCase()));
     }, [sortedRowsEnded, selectedAddrs, isAllWallets]);
+
+    /* ---------------- Publish page total to global PortfolioValueContext ---------------- */
+    const { setSource } = usePortfolioValue();
+
+    // Active stakes only (to match header total)
+    const hexStakingUsdTotal = useMemo(() => {
+        const price = Number(hexPriceUsd) || 0;
+        if (!price) return 0;
+        return (rows || []).reduce((acc, r) => {
+            const y = Number(yieldMap[r.id]?.yieldHex || 0);
+            const totalHex = (Number(r.principalHex) || 0) + y;
+            return acc + totalHex * price;
+        }, 0);
+    }, [rows, yieldMap, hexPriceUsd]);
+
+    useEffect(() => {
+        setSource(HEX_STAKING_SOURCE, Number(hexStakingUsdTotal) || 0);
+    }, [hexStakingUsdTotal, setSource]);
 
     return (
         <Row className="gy-3">

@@ -208,3 +208,20 @@ td[data-col="wallet"] .text-success {
 .kw-chip.kw-chip--all {
   opacity: 1;
 }
+
+/* =======================================================
+   GRAND USD TOTAL — unified typography
+   Apply this to:
+   - Dashboard Total Portfolio Value
+   - View All grand USD total
+   - Per-Wallet grand USD totals
+   ======================================================= */
+.kw-grand-total {
+  font-size: 26px;
+  /* matches current Dashboard computed size (~25.91px) */
+  font-weight: 400;
+  font-family: "Open Sans", sans-serif;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+}

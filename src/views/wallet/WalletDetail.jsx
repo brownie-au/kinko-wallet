@@ -635,7 +635,8 @@ export default function WalletDetail() {
                     {walletName}
                   </div>
 
-                  <h2 className="mb-1" style={{ fontWeight: 800 }}>{fmtUSD(totalUSD)}</h2>
+                  {/* Grand USD total – unified typography */}
+                  <h2 className="mb-1 kw-grand-total">{fmtUSD(totalUSD)}</h2>
 
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span style={addrStyle}>{short(address)}</span>

@@ -243,21 +243,14 @@ function readTotalHexFromDom() {
 }
 function readHexPriceUsdFromDomTicker() {
     try {
+        // Scan a limited set of likely containers first
         const scopes = document.querySelectorAll('header, .kw-ticker, .ticker, .app-header, body');
         for (const scope of scopes) {
             const txt = (scope.innerText || scope.textContent || '').toUpperCase();
-
-            // ✅ HEX only (won't match eHEX)
-            const m1 = txt.match(/\bHEX\s+USD\s*\$?\s*([0-9]*\.?[0-9]+)/);
-            if (m1 && m1[1]) {
-                const n = Number(m1[1]);
-                if (Number.isFinite(n) && n > 0) return n;
-            }
-
-            // Fallback: "HEX $0.0123" when USD is omitted
-            const m2 = txt.match(/\bHEX\s+\$?\s*([0-9]*\.?[0-9]+)/);
-            if (m2 && m2[1]) {
-                const n = Number(m2[1]);
+            // e.g., "HEX USD $0.0111"
+            const m = txt.match(/HEX\s+USD\s*\$?\s*([0-9]*\.?[0-9]+)/i);
+            if (m && m[1]) {
+                const n = Number(m[1]);
                 if (Number.isFinite(n) && n > 0) return n;
             }
         }
@@ -349,9 +342,9 @@ export default function KwHexStakingHeaderContainer({
     }, [gridRows?.length, stakes?.length, updatedAt, hexPriceUsdOverride]);
 
     // Prefer DOM-derived values when available
-    const finalAvgApyPct = (avgApyDom !== null && avgApyDom !== undefined) ? avgApyDom : aggs.avgApyPct;
-    const finalTotalYield = (totalYieldDom !== null && totalYieldDom !== undefined) ? totalYieldDom : aggs.totalYieldHex;
-    const finalTotalHex = (totalHexDom !== null && totalHexDom !== undefined)
+    const finalAvgApyPct   = (avgApyDom   !== null && avgApyDom   !== undefined) ? avgApyDom   : aggs.avgApyPct;
+    const finalTotalYield  = (totalYieldDom !== null && totalYieldDom !== undefined) ? totalYieldDom : aggs.totalYieldHex;
+    const finalTotalHex    = (totalHexDom !== null && totalHexDom !== undefined)
         ? totalHexDom
         : (aggs.totalPrincipalHex + finalTotalYield);
 
@@ -359,7 +352,7 @@ export default function KwHexStakingHeaderContainer({
         () => readHexPriceUsdFromCaches(hexPriceUsdOverride, updatedAt),
         [hexPriceUsdOverride, updatedAt]
     );
-    const finalHexPriceUsd = (hexPriceDom !== null && hexPriceDom !== undefined && hexPriceDom > 0)
+    const finalHexPriceUsd  = (hexPriceDom !== null && hexPriceDom !== undefined && hexPriceDom > 0)
         ? hexPriceDom
         : hexPriceFromCache;
 
@@ -386,7 +379,7 @@ export default function KwHexStakingHeaderContainer({
             yieldPerMonth={stats.yieldPerMonth}
             yieldPerYear={stats.yieldPerYear}
 
-            /* table-aligned tiles */
+            /* ✅ APY + Yield + USD driven by displayed table & ticker */
             avgApyPct={finalAvgApyPct}
             totalPrincipalHex={aggs.totalPrincipalHex}
             totalYieldHex={finalTotalYield}

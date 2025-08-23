@@ -12,6 +12,9 @@ import Locales from 'components/Locales';
 // NEW: wallet context (so dashboard tiles can read real totals)
 import { WalletProvider } from 'contexts/WalletContext';
 
+// NEW: global aggregated portfolio value context
+import { PortfolioValueProvider } from 'contexts/PortfolioValueContext';
+
 // NEW: background snapshot prefetcher
 import { prefetchAllManaged } from './services/snapshotService';
 
@@ -82,10 +85,12 @@ function App() {
   return (
     <Locales>
       <WalletProvider>
-        <PreloadSnapshots />
-        <KwNoGap />
-        <KwGapCancel />
-        <RouterProvider router={router} />
+        <PortfolioValueProvider>
+          <PreloadSnapshots />
+          <KwNoGap />
+          <KwGapCancel />
+          <RouterProvider router={router} />
+        </PortfolioValueProvider>
       </WalletProvider>
     </Locales>
   );

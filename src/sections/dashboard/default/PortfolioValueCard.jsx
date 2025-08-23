@@ -4,6 +4,7 @@ import { Card } from 'react-bootstrap';
 
 import KwChainAllocationPie from '../../../components/kw-ChainAllocationPie';
 import { ChainBadge } from '../../../components/ChainUI';
+import { usePortfolioValue } from '../../../contexts/PortfolioValueContext.jsx';
 
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
@@ -15,15 +16,20 @@ function readPerChainTotals() {
     if (!raw) return {};
     const obj = JSON.parse(raw);
     return obj?.totals || {};
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 export default function PortfolioValueCard() {
-  const [totalUsd, setTotalUsd] = useState(0);
+  const [totalUsd, setTotalUsd] = useState(0);   // LS fallback for Portfolio page total
   const [pct24h, setPct24h] = useState(0);
   const [chainTotals, setChainTotals] = useState({});
 
-  // --- NEW: width-driven show/hide for the pie (keeps your layout) ---
+  // Read aggregated sources from global context
+  const { total: aggregatedTotal, sources } = usePortfolioValue();
+
+  // --- width-driven show/hide for the pie (keeps your layout) ---
   const bodyRef = useRef(null);
   const [showPie, setShowPie] = useState(true);
 
@@ -31,16 +37,13 @@ export default function PortfolioValueCard() {
     const el = bodyRef.current;
     if (!el) return;
 
-    // Your exact sizing:
-    // left minWidth (336) + your right gutter (36) + pie size (188)
-    // Then a small negative fudge so "normal" widths don't hide prematurely.
-    const BASE = 336 + 36 + 188;     // 560
-    const HIDE_AT = BASE - 50;       // 548  → hide below this
-    const SHOW_AT = HIDE_AT + 12;    // 560  → show again above this (hysteresis)
+    const BASE = 336 + 36 + 188; // min-left + gutter + pie size
+    const HIDE_AT = BASE - 50;   // hide below this
+    const SHOW_AT = HIDE_AT + 12;
 
     const ro = new ResizeObserver(([entry]) => {
       const w = entry?.contentRect?.width || el.clientWidth || 0;
-      setShowPie(prev => (prev ? w >= HIDE_AT : w >= SHOW_AT));
+      setShowPie((prev) => (prev ? w >= HIDE_AT : w >= SHOW_AT));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -51,11 +54,15 @@ export default function PortfolioValueCard() {
       try {
         setTotalUsd(Number(localStorage.getItem(LS_TOTAL_KEY) || 0) || 0);
         setPct24h(Number(localStorage.getItem(LS_PCT_KEY) || 0) || 0);
-      } catch { setTotalUsd(0); setPct24h(0); }
+      } catch {
+        setTotalUsd(0);
+        setPct24h(0);
+      }
     };
     const pullChains = () => setChainTotals(readPerChainTotals());
 
-    pullTotals(); pullChains();
+    pullTotals();
+    pullChains();
 
     const onStorage = (e) => {
       if (e.key === LS_TOTAL_KEY || e.key === LS_PCT_KEY) pullTotals();
@@ -65,9 +72,30 @@ export default function PortfolioValueCard() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  // ---------- KEY FIX ----------
+  // Sum all context sources AND add LS portfolio fallback if portfolio isn't in context yet.
+  const displayTotalRaw = useMemo(() => {
+    const ctxTotal = Number(aggregatedTotal) || 0;
+    const lsPortfolio = Number(totalUsd) || 0;
+    const hasSources = sources && Object.keys(sources).length > 0;
+    const hasPortfolioSource = !!(sources && Object.prototype.hasOwnProperty.call(sources, 'portfolio'));
+
+    if (!hasSources) {
+      // No context yet → show LS portfolio (what we used to show before context)
+      return lsPortfolio;
+    }
+    // Context present → add LS portfolio only if portfolio isn't registered yet
+    return ctxTotal + (hasPortfolioSource ? 0 : lsPortfolio);
+  }, [aggregatedTotal, totalUsd, sources]);
+  // --------------------------------
+
   const formattedTotal = useMemo(
-    () => (Number(totalUsd) || 0).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }),
-    [totalUsd]
+    () =>
+      (Number(displayTotalRaw) || 0).toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2
+      }),
+    [displayTotalRaw]
   );
 
   // rows: pulse, eth, base (descending)
@@ -75,7 +103,7 @@ export default function PortfolioValueCard() {
     const entries = [
       ['pulse', Number(chainTotals.pulse || 0)],
       ['eth', Number(chainTotals.eth || 0)],
-      ['base', Number(chainTotals.base || 0)],
+      ['base', Number(chainTotals.base || 0)]
     ].filter(([, v]) => v > 0);
     entries.sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((acc, [, v]) => acc + v, 0) || 0;
@@ -84,9 +112,12 @@ export default function PortfolioValueCard() {
 
   const donutData = useMemo(() => chainList.map(({ id, usd }) => ({ id, valueUsd: usd })), [chainList]);
 
-  const fmtUsd0 = (n) => new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', maximumFractionDigits: 0
-  }).format(Number(n || 0));
+  const fmtUsd0 = (n) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(Number(n || 0));
 
   const up = Number(pct24h) >= 0;
 
@@ -98,7 +129,7 @@ export default function PortfolioValueCard() {
           style={{
             minWidth: 336,
             flex: '1 1 336px',
-            paddingRight: 36,          // ← keep your gutter
+            paddingRight: 36 // ← keep your gutter
           }}
         >
           <div className="text-muted mb-1">Total Portfolio Value</div>
@@ -142,18 +173,12 @@ export default function PortfolioValueCard() {
             display: showPie ? 'flex' : 'none',
             alignItems: 'center',
             justifyContent: 'flex-end',
-            marginRight: -10,          // keep your nudge
-            paddingLeft: 8,            // keep your tidy gap
+            marginRight: -10, // keep your nudge
+            paddingLeft: 8, // keep your tidy gap
             overflow: 'visible'
           }}
         >
-          <KwChainAllocationPie
-            items={donutData}
-            size={188}
-            thickness={22}
-            showLegend={false}
-            showCenter={false}
-          />
+          <KwChainAllocationPie items={donutData} size={188} thickness={22} showLegend={false} showCenter={false} />
         </div>
       </Card.Body>
     </Card>
