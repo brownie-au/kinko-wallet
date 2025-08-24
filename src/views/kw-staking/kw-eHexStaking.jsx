@@ -1,5 +1,5 @@
 /* src/views/kw-staking/kw-eHexStaking.jsx */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Row, Col, Card, Badge, Table, Alert, Placeholder } from 'react-bootstrap';
 import { useWallets } from '../../contexts/WalletContext';
 import { loadWallets } from '../../utils/walletStorage';
@@ -10,7 +10,7 @@ import {
 } from '../../services/kw-ehexStakingService';
 
 import { usePortfolioValue, HEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
-import KwHexStakingHeaderContainer from '../../components/kw-HexStakingHeaderContainer.jsx';
+import KwEHexStakingHeaderContainer from '../../components/kw-EHexStakingHeaderContainer.jsx';
 import WalletFilterChips from '../../components/WalletFilterChips.jsx';
 import '../../styles/kw-hex-staking-header.css';
 
@@ -31,7 +31,6 @@ const SHARES_PER_TSHARE = 1e12;
 const HEARTS_PER_HEX = 1e8;
 
 const PAGE_CHAIN = 'ethereum';
-const PAGE_KEY = 'ehex'; // only used for any optional page-specific keys if needed
 
 /* --- Service-call wrappers (tolerate multiple signatures) --- */
 async function readCacheEthSafe(wallets) {
@@ -224,6 +223,68 @@ function formatAestDate(dt) {
     }).format(dt);
 }
 
+/* ---------------- Synchronous cache hydrate (no flicker) ---------------- */
+function tryParse(obj) { try { return JSON.parse(obj); } catch { return null; } }
+function looksLikeStakeCache(x) {
+    if (!x || typeof x !== 'object') return false;
+    if (Array.isArray(x.rows) || Array.isArray(x.rowsEnded)) return true;
+    if (x.byAddr && typeof x.byAddr === 'object') return true;
+    return false;
+}
+function buildRowsFromByAddr(byAddr) {
+    const active = [], ended = [];
+    Object.entries(byAddr || {}).forEach(([addr, stakes]) => {
+        (stakes || []).forEach((s) => {
+            const row = {
+                id: `${addr}-${String(s.stakeId ?? s.index ?? '')}`,
+                wallet: String(addr),
+                principalHex: Number(s.stakedHearts ?? s.stakedHex ? (s.stakedHearts ?? 0) / HEARTS_PER_HEX : (s.stakedHex ?? 0)),
+                tShares: Number(s.stakeShares != null ? s.stakeShares / SHARES_PER_TSHARE : (s.tShares ?? 0)),
+                lockedDay: Number(s.lockedDay ?? 0),
+                stakedDays: Number(s.stakedDays ?? 0),
+                unlockedDay: Number(s.unlockedDay ?? 0) || null
+            };
+            if (row.unlockedDay) ended.push(row); else active.push(row);
+        });
+    });
+    return { active, ended };
+}
+
+/** Heuristic scan for any likely eHEX cache payload (supports legacy keys) */
+function readAnyEhexCacheSync() {
+    try {
+        const maybe = readEhexStakesCache({ chain: PAGE_CHAIN, wallets: [] });
+        if (maybe && typeof maybe === 'object' && !('then' in maybe)) return maybe;
+    } catch { }
+
+    const candidateKeys = [
+        'kw:staking:ehex:cache:v1',
+        'kw:staking:ehex:cache',
+        'kw:ehex:stakes:cache',
+        'kw:stakes:ehex',
+        'kw:staking:eth:ehex',
+        'kw:staking:ehex:eth'
+    ];
+
+    for (const k of candidateKeys) {
+        const v = localStorage.getItem(k);
+        if (!v) continue;
+        const obj = tryParse(v);
+        if (looksLikeStakeCache(obj)) return obj;
+    }
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (!/ehex|eth|staking/i.test(key)) continue;
+            const obj = tryParse(localStorage.getItem(key));
+            if (looksLikeStakeCache(obj)) return obj;
+        }
+    } catch { }
+    return null;
+}
+
 /* skeleton */
 function ShimmerTable() {
     return (
@@ -276,7 +337,7 @@ export default function KwEhexStaking({ config }) {
         title: 'eHEX Staking',
         badge: 'ETHEREUM',
         unit: 'eHEX',
-        chain: PAGE_CHAIN,
+        chain: 'ethereum',
         chainId: 'ethereum',
         hexAddress: import.meta.env.VITE_ETH_HEX_ADDRESS || '0x2b591e99aFe9F32eaa6214f7B7629768c40eEb39',
         priceKey: 'EHEX'
@@ -311,16 +372,39 @@ export default function KwEhexStaking({ config }) {
         return { address: addrLc, label: friendly ? `${friendly}` : `0x…${a.slice(-4)}` };
     }), [ethAddresses, walletNameMap]);
 
+    /* ---------------- Cache-first: hydrate initial state synchronously ---------------- */
+    const initialCached = useMemo(() => {
+        const raw = readAnyEhexCacheSync();
+        if (!raw) return null;
+        if (raw.byAddr) {
+            const { active, ended } = buildRowsFromByAddr(raw.byAddr);
+            return {
+                rows: active,
+                rowsEnded: ended,
+                currentDay: Number(raw.currentDay ?? 0) || null,
+                payoutPerTShareDailyHex: Number(raw.payoutPerTShareDailyHex ?? 0) || null,
+                updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : null
+            };
+        }
+        return {
+            rows: raw.rows || [],
+            rowsEnded: raw.rowsEnded || [],
+            currentDay: Number(raw.currentDay ?? 0) || null,
+            payoutPerTShareDailyHex: Number(raw.payoutPerTShareDailyHex ?? 0) || null,
+            updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : null
+        };
+    }, []);
+
     /* Data state */
-    const [rows, setRows] = useState([]);          // Active
-    const [rowsEnded, setRowsEnded] = useState([]); // Ended
-    const [currentDay, setCurrentDay] = useState(null);
-    const [payoutPerTShareDailyHex, setPayoutPerTShareDailyHex] = useState(null);
-    const [updatedAt, setUpdatedAt] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [rows, setRows] = useState(() => initialCached?.rows || []);
+    const [rowsEnded, setRowsEnded] = useState(() => initialCached?.rowsEnded || []);
+    const [currentDay, setCurrentDay] = useState(() => initialCached?.currentDay ?? null);
+    const [payoutPerTShareDailyHex, setPayoutPerTShareDailyHex] = useState(() => initialCached?.payoutPerTShareDailyHex ?? null);
+    const [updatedAt, setUpdatedAt] = useState(() => initialCached?.updatedAt || null);
+    const [loading, setLoading] = useState(() => !initialCached);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [setupError, setSetupError] = useState('');
-    const [progress, setProgress] = useState({ done: 0, total: 0 });
+    const [progress, setProgress] = useState({ done: 0, total: ethAddresses.length });
 
     /* Price (EHEX/ETH) */
     const initialPrice = (() => {
@@ -443,117 +527,14 @@ export default function KwEhexStaking({ config }) {
         return arr;
     }, [rowsEnded]);
 
-    /* cache → background refresh (ETH only) */
-    useEffect(() => {
-        let alive = true;
-
-        (async () => {
-            const cached = await readCacheEthSafe(ethAddresses);
-            if (cached?.rows || cached?.rowsEnded || cached?.byAddr) {
-                if (cached.byAddr) {
-                    const { active, ended } = buildRowsFromByAddr(cached.byAddr);
-                    setRows(active); setRowsEnded(ended);
-                } else {
-                    setRows(cached.rows || []); setRowsEnded(cached.rowsEnded || []);
-                    setCurrentDay(cached.currentDay ?? null);
-                    setPayoutPerTShareDailyHex(cached.payoutPerTShareDailyHex ?? null);
-                }
-                setUpdatedAt(cached.updatedAt || null);
-                setLoading(false);
-            } else {
-                setLoading(true);
-            }
-        })();
-
+    /* ---------------- Background revalidation (no blanking) ---------------- */
+    const refreshNow = useCallback(async () => {
+        if (!ethAddresses.length) {
+            setLoading(false);
+            return;
+        }
         setIsRefreshing(true);
         setSetupError('');
-        setProgress({ done: 0, total: ethAddresses.length });
-
-        const onProgress = (a, b) => {
-            let done = 0, total = ethAddresses.length || 0;
-            if (typeof a === 'number' && typeof b === 'number') { done = a; total = b; }
-            else if (typeof a === 'object' && a) { done = Number(a.done ?? a.index ?? 0); total = Number(a.total ?? total); }
-            else if (typeof a === 'number') { done = a; }
-            setProgress({ done, total });
-        };
-
-        (async () => {
-            try {
-                const payload = await refreshEthSafe(ethAddresses, onProgress);
-                if (!alive) return;
-
-                if (payload?.rows || payload?.rowsEnded) {
-                    setRows(payload.rows || []);
-                    setRowsEnded(payload.rowsEnded || []);
-                    setCurrentDay(payload.currentDay ?? null);
-                    setPayoutPerTShareDailyHex(payload.payoutPerTShareDailyHex ?? null);
-                } else if (payload?.byAddr) {
-                    const { active, ended } = buildRowsFromByAddr(payload.byAddr);
-                    setRows(active); setRowsEnded(ended);
-                }
-                setUpdatedAt(new Date());
-
-                const hdsRows = await fetchHdsEth();
-                const { pps, currentDay } = extractPpsAndDay(hdsRows);
-                if (!alive) return;
-                setPayoutPerTShareDailyHex(pps?.[currentDay] || 0);
-                setCurrentDay(currentDay);
-
-                if (!(Number(hexPriceUsd) > 0)) {
-                    const px = extractHexPriceUsd(hdsRows);
-                    if (px && alive) { setHexPriceUsd(px); setHexPriceUpdatedAt(Date.now()); writeUnifiedTokenPriceUsd(px, cfg.priceKey); }
-                }
-
-                setProgress((p) => (p.done === 0 && ((rows?.length || 0) + (rowsEnded?.length || 0)) > 0)
-                    ? { done: p.total || ethAddresses.length, total: p.total || ethAddresses.length }
-                    : p
-                );
-            } catch (e) {
-                if (alive) setSetupError(e?.message || String(e));
-            } finally {
-                if (alive) { setIsRefreshing(false); setLoading(false); }
-            }
-        })();
-
-        return () => { alive = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ethAddresses.map(a => a.toLowerCase()).join('|'), cfg.priceKey, cfg.hexAddress]);
-
-    /* Recompute Yield/APY whenever stakes or currentDay change */
-    useEffect(() => {
-        let alive = true;
-        (async () => {
-            try {
-                if ((!rows.length && !rowsEnded.length) || !Number(currentDay)) {
-                    if (alive) { setYieldMap({}); setYieldMapEnded({}); }
-                    return;
-                }
-                const hdsRows = await fetchHdsEth();
-                const { pps } = extractPpsAndDay(hdsRows);
-                if (!alive) return;
-
-                const nextActive = {};
-                for (const r of rows) {
-                    const yHex = computeStakeYieldHex(r, currentDay, pps);
-                    const apy = computeApyPct(r, yHex, currentDay);
-                    nextActive[r.id] = { yieldHex: yHex, apyPct: apy };
-                }
-                const nextEnded = {};
-                for (const r of rowsEnded) {
-                    const until = Number(r.unlockedDay || 0) || currentDay;
-                    const yHex = computeYieldHexWithUntil(r, pps, until);
-                    const apy = computeApyPct(r, yHex, until);
-                    nextEnded[r.id] = { yieldHex: yHex, apyPct: apy };
-                }
-                if (alive) { setYieldMap(nextActive); setYieldMapEnded(nextEnded); }
-            } catch { if (alive) { setYieldMap({}); setYieldMapEnded({}); } }
-        })();
-        return () => { alive = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rows, rowsEnded, currentDay, cfg.priceKey]);
-
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
         setProgress({ done: 0, total: ethAddresses.length });
 
         const onProgress = (a, b) => {
@@ -578,53 +559,121 @@ export default function KwEhexStaking({ config }) {
             }
             setUpdatedAt(new Date());
 
-            try {
-                const fresh = await fetchDexscreenerUsdByToken(cfg.hexAddress, cfg.chain);
-                writePriceCacheDyn(cfg.priceKey, cfg.chain, fresh);
-                writeUnifiedTokenPriceUsd(fresh.priceUsd, cfg.priceKey);
-                setHexPriceUsd(fresh.priceUsd); setHexPriceUpdatedAt(fresh.updatedAt);
-            } catch {
-                if (!Number.isFinite(hexPriceUsd)) {
-                    const hdsRows = await fetchHdsEth({ force: false }).catch(() => null);
-                    const px = hdsRows ? extractHexPriceUsd(hdsRows) : null;
-                    if (px) { setHexPriceUsd(px); setHexPriceUpdatedAt(Date.now()); writeUnifiedTokenPriceUsd(px, cfg.priceKey); }
-                }
-            }
-
+            // HDS assist + yield maps + price fallback
             try {
                 const hdsRows = await fetchHdsEth({ force: false });
-                const { pps } = extractPpsAndDay(hdsRows);
+                const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
+
+                if (!(Number(payload?.currentDay) > 0) && Number(hdsDay) > 0) setCurrentDay(hdsDay);
+                if (!(Number(payload?.payoutPerTShareDailyHex) > 0) && Number(hdsDay) > 0) {
+                    const todayPayout = Number(pps?.[hdsDay] || 0);
+                    if (todayPayout > 0) setPayoutPerTShareDailyHex(todayPayout);
+                }
 
                 const act = {};
-                for (const r of (payload.rows || buildRowsFromByAddr(payload.byAddr || {}).active)) {
-                    const yHex = computeStakeYieldHex(r, payload.currentDay ?? currentDay, pps);
-                    const apy = computeApyPct(r, yHex, payload.currentDay ?? currentDay);
+                for (const r of (payload?.rows || (payload?.byAddr ? buildRowsFromByAddr(payload.byAddr).active : []))) {
+                    const yHex = computeStakeYieldHex(r, payload?.currentDay ?? hdsDay, pps);
+                    const apy = computeApyPct(r, yHex, payload?.currentDay ?? hdsDay);
                     act[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
                 setYieldMap(act);
 
                 const endMap = {};
-                for (const r of (payload.rowsEnded || buildRowsFromByAddr(payload.byAddr || {}).ended)) {
-                    const until = Number(r.unlockedDay || 0) || (payload.currentDay ?? currentDay);
+                for (const r of (payload?.rowsEnded || (payload?.byAddr ? buildRowsFromByAddr(payload.byAddr).ended : []))) {
+                    const until = Number(r.unlockedDay || 0) || (payload?.currentDay ?? hdsDay);
                     const yHex = computeYieldHexWithUntil(r, pps, until);
                     const apy = computeApyPct(r, yHex, until);
                     endMap[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
                 setYieldMapEnded(endMap);
-            } catch { }
+
+                try {
+                    const fresh = await fetchDexscreenerUsdByToken(cfg.hexAddress, cfg.chain);
+                    writePriceCacheDyn(cfg.priceKey, cfg.chain, fresh);
+                    writeUnifiedTokenPriceUsd(fresh.priceUsd, cfg.priceKey);
+                    setHexPriceUsd(fresh.priceUsd); setHexPriceUpdatedAt(fresh.updatedAt);
+                } catch {
+                    if (!(Number(hexPriceUsd) > 0)) {
+                        const px = extractHexPriceUsd(hdsRows);
+                        if (px) { setHexPriceUsd(px); setHexPriceUpdatedAt(Date.now()); writeUnifiedTokenPriceUsd(px, cfg.priceKey); }
+                    }
+                }
+            } catch {
+                // ignore HDS/price assist errors
+            }
         } catch (e) {
             setSetupError(e?.message || String(e));
         } finally {
             setIsRefreshing(false);
+            setLoading(false);
         }
-    };
+    }, [ethAddresses, cfg.hexAddress, cfg.chain, cfg.priceKey, hexPriceUsd]);
+
+    // Initial background revalidation (after cache-first paint)
+    useEffect(() => {
+        refreshNow();
+    }, [refreshNow]);
+
+    /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
+    useEffect(() => {
+        if (!ethAddresses.length) return;
+        const TEN_MIN = 10 * 60 * 1000;
+        const id = setInterval(() => {
+            if (!isRefreshing) refreshNow();
+        }, TEN_MIN);
+        return () => clearInterval(id);
+    }, [ethAddresses, isRefreshing, refreshNow]);
+
+    /* ---------------- Recompute Yield/APY whenever stakes or currentDay change ---------------- */
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                if ((!rows.length && !rowsEnded.length)) {
+                    if (alive) { setYieldMap({}); setYieldMapEnded({}); }
+                    return;
+                }
+                const hdsRows = await fetchHdsEth();
+                const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
+                if (!alive) return;
+
+                if (!(Number(currentDay) > 0) && Number(hdsDay) > 0) {
+                    setPayoutPerTShareDailyHex(pps?.[hdsDay] || 0);
+                    setCurrentDay(hdsDay);
+                }
+
+                const dayForCalc = Number(currentDay) > 0 ? currentDay : hdsDay;
+
+                const act = {};
+                for (const r of rows) {
+                    const yHex = computeStakeYieldHex(r, dayForCalc, pps);
+                    const apy = computeApyPct(r, yHex, dayForCalc);
+                    act[r.id] = { yieldHex: yHex, apyPct: apy };
+                }
+                const endMap = {};
+                for (const r of rowsEnded) {
+                    const until = Number(r.unlockedDay || 0) || dayForCalc;
+                    const yHex = computeYieldHexWithUntil(r, pps, until);
+                    const apy = computeApyPct(r, yHex, until);
+                    endMap[r.id] = { yieldHex: yHex, apyPct: apy };
+                }
+                if (alive) { setYieldMap(act); setYieldMapEnded(endMap); }
+            } catch {
+                if (alive) { setYieldMap({}); setYieldMapEnded({}); }
+            }
+        })();
+        return () => { alive = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rows, rowsEnded, currentDay]);
+
+    /* ---------------- Manual Refresh ---------------- */
+    const handleRefresh = useCallback(() => {
+        refreshNow();
+    }, [refreshNow]);
 
     const ariaSort = (key) => sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
 
     /* ---------------- Wallet chip selection → filtered tables ---------------- */
-    // ✅ Mirror /staking/hex behaviour exactly:
-    // - Default = ALL addresses selected (but rendered as the single “All” chip active)
-    // - When “All” is clicked, only All shows active; others are off.
     const [selectedAddrs, setSelectedAddrs] = useState(ethAddresses.map(a => a.toLowerCase()));
     const [isAllWallets, setIsAllWallets] = useState(true);
 
@@ -655,10 +704,11 @@ export default function KwEhexStaking({ config }) {
     const unit = cfg.unit || 'eHEX';
 
     return (
-        <Row className="gy-3">
+        /* Add a scoping class so CSS can style eHEX differently */
+        <Row className="gy-3 kw-ehex-page">
             {!loading && (
                 <Col xs={12} className="pt-0 mt-0">
-                    <KwHexStakingHeaderContainer
+                    <KwEHexStakingHeaderContainer
                         stakes={rows}
                         currentHexDay={currentDay ?? 0}
                         payoutPerTShareDailyHex={payoutPerTShareDailyHex ?? 0}
@@ -666,9 +716,6 @@ export default function KwEhexStaking({ config }) {
                         onRefresh={handleRefresh}
                         sticky
                         hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
-                        titleOverride="eHEX Staking"
-                        badgeOverride="ETHEREUM"
-                        unitOverride="eHEX"
                     />
                 </Col>
             )}
@@ -694,7 +741,7 @@ export default function KwEhexStaking({ config }) {
                     </>
                 )}
 
-                {/* Wallet filter buttons — now using the SAME shared component as /staking/hex */}
+                {/* Wallet filter buttons */}
                 {!loading && ethAddresses.length > 0 && (
                     <Card className="mb-3">
                         <Card.Body>
@@ -807,7 +854,7 @@ export default function KwEhexStaking({ config }) {
 
                                         return (
                                             <tr key={r.id}>
-                                                <td className="text-start"><span className="kw-wallet-chip">{walletDisplay}</span></td>
+                                                <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
                                                 <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
                                                 <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
                                                 <td className="text-end" title={lockedTooltip} aria-label={lockedTooltip}>{r.lockedDay ?? '—'}</td>
@@ -873,7 +920,7 @@ export default function KwEhexStaking({ config }) {
 
                                         return (
                                             <tr key={`ended-${r.id}`}>
-                                                <td className="text-start"><span className="kw-wallet-chip">{walletDisplay}</span></td>
+                                                <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
                                                 <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
                                                 <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
                                                 <td className="text-end">{r.lockedDay ?? '—'}</td>
@@ -899,24 +946,4 @@ export default function KwEhexStaking({ config }) {
             </Col>
         </Row>
     );
-}
-
-/* helpers */
-function buildRowsFromByAddr(byAddr) {
-    const active = [], ended = [];
-    Object.entries(byAddr || {}).forEach(([addr, stakes]) => {
-        (stakes || []).forEach((s) => {
-            const row = {
-                id: `${addr}-${String(s.stakeId ?? s.index ?? '')}`,
-                wallet: String(addr),
-                principalHex: Number(s.stakedHearts ?? s.stakedHex ? (s.stakedHearts ?? 0) / HEARTS_PER_HEX : (s.stakedHex ?? 0)),
-                tShares: Number(s.stakeShares != null ? s.stakeShares / SHARES_PER_TSHARE : (s.tShares ?? 0)),
-                lockedDay: Number(s.lockedDay ?? 0),
-                stakedDays: Number(s.stakedDays ?? 0),
-                unlockedDay: Number(s.unlockedDay ?? 0) || null
-            };
-            if (row.unlockedDay) ended.push(row); else active.push(row);
-        });
-    });
-    return { active, ended };
 }

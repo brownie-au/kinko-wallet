@@ -248,17 +248,18 @@
     border-bottom-color: var(--kw-border-dk) !important;
 }
 
-/* Wallet name chip (green) */
+/* ---------- Wallet name chip (default: PURPLE for HEX) ---------- */
 :root[data-theme="light"] {
-    --kw-green: #0a6b2d;
-    --kw-green-bg: rgba(10, 107, 45, .08);
-    --kw-green-br: rgba(10, 107, 45, .22);
+    /* darker, higher-contrast defaults for HEX on light theme */
+    --kw-wallet-fg: #3f1fb0;
+    --kw-wallet-bg: rgba(124, 58, 237, .12);
+    --kw-wallet-br: rgba(124, 58, 237, .34);
 }
 
 :root[data-theme="dark"] {
-    --kw-green: #88ffbe;
-    --kw-green-bg: rgba(136, 255, 190, .10);
-    --kw-green-br: rgba(136, 255, 190, .30);
+    --kw-wallet-fg: #e9d5ff;
+    --kw-wallet-bg: rgba(216, 180, 254, .12);
+    --kw-wallet-br: rgba(216, 180, 254, .30);
 }
 
 .kw-wallet-chip {
@@ -267,10 +268,45 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    color: var(--kw-green);
-    background: var(--kw-green-bg);
-    border: 1px solid var(--kw-green-br);
+    color: var(--kw-wallet-fg);
+    background: var(--kw-wallet-bg);
+    border: 1px solid var(--kw-wallet-br);
     letter-spacing: .1px;
+}
+
+/* ---------- eHEX page override ONLY (green) ---------- */
+.kw-ehex-page .kw-wallet-chip {
+    color: #0a6b2d;
+    background: rgba(10, 107, 45, .08);
+    border: 1px solid rgba(10, 107, 45, .22);
+}
+
+:root[data-theme="dark"] .kw-ehex-page .kw-wallet-chip {
+    color: #88ffbe;
+    background: rgba(136, 255, 190, .12);
+    border: 1px solid rgba(136, 255, 190, .30);
+}
+
+/* eHEX page only: force wallet chip green (beats theme-specific purple) */
+.kw-wallet-chip.kw-wallet-chip--ehex {
+    color: #0a6b2d !important;
+    background: rgba(10, 107, 45, .08) !important;
+    border: 1px solid rgba(10, 107, 45, .22) !important;
+}
+
+:root[data-theme="dark"] .kw-wallet-chip.kw-wallet-chip--ehex {
+    color: #88ffbe !important;
+    background: rgba(136, 255, 190, .12) !important;
+    border: 1px solid rgba(136, 255, 190, .30) !important;
+}
+
+/* ---------- EXTRA: ensure HEX light chips are punchy (not eHEX) ---------- */
+:root[data-theme="light"] .kw-wallet-chip:not(.kw-wallet-chip--ehex) {
+    color: #3f1fb0 !important;
+    background: rgba(124, 58, 237, .12) !important;
+    border-color: rgba(124, 58, 237, .34) !important;
+    font-weight: 700;
+    /* slightly bolder for readability */
 }
 
 /* Polished table headers */
