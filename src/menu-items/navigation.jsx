@@ -67,6 +67,14 @@ const navigation = {
           type: 'item',
           url: '/staking/eth',
           disabled: true
+        },
+        // NEW: PLS Staking (below ETH Staking)
+        {
+          id: 'pls-staking',
+          title: 'PLS Staking',
+          type: 'item',
+          url: '/staking/pls',
+          disabled: true
         }
       ]
     },

@@ -25,7 +25,7 @@ const fmt2 = (x) => nf2.format(Number(x) || 0);
 /* -------------------------------------------------------------------------- */
 const HDS_ETH_URL = 'https://hexdailystats.com/fulldata';
 const HDS_LS_KEY = 'kw:hds:eth:full:v1';
-const HDS_TTL_MS = 6 * 60 * 60 * 1000;
+const HDS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 const SHARES_PER_TSHARE = 1e12;
 const HEARTS_PER_HEX = 1e8;
@@ -704,246 +704,248 @@ export default function KwEhexStaking({ config }) {
     const unit = cfg.unit || 'eHEX';
 
     return (
-        /* Add a scoping class so CSS can style eHEX differently */
-        <Row className="gy-3 kw-ehex-page">
-            {!loading && (
-                <Col xs={12} className="pt-0 mt-0">
-                    <KwEHexStakingHeaderContainer
-                        stakes={rows}
-                        currentHexDay={currentDay ?? 0}
-                        payoutPerTShareDailyHex={payoutPerTShareDailyHex ?? 0}
-                        updatedAt={updatedAt}
-                        onRefresh={handleRefresh}
-                        sticky
-                        hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
-                    />
-                </Col>
-            )}
-
-            <Col xs={12} className="mt-2">
-                {setupError && <Alert variant="warning" className="mb-3">{setupError}</Alert>}
-
-                {!ethAddresses.length && !loading && (
-                    <Card><Card.Body className="text-muted">No wallets detected. Add one in <strong>Manage Wallets</strong> to begin.</Card.Body></Card>
+        /* ✅ Scoped wrapper so staking CSS can't leak into View All */
+        <div className="kw-staking">
+            <Row className="gy-3 kw-ehex-page">
+                {!loading && (
+                    <Col xs={12} className="pt-0 mt-0">
+                        <KwEHexStakingHeaderContainer
+                            stakes={rows}
+                            currentHexDay={currentDay ?? 0}
+                            payoutPerTShareDailyHex={payoutPerTShareDailyHex ?? 0}
+                            updatedAt={updatedAt}
+                            onRefresh={handleRefresh}
+                            sticky
+                            hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
+                        />
+                    </Col>
                 )}
 
-                {loading && (
-                    <>
+                <Col xs={12} className="mt-2">
+                    {setupError && <Alert variant="warning" className="mb-3">{setupError}</Alert>}
+
+                    {!ethAddresses.length && !loading && (
+                        <Card><Card.Body className="text-muted">No wallets detected. Add one in <strong>Manage Wallets</strong> to begin.</Card.Body></Card>
+                    )}
+
+                    {loading && (
+                        <>
+                            <Card className="mb-3">
+                                <Card.Body>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <span className="text-muted">Loading eHEX stakes…</span>
+                                        {progress.total > 0 && (<small className="text-muted">({progress.done}/{progress.total} wallets)</small>)}
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                            <ShimmerTable />
+                        </>
+                    )}
+
+                    {/* Wallet filter buttons */}
+                    {!loading && ethAddresses.length > 0 && (
                         <Card className="mb-3">
                             <Card.Body>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="text-muted">Loading eHEX stakes…</span>
-                                    {progress.total > 0 && (<small className="text-muted">({progress.done}/{progress.total} wallets)</small>)}
+                                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <div className="text-muted mb-1">Filter by wallet:</div>
+                                    {isRefreshing && <small className="text-muted">Refreshing… ({progress.done}/{progress.total})</small>}
                                 </div>
+                                <WalletFilterChips
+                                    wallets={walletOptions}
+                                    onChange={(addrs, isAll) => {
+                                        setSelectedAddrs(addrs);
+                                        setIsAllWallets(isAll);
+                                    }}
+                                />
                             </Card.Body>
                         </Card>
-                        <ShimmerTable />
-                    </>
-                )}
+                    )}
 
-                {/* Wallet filter buttons */}
-                {!loading && ethAddresses.length > 0 && (
-                    <Card className="mb-3">
-                        <Card.Body>
-                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <div className="text-muted mb-1">Filter by wallet:</div>
-                                {isRefreshing && <small className="text-muted">Refreshing… ({progress.done}/{progress.total})</small>}
-                            </div>
-                            <WalletFilterChips
-                                wallets={walletOptions}
-                                onChange={(addrs, isAll) => {
-                                    setSelectedAddrs(addrs);
-                                    setIsAllWallets(isAll);
-                                }}
-                            />
-                        </Card.Body>
-                    </Card>
-                )}
+                    {/* Active stakes table */}
+                    {!loading && filteredRows.length > 0 && (
+                        <Card>
+                            <Card.Body>
+                                <Table responsive size="sm" className="align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th aria-sort={ariaSort('wallet')} className="text-start">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('wallet')}>
+                                                    Wallet {sort.key === 'wallet' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('principalHex')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('principalHex')}>
+                                                    {`Principal (${unit})`} {sort.key === 'principalHex' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('tShares')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('tShares')}>
+                                                    T-Shares {sort.key === 'tShares' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('lockedDay')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('lockedDay')}>
+                                                    Locked Day {sort.key === 'lockedDay' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('stakedDays')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('stakedDays')}>
+                                                    Staked Days {sort.key === 'stakedDays' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('unlockDay')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('unlockDay')}>
+                                                    Unlock Day {sort.key === 'unlockDay' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('daysRemaining')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('daysRemaining')}>
+                                                    Days Remaining {sort.key === 'daysRemaining' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('yieldHexTotal')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('yieldHexTotal')}>
+                                                    {`Yield (${unit})`} {sort.key === 'yieldHexTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('%apy')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('%apy')}>
+                                                    % APY {sort.key === '%apy' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('totalHex')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('totalHex')}>
+                                                    {`Total (${unit})`} {sort.key === 'totalHex' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('usdTotal')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('usdTotal')}>
+                                                    USD {sort.key === 'usdTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                            <th aria-sort={ariaSort('status')} className="text-start">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('status')}>
+                                                    Status {sort.key === 'status' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
+                                        </tr>
+                                    </thead>
 
-                {/* Active stakes table */}
-                {!loading && filteredRows.length > 0 && (
-                    <Card>
-                        <Card.Body>
-                            <Table responsive size="sm" className="align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th aria-sort={ariaSort('wallet')} className="text-start">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('wallet')}>
-                                                Wallet {sort.key === 'wallet' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('principalHex')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('principalHex')}>
-                                                {`Principal (${unit})`} {sort.key === 'principalHex' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('tShares')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('tShares')}>
-                                                T-Shares {sort.key === 'tShares' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('lockedDay')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('lockedDay')}>
-                                                Locked Day {sort.key === 'lockedDay' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('stakedDays')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('stakedDays')}>
-                                                Staked Days {sort.key === 'stakedDays' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('unlockDay')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('unlockDay')}>
-                                                Unlock Day {sort.key === 'unlockDay' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('daysRemaining')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('daysRemaining')}>
-                                                Days Remaining {sort.key === 'daysRemaining' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('yieldHexTotal')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('yieldHexTotal')}>
-                                                {`Yield (${unit})`} {sort.key === 'yieldHexTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('%apy')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('%apy')}>
-                                                % APY {sort.key === '%apy' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('totalHex')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('totalHex')}>
-                                                {`Total (${unit})`} {sort.key === 'totalHex' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('usdTotal')} className="text-end">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('usdTotal')}>
-                                                USD {sort.key === 'usdTotal' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                        <th aria-sort={ariaSort('status')} className="text-start">
-                                            <button type="button" className="kw-sort-plain" onClick={() => toggleSort('status')}>
-                                                Status {sort.key === 'status' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
-                                            </button>
-                                        </th>
-                                    </tr>
-                                </thead>
+                                    <tbody>
+                                        {filteredRows.map(r => {
+                                            const addr = (r.wallet || '');
+                                            const shortAddr = `0x…${addr.slice(-4)}`;
+                                            const friendlyName = walletNameMap[addr.toLowerCase()];
+                                            const walletDisplay = friendlyName ? `${shortAddr} — ${friendlyName}` : shortAddr;
 
-                                <tbody>
-                                    {filteredRows.map(r => {
-                                        const addr = (r.wallet || '');
-                                        const shortAddr = `0x…${addr.slice(-4)}`;
-                                        const friendlyName = walletNameMap[addr.toLowerCase()];
-                                        const walletDisplay = friendlyName ? `${shortAddr} — ${friendlyName}` : shortAddr;
+                                            const status = getStakeStatus({ lockedDay: r.lockedDay, stakedDays: r.stakedDays, unlockedDay: r.unlockedDay, currentDay });
 
-                                        const status = getStakeStatus({ lockedDay: r.lockedDay, stakedDays: r.stakedDays, unlockedDay: r.unlockedDay, currentDay });
+                                            const yInfo = yieldMap[r.id];
+                                            const yieldHex = yInfo?.yieldHex ?? null;
+                                            const apyPct = yInfo?.apyPct ?? null;
 
-                                        const yInfo = yieldMap[r.id];
-                                        const yieldHex = yInfo?.yieldHex ?? null;
-                                        const apyPct = yInfo?.apyPct ?? null;
+                                            const totalHex = (Number(r.principalHex) || 0) + Number(yieldHex || 0);
+                                            const price = Number(hexPriceUsd);
+                                            const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
 
-                                        const totalHex = (Number(r.principalHex) || 0) + Number(yieldHex || 0);
-                                        const price = Number(hexPriceUsd);
-                                        const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
+                                            const unlockDayComputed = calcUnlockDay(r.lockedDay, r.stakedDays);
+                                            const lockedTooltip = formatAestDate(dateForHexDay(r.lockedDay, currentDay));
+                                            const unlockTooltip = formatAestDate(dateForHexDay(unlockDayComputed, currentDay));
+                                            const daysRemaining = (Number(currentDay) && unlockDayComputed) ? (unlockDayComputed - Number(currentDay)) : null;
 
-                                        const unlockDayComputed = calcUnlockDay(r.lockedDay, r.stakedDays);
-                                        const lockedTooltip = formatAestDate(dateForHexDay(r.lockedDay, currentDay));
-                                        const unlockTooltip = formatAestDate(dateForHexDay(unlockDayComputed, currentDay));
-                                        const daysRemaining = (Number(currentDay) && unlockDayComputed) ? (unlockDayComputed - Number(currentDay)) : null;
+                                            return (
+                                                <tr key={r.id}>
+                                                    <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
+                                                    <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
+                                                    <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
+                                                    <td className="text-end" title={lockedTooltip} aria-label={lockedTooltip}>{r.lockedDay ?? '—'}</td>
+                                                    <td className="text-end">{r.stakedDays ?? '—'}</td>
+                                                    <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{unlockDayComputed ? unlockDayComputed : '—'}</td>
+                                                    <td className="text-end">{daysRemaining != null ? daysRemaining : '—'}</td>
+                                                    <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
+                                                    <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
+                                                    <td className="text-end">{fmt0(totalHex)}</td>
+                                                    <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
+                                                    <td className="text-start">
+                                                        {status === 'Active' && <Badge bg="primary">Active</Badge>}
+                                                        {status === 'Ready' && <Badge bg="success">Ready</Badge>}
+                                                        {status === 'Overdue' && <Badge bg="danger">Overdue</Badge>}
+                                                        {status === 'Ended' && <Badge bg="danger">Ended</Badge>}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </Table>
+                            </Card.Body>
+                        </Card>
+                    )}
 
-                                        return (
-                                            <tr key={r.id}>
-                                                <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
-                                                <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
-                                                <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
-                                                <td className="text-end" title={lockedTooltip} aria-label={lockedTooltip}>{r.lockedDay ?? '—'}</td>
-                                                <td className="text-end">{r.stakedDays ?? '—'}</td>
-                                                <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{unlockDayComputed ? unlockDayComputed : '—'}</td>
-                                                <td className="text-end">{daysRemaining != null ? daysRemaining : '—'}</td>
-                                                <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
-                                                <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
-                                                <td className="text-end">{fmt0(totalHex)}</td>
-                                                <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
-                                                <td className="text-start">
-                                                    {status === 'Active' && <Badge bg="primary">Active</Badge>}
-                                                    {status === 'Ready' && <Badge bg="success">Ready</Badge>}
-                                                    {status === 'Overdue' && <Badge bg="danger">Overdue</Badge>}
-                                                    {status === 'Ended' && <Badge bg="danger">Ended</Badge>}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </Table>
-                        </Card.Body>
-                    </Card>
-                )}
+                    {/* Ended stakes table */}
+                    {!loading && filteredRowsEnded.length > 0 && (
+                        <Card className="mt-3">
+                            <Card.Header className="pb-0"><strong>Ended Stakes</strong> <small className="text-muted">(history)</small></Card.Header>
+                            <Card.Body>
+                                <Table responsive size="sm" className="align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-start">Wallet</th>
+                                            <th className="text-end">{`Principal (${unit})`}</th>
+                                            <th className="text-end">T-Shares</th>
+                                            <th className="text-end">Locked Day</th>
+                                            <th className="text-end">Staked Days</th>
+                                            <th className="text-end">Unlock Day</th>
+                                            <th className="text-end">{`Yield (${unit})`}</th>
+                                            <th className="text-end">% APY</th>
+                                            <th className="text-end">{`Total (${unit})`}</th>
+                                            <th className="text-end">USD</th>
+                                            <th className="text-start">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredRowsEnded.map(r => {
+                                            const addr = (r.wallet || '');
+                                            const shortAddr = `0x…${addr.slice(-4)}`;
+                                            const friendlyName = walletNameMap[addr.toLowerCase()];
+                                            const walletDisplay = friendlyName ? `${shortAddr} — ${friendlyName}` : shortAddr;
 
-                {/* Ended stakes table */}
-                {!loading && filteredRowsEnded.length > 0 && (
-                    <Card className="mt-3">
-                        <Card.Header className="pb-0"><strong>Ended Stakes</strong> <small className="text-muted">(history)</small></Card.Header>
-                        <Card.Body>
-                            <Table responsive size="sm" className="align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th className="text-start">Wallet</th>
-                                        <th className="text-end">{`Principal (${unit})`}</th>
-                                        <th className="text-end">T-Shares</th>
-                                        <th className="text-end">Locked Day</th>
-                                        <th className="text-end">Staked Days</th>
-                                        <th className="text-end">Unlock Day</th>
-                                        <th className="text-end">{`Yield (${unit})`}</th>
-                                        <th className="text-end">% APY</th>
-                                        <th className="text-end">{`Total (${unit})`}</th>
-                                        <th className="text-end">USD</th>
-                                        <th className="text-start">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredRowsEnded.map(r => {
-                                        const addr = (r.wallet || '');
-                                        const shortAddr = `0x…${addr.slice(-4)}`;
-                                        const friendlyName = walletNameMap[addr.toLowerCase()];
-                                        const walletDisplay = friendlyName ? `${shortAddr} — ${friendlyName}` : shortAddr;
+                                            const yInfo = yieldMapEnded[r.id];
+                                            const yieldHex = yInfo?.yieldHex ?? null;
+                                            const apyPct = yInfo?.apyPct ?? null;
 
-                                        const yInfo = yieldMapEnded[r.id];
-                                        const yieldHex = yInfo?.yieldHex ?? null;
-                                        const apyPct = yInfo?.apyPct ?? null;
+                                            const totalHex = (Number(r.principalHex) || 0) + Number(yieldHex || 0);
+                                            const price = Number(hexPriceUsd);
+                                            const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
 
-                                        const totalHex = (Number(r.principalHex) || 0) + Number(yieldHex || 0);
-                                        const price = Number(hexPriceUsd);
-                                        const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
+                                            const unlockTooltip = formatAestDate(dateForHexDay(r.unlockedDay, currentDay));
 
-                                        const unlockTooltip = formatAestDate(dateForHexDay(r.unlockedDay, currentDay));
+                                            return (
+                                                <tr key={`ended-${r.id}`}>
+                                                    <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
+                                                    <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
+                                                    <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
+                                                    <td className="text-end">{r.lockedDay ?? '—'}</td>
+                                                    <td className="text-end">{r.stakedDays ?? '—'}</td>
+                                                    <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{r.unlockedDay || '—'}</td>
+                                                    <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
+                                                    <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
+                                                    <td className="text-end">{fmt0(totalHex)}</td>
+                                                    <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
+                                                    <td className="text-start"><Badge bg="secondary">Ended</Badge></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </Table>
+                            </Card.Body>
+                        </Card>
+                    )}
 
-                                        return (
-                                            <tr key={`ended-${r.id}`}>
-                                                <td className="text-start"><span className="kw-wallet-chip kw-wallet-chip--ehex">{walletDisplay}</span></td>
-                                                <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
-                                                <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
-                                                <td className="text-end">{r.lockedDay ?? '—'}</td>
-                                                <td className="text-end">{r.stakedDays ?? '—'}</td>
-                                                <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{r.unlockedDay || '—'}</td>
-                                                <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
-                                                <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
-                                                <td className="text-end">{fmt0(totalHex)}</td>
-                                                <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
-                                                <td className="text-start"><Badge bg="secondary">Ended</Badge></td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </Table>
-                        </Card.Body>
-                    </Card>
-                )}
-
-                {!loading && !filteredRows.length && !filteredRowsEnded.length && !!ethAddresses.length && !setupError && (
-                    <Card><Card.Body>No stakes match the current wallet filter.</Card.Body></Card>
-                )}
-            </Col>
-        </Row>
+                    {!loading && !filteredRows.length && !filteredRowsEnded.length && !!ethAddresses.length && !setupError && (
+                        <Card><Card.Body>No stakes match the current wallet filter.</Card.Body></Card>
+                    )}
+                </Col>
+            </Row>
+        </div>
     );
 }

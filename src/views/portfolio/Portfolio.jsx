@@ -116,7 +116,7 @@ const Styles = () => (
     .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
 
-    .kw-scope{
+    .kwp-scope{
       --kw-price: 140px;
       --kw-amount: 170px;
       --kw-value: 140px;
@@ -125,50 +125,50 @@ const Styles = () => (
     }
 
     /* ---- ROW + HOVER (keep faint highlighter) ---- */
-    .kw-row { padding: 8px 12px; border-bottom: 1px solid var(--bs-border-color);
+    .kwp-row { padding: 8px 12px; border-bottom: 1px solid var(--bs-border-color);
       border-radius: 8px; transition: background-color .15s ease, box-shadow .15s ease; }
-    .kw-row:hover { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
-    :root:not([data-pc-theme='dark']) .kw-row:hover { background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+    .kwp-row:hover { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    :root:not([data-pc-theme='dark']) .kwp-row:hover { background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 
     /* ---- LEFT SIDE: grid with explicit buffer column ---- */
-    .kw-left { 
+    .kwp-left { 
       display: grid;
       grid-template-columns: 36px 12px minmax(0, 1fr); /* logo | spacer | name */
       align-items: center;
       min-width: 0;
     }
-    .kw-logo { width: 36px; height: 36px; display: flex; align-items: center; }
-    .kw-spacer { width: 12px; } /* the buffer that aligns all tickers/chips */
+    .kwp-logo { width: 36px; height: 36px; display: flex; align-items: center; }
+    .kwp-spacer { width: 12px; } /* the buffer that aligns all tickers/chips */
 
-    .kw-name { min-width:0; }
-    .kw-symbol { font-weight:600; white-space:nowrap; }
-    .kw-sub { font-size:12px; color: var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kwp-name { min-width:0; }
+    .kwp-symbol { font-weight:600; white-space:nowrap; }
+    .kwp-sub { font-size:12px; color: var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-    .kw-name-inline{ font-weight:400; font-size:12px; color: var(--bs-secondary-color); }
-    [data-pc-theme='dark'] .kw-name-inline{ color: rgba(255,255,255,.70); }
+    .kwp-name-inline{ font-weight:400; font-size:12px; color: var(--bs-secondary-color); }
+    [data-pc-theme='dark'] .kwp-name-inline{ color: rgba(255,255,255,.70); }
 
-    .kw-ticker{ font-size: 1.1rem; font-weight: 700; }
+    .kwp-ticker{ font-size: 1.1rem; font-weight: 700; }
 
-    .kw-cols { display:flex; align-items:center; gap: var(--kw-gap); }
-    .kw-col { text-align:right; }
-    .kw-price { width: var(--kw-price); }
-    .kw-amount { width: var(--kw-amount); }
-    .kw-value { width: var(--kw-value); }
-    .kw-delta.up { color: #1fbf75; }
-    .kw-delta.down { color: #e55353; }
-    [data-pc-theme='dark'] .kw-sub{ color: rgba(255,255,255,.65); }
+    .kwp-cols { display:flex; align-items:center; gap: var(--kw-gap); }
+    .kwp-col { text-align:right; }
+    .kwp-price { width: var(--kw-price); }
+    .kwp-amount { width: var(--kw-amount); }
+    .kwp-value { width: var(--kw-value); }
+    .kwp-delta.up { color: #1fbf75; }
+    .kwp-delta.down { color: #e55353; }
+    [data-pc-theme='dark'] .kwp-sub{ color: rgba(255,255,255,.65); }
 
-    .kw-break { margin-top: 4px; }
-    .kw-break-hdr{
+    .kwp-break { margin-top: 4px; }
+    .kwp-break-hdr{
       display:grid;
       grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
       column-gap: var(--kw-gap);
       align-items: end;
       margin-bottom: 2px;
     }
-    .kw-break-title { font-size:12px; color: var(--bs-secondary-color); letter-spacing:.3px; }
+    .kwp-break-title { font-size:12px; color: var(--bs-secondary-color); letter-spacing:.3px; }
 
-    .kw-break-row{
+    .kwp-break-row{
       display:grid;
       grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
       column-gap: var(--kw-gap);
@@ -179,19 +179,19 @@ const Styles = () => (
       border-radius: 6px;
       transition: background-color .15s ease, box-shadow .15s ease;
     }
-    .kw-break-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .kw-right{ text-align:right; }
+    .kwp-break-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kwp-right{ text-align:right; }
 
-    .kw-break-row:hover{
+    .kwp-break-row:hover{
       background: rgba(255,255,255,.06);
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
     }
-    :root:not([data-pc-theme='dark']) .kw-break-row:hover{
+    :root:not([data-pc-theme='dark']) .kwp-break-row:hover{
       background: rgba(0,0,0,.04);
       box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
     }
     @media (prefers-reduced-motion: reduce){
-      .kw-break-row{ transition: none; }
+      .kwp-break-row{ transition: none; }
     }
 
     .k-chain-btn {
@@ -237,7 +237,7 @@ const Styles = () => (
     }
 
     @media (max-width: 768px){
-      .kw-scope{
+      .kwp-scope{
         --kw-price: 120px;
         --kw-amount: 150px;
         --kw-value: 130px;
@@ -629,7 +629,7 @@ export default function Portfolio() {
       {/* Token rows (aggregated) */}
       <Row>
         <Col>
-          <Card className="shadow-sm kw-scope">
+          <Card className="shadow-sm kwp-scope">
             <Card.Header><strong>Top Tokens</strong></Card.Header>
             <Card.Body>
               {booting && (
@@ -656,11 +656,11 @@ export default function Portfolio() {
                 const logoAddr = (t.address || t.contract || '') || null;
 
                 return (
-                  <div key={`${k}:${i}`} className="kw-row">
+                  <div key={`${k}:${i}`} className="kwp-row">
                     <div className="d-flex align-items-center justify-content-between">
                       {/* LEFT: icon + spacer + symbol/name (chips sit on line 2) */}
-                      <div className="kw-left">
-                        <div className="kw-logo">
+                      <div className="kwp-left">
+                        <div className="kwp-logo">
                           <TokenLogo
                             chainId={logoChainId}
                             address={logoAddr}
@@ -668,35 +668,35 @@ export default function Portfolio() {
                             size={36}
                           />
                         </div>
-                        <div className="kw-spacer" />
-                        <div className="kw-name">
-                          <div className="kw-symbol">
-                            <strong className="kw-ticker">{t.symbol || '—'}</strong>
-                            <span className="kw-name-inline">
+                        <div className="kwp-spacer" />
+                        <div className="kwp-name">
+                          <div className="kwp-symbol">
+                            <strong className="kwp-ticker">{t.symbol || '—'}</strong>
+                            <span className="kwp-name-inline">
                               {' - '}
                               {t.name || (t.address ? `${t.address.slice(0, 6)}…${t.address.slice(-4)}` : 'Native')}
                             </span>
                           </div>
-                          <div className="kw-sub">
+                          <div className="kwp-sub">
                             {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
                           </div>
                         </div>
                       </div>
 
                       {/* RIGHT: price/amount/value + expand */}
-                      <div className="kw-cols">
-                        <div className="kw-col kw-price">
+                      <div className="kwp-cols">
+                        <div className="kwp-col kwp-price">
                           <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
                           <div>{fmtUSD(price)}</div>
                           {delta != null && (
-                            <div className={`kw-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>
+                            <div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>
                           )}
                         </div>
-                        <div className="kw-col kw-amount">
+                        <div className="kwp-col kwp-amount">
                           <div className="text-muted" style={{ fontSize: 12 }}>Amount</div>
                           <div>{fmtAmt(t.amount)} {t.symbol}</div>
                         </div>
-                        <div className="kw-col kw-value">
+                        <div className="kwp-col kwp-value">
                           <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
                           <div className="fw-semibold">{fmtUSD(Number(t.valueUsd ?? (Number(t.amount || 0) * price)))}</div>
                         </div>
@@ -709,24 +709,24 @@ export default function Portfolio() {
                     </div>
 
                     {open && (
-                      <div className="kw-break">
-                        <div className="kw-break-hdr">
-                          <div className="kw-break-title text-muted">Balance Breakdown</div>
+                      <div className="kwp-break">
+                        <div className="kwp-break-hdr">
+                          <div className="kwp-break-title text-muted">Balance Breakdown</div>
                           <div /> <div /> <div /> <div />
                         </div>
 
                         {rows.length === 0 && (
-                          <div className="kw-break-row">
+                          <div className="kwp-break-row">
                             <div className="text-muted">No holdings.</div>
                             <div></div><div></div><div></div><div></div>
                           </div>
                         )}
                         {rows.map((r, idx) => (
-                          <div key={idx} className="kw-break-row">
-                            <div className="kw-break-name">{walletName(r.wallet)}</div>
+                          <div key={idx} className="kwp-break-row">
+                            <div className="kwp-break-name">{walletName(r.wallet)}</div>
                             <div></div>
-                            <div className="kw-right">{fmtAmt(r.amount)} {t.symbol}</div>
-                            <div className="kw-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
+                            <div className="kwp-right">{fmtAmt(r.amount)} {t.symbol}</div>
+                            <div className="kwp-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
                             <div></div>
                           </div>
                         ))}
