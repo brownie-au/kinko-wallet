@@ -4,16 +4,14 @@ import { Row, Col, Card, Badge, Table, Alert, Placeholder } from 'react-bootstra
 import { useWallets } from '../../contexts/WalletContext';
 import { loadWallets } from '../../utils/walletStorage';
 
-/* === eHEX (Ethereum) staking data === */
 import {
     readEhexStakesCache,
     refreshEhexStakesAndCache
 } from '../../services/kw-ehexStakingService';
 
 import { usePortfolioValue, HEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
-
-/* match the HEX page import style */
 import KwHexStakingHeaderContainer from '../../components/kw-HexStakingHeaderContainer.jsx';
+import WalletFilterChips from '../../components/WalletFilterChips.jsx';
 import '../../styles/kw-hex-staking-header.css';
 
 /* ---------- Formatters ---------- */
@@ -28,12 +26,12 @@ const fmt2 = (x) => nf2.format(Number(x) || 0);
 const HDS_ETH_URL = 'https://hexdailystats.com/fulldata';
 const HDS_LS_KEY = 'kw:hds:eth:full:v1';
 const HDS_TTL_MS = 6 * 60 * 60 * 1000;
+
 const SHARES_PER_TSHARE = 1e12;
 const HEARTS_PER_HEX = 1e8;
 
-/* hard‑lock this page to ETH */
 const PAGE_CHAIN = 'ethereum';
-const PAGE_KEY = 'ehex'; // used to keep this page's "All" structurally distinct
+const PAGE_KEY = 'ehex'; // only used for any optional page-specific keys if needed
 
 /* --- Service-call wrappers (tolerate multiple signatures) --- */
 async function readCacheEthSafe(wallets) {
@@ -142,6 +140,7 @@ const statusSortWeight = { Active: 3, Ready: 2, Overdue: 1, Ended: 0 };
 const CHAIN_ID_MAP = { pulse: 'pulsechain', pulsechain: 'pulsechain', pls: 'pulsechain', ethereum: 'ethereum', eth: 'ethereum' };
 const up = (s) => String(s || '').toUpperCase();
 const low = (s) => String(s || '').toLowerCase();
+
 function readUnifiedTokenPriceUsd(symbol = 'EHEX') {
     const symU = up(symbol), symL = low(symbol);
     try {
@@ -201,7 +200,7 @@ async function getTokenUsdFast(symbol, tokenAddress, chainKey, ttlMs = 60_000) {
     return { ...fresh, fromCache: false };
 }
 
-/* ---------------- Tooltip helpers (HEX Day → date, 10:00 AEST) ---------------- */
+/* ---------------- Tooltip helpers ---------------- */
 const AEST_TZ = 'Australia/Brisbane';
 const TOOLTIP_LOCALE = 'en-US';
 function getBrisbaneYMD(now = new Date()) {
@@ -223,77 +222,6 @@ function formatAestDate(dt) {
         timeZone: AEST_TZ, weekday: 'long', year: 'numeric', month: 'long', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
     }).format(dt);
-}
-
-/* ------------------------------------------------------------------ */
-/* Wallet filter chips (inlined, page‑namespaced)                      */
-/* ------------------------------------------------------------------ */
-function WalletFilterChips({ wallets, onChange, pageKey }) {
-    const CHIP_LS_KEY = `kw:staking:walletChipSel:${pageKey || 'default'}`;
-
-    const options = useMemo(() => (wallets || []).map(w => ({
-        address: (w.address || '').toLowerCase(),
-        label: w.label || `0x…${(w.address || '').slice(-4)}`
-    })), [wallets]);
-
-    // load selection (empty [] = "All")
-    const [selected, setSelected] = useState(() => {
-        try {
-            const raw = localStorage.getItem(CHIP_LS_KEY);
-            const arr = raw ? JSON.parse(raw) : null;
-            if (Array.isArray(arr) && arr.length) return arr.map(a => String(a).toLowerCase());
-        } catch { }
-        return [];
-    });
-
-    const isAll = selected.length === 0;
-
-    // publish
-    useEffect(() => {
-        try { localStorage.setItem(CHIP_LS_KEY, JSON.stringify(selected)); } catch { }
-        if (typeof onChange === 'function') {
-            onChange(isAll ? options.map(o => o.address) : selected, isAll);
-        }
-    }, [selected, isAll, options, onChange, CHIP_LS_KEY]);
-
-    const toggle = (addr) => {
-        setSelected(prev => {
-            const a = String(addr).toLowerCase();
-            if (prev.includes(a)) {
-                const next = prev.filter(x => x !== a);
-                return next.length === options.length ? [] : next; // if everything selected, treat as All
-            }
-            const next = [...prev, a];
-            return next.length === options.length ? [] : next;
-        });
-    };
-
-    const setAll = () => setSelected([]);
-
-    return (
-        <div className="d-flex flex-wrap gap-2" key={`chips-${pageKey || 'default'}`}>
-            {/* Invisible marker ensures the “All” subtree is distinct per page */}
-            {isAll && <span data-page={pageKey || 'default'} style={{ display: 'none' }} />}
-            <button
-                type="button"
-                className={`btn btn-sm ${isAll ? 'btn-primary' : 'btn-outline-secondary'}`}
-                onClick={setAll}
-            >
-                All
-            </button>
-            {options.map(o => (
-                <button
-                    key={o.address}
-                    type="button"
-                    className={`btn btn-sm ${(!isAll && selected.includes(o.address)) ? 'btn-primary' : 'btn-outline-secondary'}`}
-                    onClick={() => toggle(o.address)}
-                    title={o.address}
-                >
-                    {o.label}
-                </button>
-            ))}
-        </div>
-    );
 }
 
 /* skeleton */
@@ -318,13 +246,23 @@ function ShimmerTable() {
                             <th className="text-start">Status</th>
                         </tr>
                     </thead>
-                    <tbody>{Array.from({ length: 5 }).map((_, i) => (
-                        <tr key={i}>{Array.from({ length: 12 }).map((__, j) => (
-                            <td key={j} className={j === 0 || j === 11 ? 'text-start' : 'text-end'} style={{ minWidth: j === 0 ? 120 : 80 }}>
-                                <Placeholder as="div" animation="wave"><Placeholder xs={j === 0 ? 6 : 4} /></Placeholder>
-                            </td>
-                        ))}</tr>
-                    ))}</tbody>
+                    <tbody>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <tr key={i}>
+                                {Array.from({ length: 12 }).map((__, j) => (
+                                    <td
+                                        key={j}
+                                        className={j === 0 || j === 11 ? 'text-start' : 'text-end'}
+                                        style={{ minWidth: j === 0 ? 120 : 80 }}
+                                    >
+                                        <Placeholder as="div" animation="wave">
+                                            <Placeholder xs={j === 0 ? 6 : 4} />
+                                        </Placeholder>
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
                 </Table>
             </Card.Body>
         </Card>
@@ -432,7 +370,7 @@ export default function KwEhexStaking({ config }) {
                         })
                         .catch(() => { });
                 }
-            } catch { /* HDS fallback below may fill it */ }
+            } catch { }
         })();
         return () => { alive = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -683,7 +621,10 @@ export default function KwEhexStaking({ config }) {
 
     const ariaSort = (key) => sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
 
-    /* Wallet chip selection → filtered tables */
+    /* ---------------- Wallet chip selection → filtered tables ---------------- */
+    // ✅ Mirror /staking/hex behaviour exactly:
+    // - Default = ALL addresses selected (but rendered as the single “All” chip active)
+    // - When “All” is clicked, only All shows active; others are off.
     const [selectedAddrs, setSelectedAddrs] = useState(ethAddresses.map(a => a.toLowerCase()));
     const [isAllWallets, setIsAllWallets] = useState(true);
 
@@ -714,8 +655,7 @@ export default function KwEhexStaking({ config }) {
     const unit = cfg.unit || 'eHEX';
 
     return (
-        <Row className="gy-3" key={`page-${PAGE_KEY}`}>
-            {/* Unified header */}
+        <Row className="gy-3">
             {!loading && (
                 <Col xs={12} className="pt-0 mt-0">
                     <KwHexStakingHeaderContainer
@@ -726,7 +666,6 @@ export default function KwEhexStaking({ config }) {
                         onRefresh={handleRefresh}
                         sticky
                         hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
-                        /* explicit overrides to avoid header equality with HEX page */
                         titleOverride="eHEX Staking"
                         badgeOverride="ETHEREUM"
                         unitOverride="eHEX"
@@ -755,9 +694,9 @@ export default function KwEhexStaking({ config }) {
                     </>
                 )}
 
-                {/* Wallet filter buttons (page-keyed) */}
+                {/* Wallet filter buttons — now using the SAME shared component as /staking/hex */}
                 {!loading && ethAddresses.length > 0 && (
-                    <Card className="mb-3" key={`chips-card-${PAGE_KEY}`}>
+                    <Card className="mb-3">
                         <Card.Body>
                             <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                                 <div className="text-muted mb-1">Filter by wallet:</div>
@@ -765,8 +704,10 @@ export default function KwEhexStaking({ config }) {
                             </div>
                             <WalletFilterChips
                                 wallets={walletOptions}
-                                pageKey={PAGE_KEY}
-                                onChange={(addrs, isAll) => { setSelectedAddrs(addrs); setIsAllWallets(isAll); }}
+                                onChange={(addrs, isAll) => {
+                                    setSelectedAddrs(addrs);
+                                    setIsAllWallets(isAll);
+                                }}
                             />
                         </Card.Body>
                     </Card>
@@ -774,10 +715,8 @@ export default function KwEhexStaking({ config }) {
 
                 {/* Active stakes table */}
                 {!loading && filteredRows.length > 0 && (
-                    <Card key={`active-${PAGE_KEY}`}>
+                    <Card>
                         <Card.Body>
-                            {/* hidden page marker also here to keep subtree distinct */}
-                            <span data-page-table={PAGE_KEY} style={{ display: 'none' }} />
                             <Table responsive size="sm" className="align-middle mb-0">
                                 <thead>
                                     <tr>
@@ -896,7 +835,7 @@ export default function KwEhexStaking({ config }) {
 
                 {/* Ended stakes table */}
                 {!loading && filteredRowsEnded.length > 0 && (
-                    <Card className="mt-3" key={`ended-${PAGE_KEY}`}>
+                    <Card className="mt-3">
                         <Card.Header className="pb-0"><strong>Ended Stakes</strong> <small className="text-muted">(history)</small></Card.Header>
                         <Card.Body>
                             <Table responsive size="sm" className="align-middle mb-0">
