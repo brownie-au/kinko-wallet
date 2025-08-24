@@ -1,114 +1,194 @@
 // src/services/kw-hexPulseService.js
 import { ethers } from 'ethers';
 
-// ---- Configuration ----
-const PULSE_RPC =
-    import.meta.env.VITE_PLS_RPC_URL ||
-    'https://rpc.pulsechain.com';
+/* -------------------------------------------------------------------------- */
+/* Endpoints                                                                  */
+/* -------------------------------------------------------------------------- */
+const PLS_RPC_LIST = [
+    import.meta.env.VITE_PLS_RPC_URL,
+    'https://rpc.pulsechain.com',
+    'https://pulsechain.publicnode.com',
+    'https://pulsechain-rpc.publicnode.com'
+].filter(Boolean);
 
-const HEX_PLS_ADDRESS =
-    import.meta.env.VITE_PLS_HEX_ADDRESS ||
-    ''; // REQUIRED: set in .env
+const ETH_RPC_LIST = [
+    import.meta.env.VITE_ETH_RPC_URL,
+    'https://cloudflare-eth.com',
+    'https://rpc.ankr.com/eth',
+    'https://eth.llamarpc.com'
+].filter(Boolean);
 
-// Minimal ABI (+ currentDay + dailyData)
+// Addresses (Pulse required via env; ETH has a safe default for cross‑chain reads)
+const HEX_PLS_ADDRESS = (import.meta.env.VITE_PLS_HEX_ADDRESS || '').trim();
+const HEX_ETH_ADDRESS = (import.meta.env.VITE_ETH_HEX_ADDRESS || '0x2b591e99aFe9f32eaa6214f7B7629768c40eEb39').trim();
+
+const DEFAULTS = { chain: 'pulse', rpcUrl: null, hexAddress: HEX_PLS_ADDRESS };
+
+/* -------------------------------------------------------------------------- */
+/* ABI (unified with eHEX)                                                    */
+/* -------------------------------------------------------------------------- */
 const HEX_ABI = [
     'function stakeCount(address) view returns (uint256)',
-    'function stakeLists(address staker, uint256 index) view returns (uint40 stakeId, uint72 stakedHearts, uint72 stakeShares, uint16 lockedDay, uint16 stakedDays, uint40 unlockedDay, bool isAutoStake)',
+    'function stakeLists(address,uint256) view returns (uint40,uint72,uint72,uint16,uint16,uint16,bool)',
     'function currentDay() view returns (uint256)',
-    // Returns at least (payoutTotal, stakeSharesTotal, unclaimedSatoshisTotal) for that day index
-    'function dailyData(uint256) view returns (uint256 payoutTotal, uint256 stakeSharesTotal, uint256 unclaimedSatoshisTotal)'
+    'function dailyData(uint256) view returns (uint256,uint256,uint256)'
 ];
 
 const HEARTS_DECIMALS = 1e8;
 const TSHARE_DIVISOR = 1e12;
 
-// ---------------- Cache helpers (localStorage) ----------------
-// Cache payload now supports both active + ended stakes:
-// { updatedAt, currentDay, rows, rowsEnded, payoutPerTShareDailyHex? }
-const LS_NS = 'kw:hexstakes:pls:v1';
+/* -------------------------------------------------------------------------- */
+/* Cache helpers                                                              */
+/* -------------------------------------------------------------------------- */
+const LS_NS_NEW = 'kw:hexstakes:v1';
+const LS_NS_LEGACY = 'kw:hexstakes:pls:v1';
 
-// Separate chain-level DPO cache (for quick reads before stake cache refresh)
-const LS_DPO_KEY = 'kw:hexDpo:pulse:v1';
-const LS_DPO_AT = 'kw:hexDpo:pulse:at:v1';
-
-function keyFor(addresses = []) {
-    const addrs = (addresses || [])
-        .map(a => (a || '').toLowerCase())
-        .filter(Boolean)
-        .sort()
-        .join(',');
-    return `${LS_NS}:${HEX_PLS_ADDRESS}:${addrs}`;
+function dpoKeys(chain) {
+    const c = String(chain || DEFAULTS.chain).toLowerCase();
+    return { val: `kw:hexDpo:${c}:v1`, at: `kw:hexDpo:${c}:at:v1` };
 }
 
-export function readHexStakesCache(addresses = []) {
-    try {
-        const raw = localStorage.getItem(keyFor(addresses));
-        return raw ? JSON.parse(raw) : null; // { updatedAt, currentDay, rows, rowsEnded?, payoutPerTShareDailyHex? }
-    } catch {
-        return null;
-    }
+function keyForNew(addresses = [], cfg = {}) {
+    const chain = String(cfg?.chain || DEFAULTS.chain).toLowerCase();
+    const hexAddr = String(cfg?.hexAddress || DEFAULTS.hexAddress || '').toLowerCase();
+    const addrs = (addresses || []).map(a => (a || '').toLowerCase()).filter(Boolean).sort().join(',');
+    return `${LS_NS_NEW}:${chain}:${hexAddr}:${addrs}`;
+}
+function keyForLegacyPulse(addresses = []) {
+    const addrs = (addresses || []).map(a => (a || '').toLowerCase()).filter(Boolean).sort().join(',');
+    return `${LS_NS_LEGACY}:${(HEX_PLS_ADDRESS || '').toLowerCase()}:${addrs}`;
 }
 
-export function writeHexStakesCache(addresses = [], payload) {
-    try {
-        localStorage.setItem(
-            keyFor(addresses),
-            JSON.stringify({
-                updatedAt: Date.now(),
-                ...(payload || {})
-            })
-        );
-    } catch { }
-}
+function readLS(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
+function writeLS(key, obj) { try { localStorage.setItem(key, JSON.stringify(obj)); } catch { } }
 
-// Keep storage tidy (optional)
-function pruneOldCaches(max = 8) {
+function pruneOldCaches(max = 12) {
     try {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith(LS_NS));
+        const keys = Object.keys(localStorage).filter(k => k.startsWith(LS_NS_NEW) || k.startsWith(LS_NS_LEGACY));
         if (keys.length <= max) return;
-        // naive prune: just remove oldest by updatedAt field
-        const items = keys.map(k => {
-            try { return { k, t: JSON.parse(localStorage.getItem(k)).updatedAt || 0 }; }
-            catch { return { k, t: 0 }; }
-        });
-        items.sort((a, b) => a.t - b.t).slice(0, Math.max(0, items.length - max))
-            .forEach(({ k }) => localStorage.removeItem(k));
+        const items = keys.map(k => { try { return { k, t: JSON.parse(localStorage.getItem(k)).updatedAt || 0 }; } catch { return { k, t: 0 }; } });
+        items.sort((a, b) => a.t - b.t).slice(0, Math.max(0, items.length - max)).forEach(({ k }) => localStorage.removeItem(k));
     } catch { }
 }
-// ----------------------------------------------------------------
 
-function getContract() {
-    if (!HEX_PLS_ADDRESS) {
-        throw new Error('HEX PulseChain contract address is not set. Define VITE_PLS_HEX_ADDRESS in .env');
+/* -------------------------------------------------------------------------- */
+/* Public cache API                                                           */
+/* -------------------------------------------------------------------------- */
+export function readHexStakesCache(addresses = [], cfg) {
+    const fromNew = readLS(keyForNew(addresses, cfg));
+    if (fromNew) return fromNew;
+    const chain = String(cfg?.chain || DEFAULTS.chain).toLowerCase();
+    if (chain === 'pulse') {
+        const fromLegacy = readLS(keyForLegacyPulse(addresses));
+        if (fromLegacy) return fromLegacy;
     }
-    const provider = new ethers.providers.JsonRpcProvider(PULSE_RPC);
-    return new ethers.Contract(HEX_PLS_ADDRESS, HEX_ABI, provider);
+    return null;
+}
+export function writeHexStakesCache(addresses = [], payload, cfg) {
+    const stamped = { updatedAt: Date.now(), ...(payload || {}) };
+    writeLS(keyForNew(addresses, cfg), stamped);
+    if (String(cfg?.chain || DEFAULTS.chain).toLowerCase() === 'pulse') {
+        writeLS(keyForLegacyPulse(addresses), stamped);
+    }
 }
 
-function toNumber(bn) {
-    try { return Number(bn.toString()); } catch { return Number(bn); }
+/* -------------------------------------------------------------------------- */
+/* Providers / Contracts (shared pattern with eHEX)                           */
+/* -------------------------------------------------------------------------- */
+function makeFallbackProvider(rpcs, chainId, name) {
+    const statics = rpcs.map((url, i) =>
+        new ethers.providers.StaticJsonRpcProvider({ url, timeout: 8000 }, { chainId, name })
+    );
+    const configs = statics.map((p, i) => ({ provider: p, priority: i + 1, weight: (statics.length - i) * 2 }));
+    return new ethers.providers.FallbackProvider(configs, 1);
 }
 
-/** Live: fetch all stakes for a single address (active + ended mixed) */
-export async function fetchHexStakesForAddress(address) {
-    const hex = getContract();
+function cleanHexAddress(addr, label = 'contract') {
+    const cleaned = String(addr || '').trim().replace(/^["']|["']$/g, '').replace(/[\u200B-\u200D\uFEFF\s]/g, '');
+    const lower = cleaned.toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(lower)) throw new Error(`Invalid ${label} address. Expected 20‑byte hex. Got "${cleaned}" (len=${cleaned.length}).`);
+    return lower;
+}
+function checksumUserAddress(addr) {
+    try { return ethers.utils.getAddress(addr); }
+    catch { throw new Error(`Invalid wallet address "${addr}". Please check and try again.`); }
+}
+function isBenignStakeRevert(err) {
+    const m = `${err?.reason || ''} ${err?.message || ''}`.toLowerCase();
+    return /call_exception|missing revert data|execution reverted|revert/i.test(m);
+}
+function isNetworkish(err) {
+    const m = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
+    return err?.code === 'NETWORK_ERROR' || /network|timeout|fetch|503|502|bad gateway|temporarily unavailable/i.test(m);
+}
 
-    const countBN = await hex.stakeCount(address);
-    const count = Number(countBN || 0);
-    const rows = [];
-    for (let i = 0; i < count; i++) {
-        const s = await hex.stakeLists(address, i);
-        const stakeId = Number(s.stakeId);
-        const stakedHearts = toNumber(s.stakedHearts);
-        const stakeShares = toNumber(s.stakeShares);
-        const lockedDay = Number(s.lockedDay);
-        const stakedDays = Number(s.stakedDays);
-        const unlockedDay = Number(s.unlockedDay);
-        const isAutoStake = Boolean(s.isAutoStake);
+function resolvedConfig(cfg) {
+    const chain = String(cfg?.chain || DEFAULTS.chain).toLowerCase();
+    if (chain === 'ethereum') {
+        return {
+            chain,
+            provider: makeFallbackProvider(ETH_RPC_LIST, 1, 'homestead'),
+            hexAddress: cleanHexAddress(cfg?.hexAddress || HEX_ETH_ADDRESS, 'HEX (ETH) contract')
+        };
+    }
+    return {
+        chain: 'pulse',
+        provider: makeFallbackProvider(PLS_RPC_LIST, 369, 'pulsechain'),
+        hexAddress: cleanHexAddress(cfg?.hexAddress || HEX_PLS_ADDRESS, 'HEX (Pulse) contract')
+    };
+}
 
-        rows.push({
-            id: `${address}-${stakeId}-${i}`,
-            wallet: address,
+function getContract(cfg) {
+    const rc = resolvedConfig(cfg);
+    const hex = new ethers.Contract(rc.hexAddress, HEX_ABI, rc.provider);
+    return { hex, rc };
+}
+
+function toNumber(bn) { try { return Number(bn?.toString?.() ?? bn); } catch { return Number(bn); } }
+
+/* -------------------------------------------------------------------------- */
+/* Chain‑agnostic stake fetchers                                              */
+/* -------------------------------------------------------------------------- */
+export async function fetchHexStakesForAddress(address, cfg) {
+    const { hex, rc } = getContract(cfg);
+    const wallet = checksumUserAddress(address);
+
+    // Read stakeCount safely; downgrade benign reverts to 0
+    let count = 0;
+    try {
+        const c = await hex.stakeCount(wallet);
+        count = Number(c || 0);
+    } catch (e) {
+        if (!isBenignStakeRevert(e)) {
+            throw new Error(`Failed to read stake count for ${wallet} on ${rc.chain === 'pulse' ? 'PulseChain' : 'Ethereum'}: ${prettyNetHint(e, rc.chain)}`);
+        }
+        count = 0;
+    }
+
+    if (count === 0) return [];
+
+    // Fetch each index; skip per‑index reverts quietly
+    const calls = Array.from({ length: count }, (_, i) =>
+        hex.stakeLists(wallet, i).then(
+            (s) => ({ ok: true, s, i }),
+            (e) => ({ ok: false, e, i })
+        )
+    );
+    const results = await Promise.all(calls);
+
+    const ok = results.filter(r => r.ok);
+    return ok.map(({ s, i }) => {
+        const stakeId = toNumber(s?.[0]);
+        const stakedHearts = toNumber(s?.[1]);
+        const stakeShares = toNumber(s?.[2]);
+        const lockedDay = toNumber(s?.[3]);
+        const stakedDays = toNumber(s?.[4]);
+        const unlockedDay = toNumber(s?.[5]);
+        const isAutoStake = Boolean(s?.[6]);
+
+        return {
+            id: `${wallet}-${stakeId}-${i}`,
+            wallet,
             stakeIndex: i,
             stakeId,
             principalHex: stakedHearts / HEARTS_DECIMALS,
@@ -117,130 +197,137 @@ export async function fetchHexStakesForAddress(address) {
             stakedDays,
             unlockedDay,
             isAutoStake
-        });
-    }
-    return rows;
+        };
+    });
 }
 
-/** Live: fetch all stakes for many addresses (returns flat array of all stakes) */
-export async function fetchHexStakesPulse(addresses = []) {
+export async function fetchHexStakesPulse(addresses = [], cfg) {
     const all = [];
-    for (const a of addresses) {
+    for (const a of (addresses || [])) {
         try {
-            const rows = await fetchHexStakesForAddress(a);
+            const rows = await fetchHexStakesForAddress(a, cfg);
             all.push(...rows);
         } catch (err) {
+            // Network/config errors only; benign reverts are handled upstream
             console.error('HEX stake fetch failed for', a, err);
-            all.push({
-                id: `${a}-error`,
-                wallet: a,
-                error: (err && err.message) || String(err)
-            });
+            all.push({ id: `${a}-error`, wallet: a, error: err?.message || String(err) });
         }
     }
     return all;
 }
 
-/** Live: current HEX day from contract */
-export async function fetchHexCurrentDay() {
-    const hex = getContract();
-    const d = await hex.currentDay();
-    return Number(d);
+export async function fetchHexCurrentDay(cfg) {
+    const { hex, rc } = getContract(cfg);
+    try {
+        const d = await hex.currentDay();
+        return Number(d);
+    } catch (err) {
+        throw new Error(`Failed to read current HEX day on ${rc.chain === 'pulse' ? 'PulseChain' : 'Ethereum'}: ${prettyNetHint(err, rc.chain)}`);
+    }
 }
 
-// ----------------------- Pulse DPO (HEX/T-Share/day) -----------------------
-// payoutPerTShareHex = (payoutTotalHearts * 1e12 / stakeSharesTotal) / 1e8
-//                     = payoutTotalHearts * 1e4 / stakeSharesTotal
-// We keep 6 decimal precision via integer math, then return Number.
-export async function fetchPulseDpoHex() {
-    const hex = getContract();
-    const day = await hex.currentDay();
-    const dayNum = Number(day);
-    if (!Number.isFinite(dayNum) || dayNum <= 0) return 0;
-
-    // Yesterday's daily data
-    const dd = await hex.dailyData(dayNum - 1);
-    // The ABI names might not always be present; grab the first two outputs regardless.
-    const payoutTotal = dd?.payoutTotal ?? dd?.[0] ?? 0;
-    const stakeSharesTotal = dd?.stakeSharesTotal ?? dd?.[1] ?? 0;
-
-    const payoutBN = ethers.BigNumber.from(payoutTotal);
-    const sharesBN = ethers.BigNumber.from(stakeSharesTotal);
-
-    if (sharesBN.isZero()) return 0;
-
-    // Multiply by 1e4 to convert hearts/share to HEX/T-Share; keep 6 extra decimals for precision.
-    const scaled = payoutBN.mul(10000).mul(1_000_000); // *1e10 overall
-    const perTshareMicro = scaled.div(sharesBN);       // micro-HEX per T-Share
-    const dpo = Number(perTshareMicro.toString()) / 1_000_000; // back to HEX
-    // cache (chain-level)
+/* -------------------------------------------------------------------------- */
+/* DPO helpers (payoutPerTshare)                                              */
+/* -------------------------------------------------------------------------- */
+export async function fetchPulseDpoHex(cfg) {
+    const { hex, rc } = getContract(cfg);
     try {
-        localStorage.setItem(LS_DPO_KEY, JSON.stringify({ dpo }));
-        localStorage.setItem(LS_DPO_AT, String(Date.now()));
+        const dayNum = Number(await hex.currentDay());
+        if (!Number.isFinite(dayNum) || dayNum <= 0) { cacheDpo(rc.chain, 0); return 0; }
+
+        const dd = await hex.dailyData(dayNum - 1);
+        const payoutTotal = toNumber(dd?.[0]);
+        const stakeSharesTotal = toNumber(dd?.[1]);
+        if (!stakeSharesTotal) { cacheDpo(rc.chain, 0); return 0; }
+
+        const payoutBN = ethers.BigNumber.from(payoutTotal);
+        const sharesBN = ethers.BigNumber.from(stakeSharesTotal);
+        const perTshare = payoutBN.mul(10_000_000).div(sharesBN); // scale 1e7
+        const dpo = Number(perTshare.toString()) / 10_000_000;
+
+        cacheDpo(rc.chain, dpo);
+        return dpo;
+    } catch (err) {
+        throw new Error(`Failed to read daily payout on ${rc.chain === 'pulse' ? 'PulseChain' : 'Ethereum'}: ${prettyNetHint(err, rc.chain)}`);
+    }
+}
+
+function cacheDpo(chain, dpo) {
+    try {
+        const { val, at } = dpoKeys(chain);
+        localStorage.setItem(val, JSON.stringify({ dpo }));
+        localStorage.setItem(at, String(Date.now()));
     } catch { }
-    return dpo;
 }
-
-export function readPulseDpoHexCache(maxAgeMs = 10 * 60 * 1000) {
+export function readPulseDpoHexCache(maxAgeMs = 10 * 60 * 1000, cfg) {
     try {
-        const raw = localStorage.getItem(LS_DPO_KEY);
-        const at = Number(localStorage.getItem(LS_DPO_AT) || '0');
-        if (!raw || !at) return null;
-        if (Date.now() - at > maxAgeMs) return null;
+        const chain = String(cfg?.chain || DEFAULTS.chain).toLowerCase();
+        const { val, at } = dpoKeys(chain);
+        const raw = localStorage.getItem(val);
+        const ts = Number(localStorage.getItem(at) || '0');
+        if (!raw || !ts) return null;
+        if (Date.now() - ts > maxAgeMs) return null;
         const { dpo } = JSON.parse(raw);
-        return (typeof dpo === 'number' && isFinite(dpo)) ? dpo : null;
-    } catch {
-        return null;
-    }
+        return typeof dpo === 'number' && isFinite(dpo) ? dpo : null;
+    } catch { return null; }
 }
-
-export async function getPulseDpoHex({ preferCache = true } = {}) {
+export async function getPulseDpoHex({ preferCache = true } = {}, cfg) {
     if (preferCache) {
-        const cached = readPulseDpoHexCache();
-        if (cached != null) {
-            // silent refresh
-            fetchPulseDpoHex().catch(() => { });
-            return cached;
-        }
+        const cached = readPulseDpoHexCache(undefined, cfg);
+        if (cached != null) { fetchPulseDpoHex(cfg).catch(() => { }); return cached; }
     }
-    try {
-        return await fetchPulseDpoHex();
-    } catch {
-        const cached = readPulseDpoHexCache(Number.MAX_SAFE_INTEGER);
+    try { return await fetchPulseDpoHex(cfg); }
+    catch {
+        const cached = readPulseDpoHexCache(Number.MAX_SAFE_INTEGER, cfg);
         return cached != null ? cached : 0;
     }
 }
-// ---------------------------------------------------------------------------
 
-/** Convenience: fetch and write cache in one go
- *  Now returns both active and ended stakes, plus the chain-level DPO:
- *  { currentDay, rows, rowsEnded, payoutPerTShareDailyHex }
- */
-export async function refreshHexStakesAndCache(addresses = [], onProgress) {
-    const cd = await fetchHexCurrentDay();
-
+/* -------------------------------------------------------------------------- */
+/* Main refresh                                                               */
+/* -------------------------------------------------------------------------- */
+export async function refreshHexStakesAndCache(addresses = [], onProgress, cfg) {
+    const rc = resolvedConfig(cfg);
     const batchSize = 3;
+    const progress = (done) => onProgress && onProgress(Math.min(done, addresses.length), addresses.length);
+
+    // 1) Current day (show banner if network borks)
+    const cd = await fetchHexCurrentDay(rc);
+
+    // 2) Stakes (benign reverts are already downgraded to empty)
     const all = [];
     for (let i = 0; i < addresses.length; i += batchSize) {
-        const part = await fetchHexStakesPulse(addresses.slice(i, i + batchSize));
+        const part = await fetchHexStakesPulse(addresses.slice(i, i + batchSize), rc);
         all.push(...part);
-        if (onProgress) onProgress(Math.min(i + batchSize, addresses.length), addresses.length);
+        progress(i + batchSize);
     }
 
-    const rows = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) === 0);   // Active
-    const rowsEnded = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) > 0); // Ended
+    const rows = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) === 0);
+    const rowsEnded = all.filter(r => !r.error && (Number(r.unlockedDay) || 0) > 0);
 
-    // Try to fetch DPO; fall back to any cached value.
+    // 3) DPO (Pulse only); ETH path returns 0 (your UI can use HDS for ETH)
     let dpoHex = 0;
-    try {
-        dpoHex = await fetchPulseDpoHex();
-    } catch {
-        const cached = readPulseDpoHexCache(Number.MAX_SAFE_INTEGER);
-        if (cached != null) dpoHex = cached;
+    if (rc.chain === 'pulse') {
+        try { dpoHex = await fetchPulseDpoHex(rc); }
+        catch {
+            const cached = readPulseDpoHexCache(Number.MAX_SAFE_INTEGER, rc);
+            if (cached != null) dpoHex = cached;
+        }
     }
 
     const payload = { currentDay: cd, rows, rowsEnded, payoutPerTShareDailyHex: dpoHex };
-    writeHexStakesCache(addresses, payload);
+    writeHexStakesCache(addresses, payload, rc);
     pruneOldCaches();
     return payload;
+}
+
+/* -------------------------------------------------------------------------- */
+function prettyNetHint(err, chain) {
+    const m = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
+    if (isNetworkish(err)) {
+        const where = chain === 'pulse' ? 'PulseChain' : 'Ethereum';
+        return `Network issue (${where}). We tried multiple public RPCs but didn’t get a response in time. Please try again.`;
+    }
+    if (/invalid address|bad address checksum/i.test(m)) return 'Invalid address format. Please verify the contract and wallet addresses.';
+    return err?.message || String(err);
 }

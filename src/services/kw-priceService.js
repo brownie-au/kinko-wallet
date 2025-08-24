@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 const PULSE_HEX_ADDRESS =
     import.meta.env.VITE_PLS_HEX_ADDRESS ||
     // Keep this overridable via .env; this is the HEX address on PulseChain (same as ETH fork).
-    '0x2b591e99aFe9F32eaa6214f7B7629768c40eeb39';
+    '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
 
 const DEXSCREENER_TOKEN_URL = (token) =>
     `https://api.dexscreener.com/latest/dex/tokens/${token}`;

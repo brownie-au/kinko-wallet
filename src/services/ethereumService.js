@@ -99,7 +99,7 @@ const row = ({ address, symbol, name, decimals, balance }) => ({
 });
 
 // ---------- Known token overrides ----------
-const EHEX_CONTRACT = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // eHEX
+const EHEX_CONTRACT = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39'; // eHEX
 const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC
 
 const KNOWN_TOKENS = {

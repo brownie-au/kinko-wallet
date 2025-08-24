@@ -56,9 +56,9 @@ const navigation = {
         },
         {
           id: 'phex-staking',
-          title: 'pHEX Staking',
+          title: 'eHEX Staking',
           type: 'item',
-          url: '/staking/phex',
+          url: '/staking/ehex',
           disabled: true
         },
         {
