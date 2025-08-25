@@ -51,6 +51,18 @@ async function refreshEthSafe(wallets, onProgress) {
 const hdsMem = { data: null, ts: 0 };
 function readHdsLS() { try { return JSON.parse(localStorage.getItem(HDS_LS_KEY) || 'null'); } catch { return null; } }
 function writeHdsLS(obj) { try { localStorage.setItem(HDS_LS_KEY, JSON.stringify(obj)); } catch { } }
+function getFreshHdsFromLS() {
+    const now = Date.now();
+    const obj = readHdsLS();
+    if (obj?.data && now - (obj.ts || 0) < HDS_TTL_MS) return obj.data;
+    return null;
+}
+// NEW: allow stale for instant snapshot
+function getAnyHdsFromLS() {
+    const obj = readHdsLS();
+    return obj?.data || null;
+}
+
 async function fetchHdsEth({ force = false } = {}) {
     const now = Date.now();
     if (!force && hdsMem.data && now - (hdsMem.ts || 0) < HDS_TTL_MS) return hdsMem.data;
@@ -285,6 +297,38 @@ function readAnyEhexCacheSync() {
     return null;
 }
 
+/* ------ NEW: lightweight yield snapshot persistence ------ */
+const EHEX_YIELD_SNAP_KEY = 'kw:ehex:yieldSnap:v1';
+function readYieldSnap() {
+    try { return JSON.parse(localStorage.getItem(EHEX_YIELD_SNAP_KEY) || 'null'); } catch { return null; }
+}
+function writeYieldSnap(snap) {
+    try { localStorage.setItem(EHEX_YIELD_SNAP_KEY, JSON.stringify(snap)); } catch { }
+}
+
+/* ------ build a header/table snapshot from cached (fresh OR stale) HDS ------ */
+function snapshotYieldFromCachedHds(rowsAct = [], rowsEnd = []) {
+    const hdsData = getFreshHdsFromLS() || getAnyHdsFromLS(); // <- fresh OR stale
+    if (!hdsData) return null;
+    const { pps, currentDay } = extractPpsAndDay(hdsData);
+    const todayPayout = Number(pps?.[currentDay] || 0);
+
+    const yAct = {};
+    for (const r of rowsAct) {
+        const yHex = computeStakeYieldHex(r, currentDay, pps);
+        const apy = computeApyPct(r, yHex, currentDay);
+        yAct[r.id] = { yieldHex: yHex, apyPct: apy };
+    }
+    const yEnd = {};
+    for (const r of rowsEnd) {
+        const until = Number(r.unlockedDay || 0) || currentDay;
+        const yHex = computeYieldHexWithUntil(r, pps, until);
+        const apy = computeApyPct(r, yHex, until);
+        yEnd[r.id] = { yieldHex: yHex, apyPct: apy };
+    }
+    return { currentDay, todayPayout, yAct, yEnd, updatedAt: Date.now() };
+}
+
 /* skeleton */
 function ShimmerTable() {
     return (
@@ -375,23 +419,50 @@ export default function KwEhexStaking({ config }) {
     /* ---------------- Cache-first: hydrate initial state synchronously ---------------- */
     const initialCached = useMemo(() => {
         const raw = readAnyEhexCacheSync();
-        if (!raw) return null;
-        if (raw.byAddr) {
-            const { active, ended } = buildRowsFromByAddr(raw.byAddr);
-            return {
-                rows: active,
-                rowsEnded: ended,
-                currentDay: Number(raw.currentDay ?? 0) || null,
-                payoutPerTShareDailyHex: Number(raw.payoutPerTShareDailyHex ?? 0) || null,
-                updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : null
-            };
+        let rows = [], rowsEnded = [], currentDay = null, payoutPerTShareDailyHex = null, updatedAt = null;
+
+        if (raw) {
+            if (raw.byAddr) {
+                const built = buildRowsFromByAddr(raw.byAddr);
+                rows = built.active; rowsEnded = built.ended;
+                currentDay = Number(raw.currentDay ?? 0) || null;
+                payoutPerTShareDailyHex = Number(raw.payoutPerTShareDailyHex ?? 0) || null;
+                updatedAt = raw.updatedAt ? new Date(raw.updatedAt) : null;
+            } else {
+                rows = raw.rows || [];
+                rowsEnded = raw.rowsEnded || [];
+                currentDay = Number(raw.currentDay ?? 0) || null;
+                payoutPerTShareDailyHex = Number(raw.payoutPerTShareDailyHex ?? 0) || null;
+                updatedAt = raw.updatedAt ? new Date(raw.updatedAt) : null;
+            }
         }
+
+        // Try HDS snapshot (fresh or stale)
+        let yieldMapInit = {}, yieldMapEndedInit = {};
+        const snap = snapshotYieldFromCachedHds(rows, rowsEnded);
+        if (snap) {
+            if (!currentDay) currentDay = snap.currentDay;
+            if (!payoutPerTShareDailyHex) payoutPerTShareDailyHex = snap.todayPayout;
+            yieldMapInit = snap.yAct; yieldMapEndedInit = snap.yEnd;
+        } else {
+            // fallback to last saved yield snapshot
+            const ys = readYieldSnap();
+            if (ys) {
+                if (!currentDay && ys.currentDay) currentDay = ys.currentDay;
+                if (!payoutPerTShareDailyHex && ys.payoutPerTShareDailyHex) payoutPerTShareDailyHex = ys.payoutPerTShareDailyHex;
+                yieldMapInit = ys.yieldMap || {};
+                yieldMapEndedInit = ys.yieldMapEnded || {};
+            }
+        }
+
         return {
-            rows: raw.rows || [],
-            rowsEnded: raw.rowsEnded || [],
-            currentDay: Number(raw.currentDay ?? 0) || null,
-            payoutPerTShareDailyHex: Number(raw.payoutPerTShareDailyHex ?? 0) || null,
-            updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : null
+            rows,
+            rowsEnded,
+            currentDay,
+            payoutPerTShareDailyHex,
+            updatedAt,
+            yieldMapInit,
+            yieldMapEndedInit
         };
     }, []);
 
@@ -460,9 +531,9 @@ export default function KwEhexStaking({ config }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cfg.priceKey, cfg.hexAddress, cfg.chain]);
 
-    /* Yield state */
-    const [yieldMap, setYieldMap] = useState({});
-    const [yieldMapEnded, setYieldMapEnded] = useState({});
+    /* Yield state (seed with snapshot so header/table are instant) */
+    const [yieldMap, setYieldMap] = useState(() => initialCached?.yieldMapInit || {});
+    const [yieldMapEnded, setYieldMapEnded] = useState(() => initialCached?.yieldMapEndedInit || {});
 
     /* Sorting */
     const [sort, setSort] = useState({ key: 'daysRemaining', dir: 'asc' });
@@ -587,6 +658,15 @@ export default function KwEhexStaking({ config }) {
                 }
                 setYieldMapEnded(endMap);
 
+                // Persist a yield snapshot for next visit (instant paint)
+                writeYieldSnap({
+                    currentDay: Number(payload?.currentDay ?? hdsDay) || 0,
+                    payoutPerTShareDailyHex: Number(payload?.payoutPerTShareDailyHex ?? pps?.[hdsDay] ?? 0) || 0,
+                    yieldMap: act,
+                    yieldMapEnded: endMap,
+                    updatedAt: Date.now()
+                });
+
                 try {
                     const fresh = await fetchDexscreenerUsdByToken(cfg.hexAddress, cfg.chain);
                     writePriceCacheDyn(cfg.priceKey, cfg.chain, fresh);
@@ -611,6 +691,7 @@ export default function KwEhexStaking({ config }) {
 
     // Initial background revalidation (after cache-first paint)
     useEffect(() => {
+        setLoading(false); // ensure header/table render immediately with snapshot/snap
         refreshNow();
     }, [refreshNow]);
 
@@ -633,6 +714,48 @@ export default function KwEhexStaking({ config }) {
                     if (alive) { setYieldMap({}); setYieldMapEnded({}); }
                     return;
                 }
+
+                // Prefer cached HDS (fresh OR stale) to avoid blank totals
+                const cachedHds = getFreshHdsFromLS() || getAnyHdsFromLS();
+                if (cachedHds) {
+                    const { pps, currentDay: hdsDay } = extractPpsAndDay(cachedHds);
+                    if (!alive) return;
+
+                    if (!(Number(currentDay) > 0) && Number(hdsDay) > 0) {
+                        setPayoutPerTShareDailyHex(pps?.[hdsDay] || 0);
+                        setCurrentDay(hdsDay);
+                    }
+
+                    const dayForCalc = Number(currentDay) > 0 ? currentDay : hdsDay;
+
+                    const act = {};
+                    for (const r of rows) {
+                        const yHex = computeStakeYieldHex(r, dayForCalc, pps);
+                        const apy = computeApyPct(r, yHex, dayForCalc);
+                        act[r.id] = { yieldHex: yHex, apyPct: apy };
+                    }
+                    const endMap = {};
+                    for (const r of rowsEnded) {
+                        const until = Number(r.unlockedDay || 0) || dayForCalc;
+                        const yHex = computeYieldHexWithUntil(r, pps, until);
+                        const apy = computeApyPct(r, yHex, until);
+                        endMap[r.id] = { yieldHex: yHex, apyPct: apy };
+                    }
+                    if (alive) {
+                        setYieldMap(act);
+                        setYieldMapEnded(endMap);
+                        writeYieldSnap({
+                            currentDay: Number(dayForCalc) || 0,
+                            payoutPerTShareDailyHex: Number(pps?.[dayForCalc] ?? 0) || 0,
+                            yieldMap: act,
+                            yieldMapEnded: endMap,
+                            updatedAt: Date.now()
+                        });
+                    }
+                    return;
+                }
+
+                // …fallback: fetch if nothing cached at all
                 const hdsRows = await fetchHdsEth();
                 const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
                 if (!alive) return;
@@ -657,7 +780,17 @@ export default function KwEhexStaking({ config }) {
                     const apy = computeApyPct(r, yHex, until);
                     endMap[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
-                if (alive) { setYieldMap(act); setYieldMapEnded(endMap); }
+                if (alive) {
+                    setYieldMap(act);
+                    setYieldMapEnded(endMap);
+                    writeYieldSnap({
+                        currentDay: Number(dayForCalc) || 0,
+                        payoutPerTShareDailyHex: Number(pps?.[dayForCalc] ?? 0) || 0,
+                        yieldMap: act,
+                        yieldMapEnded: endMap,
+                        updatedAt: Date.now()
+                    });
+                }
             } catch {
                 if (alive) { setYieldMap({}); setYieldMapEnded({}); }
             }

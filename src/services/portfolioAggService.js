@@ -2,8 +2,20 @@
 // Aggregates balances across wallets/chains and returns totals + breakdown.
 
 import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainService';
-import { fetchEthereumTokens,  refreshEthereumTokens  } from './ethereumService';
+// Keep ethereumService import ONLY if you still want legacy backfill elsewhere.
+// We won't use it for prices here.
+import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
 import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
+
+// 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
+import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
+// Read native ETH balance via public RPCs from .env (no API keys)
+import { getEthNativeBalance } from './ethRpcService';
+// DefiLlama prices (no API key)
+import { getEthTokenPricesLlama, getEthUsdPriceLlama } from './priceService';
+
+// ----- toggles -----
+const USE_ETH_PRICE_BACKFILL = false; // we use DefiLlama now
 
 // Visibility threshold (USD). Default 0.01 if not set.
 const HIDE_USD_MIN = Number(
@@ -16,16 +28,53 @@ const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').
 
 function toRow(sr, wallet) {
   return {
-    chain: (sr.chain || '').toLowerCase(),               // 'pulse' | 'eth' | 'base'
-    wallet,                                              // wallet address
+    chain: (sr.chain || '').toLowerCase(), // 'pulse' | 'eth' | 'base'
+    wallet,                                 // wallet address
     address: sr.address === 'native' ? null : (sr.address || sr.contract || null),
     symbol: sr.symbol || '',
     name: sr.name || '',
+    // pass through description for spam filter
+    description: sr.description || '',
     decimals: Number(sr.decimals ?? 18),
     amount: Number(sr.balance ?? sr.amount ?? 0),
-    priceUsd: Number(sr.price   ?? sr.priceUsd ?? 0),
-    valueUsd: Number(sr.value   ?? sr.valueUsd ?? 0)
+    priceUsd: Number(sr.price ?? sr.priceUsd ?? 0),
+    valueUsd: Number(sr.value ?? sr.valueUsd ?? 0)
   };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   SPAM FILTER
+   - Hides tokens whose name/symbol/description contains a URL *or* a domain-like string.
+   - Examples caught: "claim rewards on earn-eth.com", "pepefinance.org", "stake-eth.net"
+   - Safe allowlist for rare legit dotted symbols (adjust as needed).
+──────────────────────────────────────────────────────────────────────────── */
+const ALLOWLIST_SUBSTRINGS = [
+  // add any legit dotted symbols here (lowercase)
+  'usdc.e'
+];
+
+const DOMAIN_RE = /\b(?:[a-z0-9-]{2,}\.)+[a-z]{2,24}\b/i;
+const URL_MARKERS = ['http://', 'https://', 'www.'];
+const SPAM_PHRASES = [
+  'claim rewards', 'airdrop', 'bonus', 'free', 'mint now', 'verify', 'AICC - AI Chain Coin', 'connect wallet'
+];
+
+function isSpamToken(t) {
+  const name = (t.name || '').toLowerCase();
+  const symbol = (t.symbol || '').toLowerCase();
+  const desc = (t.description || '').toLowerCase();
+  const hay = `${name} ${symbol} ${desc}`;
+
+  // allowlist early exit
+  for (const ok of ALLOWLIST_SUBSTRINGS) {
+    if (name.includes(ok) || symbol.includes(ok)) return false;
+  }
+
+  if (URL_MARKERS.some(m => hay.includes(m))) return true;
+  if (DOMAIN_RE.test(hay)) return true;
+  if (SPAM_PHRASES.some(p => hay.includes(p))) return true;
+
+  return false;
 }
 
 // Map Moralis result (used for Base) into token rows
@@ -85,12 +134,12 @@ function rowsFromMoralis(address, chainCode, res) {
  * @returns {{ totalUsd:number, tokens:Array, breakdown:Map<string, Array> }}
  */
 export async function buildPortfolioDetailed(wallets = [], options = {}) {
-  const only  = (options.only  || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
+  const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
   const force = !!options.force;
 
   const wantPulse = (only === 'all' || only === 'auto' || only === 'pulse');
-  const wantEth   = (only === 'all' || only === 'auto' || only === 'eth');
-  const wantBase  = (only === 'all' || only === 'auto' || only === 'base');
+  const wantEth = (only === 'all' || only === 'auto' || only === 'eth');
+  const wantBase = (only === 'all' || only === 'auto' || only === 'base');
 
   const rows = [];
 
@@ -107,17 +156,83 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
       }
     }
 
-    // ETH
+    // ETH (Blockscout discovery + DefiLlama prices)
     if (wantEth) {
       try {
-        const list = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
-        for (const r of list) rows.push(toRow(r, addr));
+        // 1) Discover ALL ERC‑20s via Blockscout (no Moralis/Alchemy)
+        const discovered = await getEthTokensFromBlockscout(addr, { cacheMs: 5 * 60 * 1000 });
+
+        // 2) Prices via DefiLlama (native + ERC-20)
+        let priceMap = new Map(); // lowercased contract -> priceUsd
+        let nativePriceUsd = 0;
+        try {
+          nativePriceUsd = await getEthUsdPriceLlama();
+          const addrs = (discovered || []).map(t => t.address).filter(Boolean);
+          priceMap = await getEthTokenPricesLlama(addrs);
+        } catch (e) {
+          console.warn('[PortfolioAgg] Llama price fetch failed for', addr, e?.message);
+        }
+
+        // (optional) Legacy backfill if explicitly enabled
+        if (USE_ETH_PRICE_BACKFILL && priceMap.size === 0) {
+          try {
+            const legacy = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
+            for (const t of Array.isArray(legacy) ? legacy : []) {
+              const k = (t.address || t.contract || '').toLowerCase();
+              if (k) priceMap.set(k, Number(t.priceUsd ?? t.price ?? 0));
+              if (t.address === 'native' && !nativePriceUsd) {
+                nativePriceUsd = Number(t.priceUsd ?? t.price ?? nativePriceUsd);
+              }
+            }
+          } catch (e) {
+            console.warn('[PortfolioAgg] ETH legacy price backfill failed for', addr, e?.message);
+          }
+        }
+
+        // 3) Native ETH row (real amount via RPC)
+        let nativeAmount = 0;
+        try { nativeAmount = await getEthNativeBalance(addr); } catch { }
+        rows.push(
+          toRow(
+            {
+              chain: 'eth',
+              address: 'native',
+              symbol: 'ETH',
+              name: 'Ether',
+              amount: nativeAmount,
+              priceUsd: nativePriceUsd,
+              valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+            },
+            addr
+          )
+        );
+
+        // 4) ERC‑20 rows
+        for (const t of discovered) {
+          const amountUnits = toUnits(t.balanceRaw, Number(t.decimals ?? 18));
+          const p = priceMap.get(t.address) || 0;
+          rows.push(
+            toRow(
+              {
+                chain: 'eth',
+                address: t.address,
+                symbol: t.symbol || '',
+                name: t.name || t.symbol || 'Token',
+                decimals: Number(t.decimals ?? 18),
+                amount: amountUnits,
+                priceUsd: p,
+                valueUsd: p ? (amountUnits * p) : 0
+              },
+              addr
+            )
+          );
+        }
       } catch (e) {
-        console.warn('[PortfolioAgg] ETH fetch failed for', addr, e?.message);
+        console.warn('[PortfolioAgg] ETH (Blockscout) fetch failed for', addr, e?.message);
       }
     }
 
-    // Base (Moralis)
+    // Base (still via Moralis for now)
     if (wantBase) {
       try {
         const res = await getPortfolioWithPrices(addr, 'base'); // prices + balances
@@ -128,11 +243,14 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     }
   }
 
+  // 🔒 filter out spammy tokens with web addresses / phishing phrases
+  const safeRows = rows.filter((r) => !isSpamToken(r));
+
   // Aggregate + breakdown
   const byKey = new Map();     // key -> token aggregate
   const breakdown = new Map(); // key -> [{ wallet, amount, valueUsd }]
 
-  for (const r of rows) {
+  for (const r of safeRows) {
     const k = tokenKey(r);
 
     if (!byKey.has(k)) byKey.set(k, { ...r });
@@ -156,7 +274,14 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     .map((t) => ({ ...t, valueUsd: t.valueUsd || (t.amount || 0) * (t.priceUsd || 0) }))
     .sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
 
-  const tokens = tokensAll.filter((t) => (Number(t.valueUsd) || 0) >= HIDE_USD_MIN);
+  // Show tokens if they have either:
+  // - valueUsd >= threshold, OR
+  // - a non-zero amount (even if price is 0)
+  const tokens = tokensAll.filter((t) => {
+    const v = Number(t.valueUsd) || 0;
+    const a = Number(t.amount) || 0;
+    return v >= HIDE_USD_MIN || a > 0;
+  });
 
   // Prune breakdown to only visible tokens
   const visibleBreakdown = new Map();
