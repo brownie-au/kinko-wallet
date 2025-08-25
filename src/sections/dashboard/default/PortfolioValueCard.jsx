@@ -1,4 +1,3 @@
-// src/sections/dashboard/default/PortfolioValueCard.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
 
@@ -9,42 +8,79 @@ import {
   HEX_STAKING_SOURCE,
   EHEX_STAKING_SOURCE
 } from '../../../contexts/PortfolioValueContext.jsx';
+import { useWallets } from '../../../contexts/WalletContext.jsx';
+import walletsStatic from '../../../data/wallets.js';
 
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
 const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
+const chainTotalsKeyFor = (sig) => (sig ? `${LS_CHAIN_TOTALS_KEY}:${sig}` : LS_CHAIN_TOTALS_KEY);
 
 // optional LS fallbacks some staking views may write
 const LS_HEX_STAKE_SUMMARY = 'kw:staking:hex:summary';
 const LS_EHEX_STAKE_SUMMARY = 'kw:staking:ehex:summary';
 
-// orange/yellow accent for staking chip
 const STAKING_COLOUR = '#F5A200';
 
-// read cached per-chain totals used by this tile
-function readPerChainTotals() {
+/* ----------------------- helpers ----------------------- */
+function num(x) {
+  if (x == null) return 0;
+  if (typeof x === 'number') return Number.isFinite(x) ? x : 0;
+  if (typeof x === 'string') {
+    const cleaned = x.replace(/[, ]+/g, '');
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+/** Prefer canonical key when aliases disagree by >20% */
+function preferCanonical({ aliases, totals }) {
+  const vals = aliases.map(k => num(totals?.[k]));
+  const max = Math.max(...vals);
+  if (!Number.isFinite(max) || max <= 0) return 0;
+
+  const canonical = num(totals?.[aliases[0]]);
+  if (canonical > 0 && (max - Math.min(canonical, max)) / max > 0.2) return canonical;
+
+  for (const k of aliases) {
+    const v = num(totals?.[k]);
+    if (v > 0) return v;
+  }
+  return max || 0;
+}
+
+/**
+ * Read per-wallet chain totals (no legacy fallback).
+ * The Portfolio writer now standardizes aliases inside the object, so we just canonicalise.
+ */
+function readChainTotalsCache(sig) {
   try {
-    const raw = localStorage.getItem(LS_CHAIN_TOTALS_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    return obj?.totals || {};
+    const raw = localStorage.getItem(chainTotalsKeyFor(sig));
+    if (!raw) return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
+
+    const parsed = JSON.parse(raw);
+    const totals = parsed?.totals || parsed || {};
+
+    const ethUsd = preferCanonical({ aliases: ['ethereum', 'eth'], totals });
+    const pulseUsd = preferCanonical({ aliases: ['pulse', 'pulsechain', 'pls'], totals });
+    const baseUsd = preferCanonical({ aliases: ['base'], totals });
+
+    const updatedAt = num(parsed?.updatedAt);
+
+    return { eth: ethUsd, pulse: pulseUsd, base: baseUsd, updatedAt };
   } catch {
-    return {};
+    return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
   }
 }
 
-// robust numeric extraction from number/string/object
+// robust numeric extraction for staking context values
 function toUsd(value) {
   if (value == null) return 0;
-
-  // direct numeric or numeric string
   const n = Number(value);
   if (Number.isFinite(n)) return n;
-
-  // object shapes we’ve seen: { usd }, { totalUsd }, { total }, { value }
   if (typeof value === 'object') {
-    const candidates = [value.usd, value.totalUsd, value.total, value.value, value.amountUsd];
-    for (const c of candidates) {
+    for (const c of [value.usd, value.totalUsd, value.total, value.value, value.amountUsd]) {
       const m = Number(c);
       if (Number.isFinite(m)) return m;
     }
@@ -52,173 +88,163 @@ function toUsd(value) {
   return 0;
 }
 
-// Chip sized & styled to match ChainBadge pills; colour overridable
 function StakingChip({ bgColor = STAKING_COLOUR, fgColor = '#fff', label = 'STAKES' }) {
   return (
     <span
       className="badge rounded-pill"
-      style={{
-        backgroundColor: bgColor,
-        color: fgColor,
-        // keep sizing consistent with other ChainBadge pills
-        padding: '4px 8.2px',
-        fontSize: 11,
-        lineHeight: 1
-      }}
+      style={{ backgroundColor: bgColor, color: fgColor, padding: '4px 8.2px', fontSize: 11, lineHeight: 1 }}
     >
       {label}
     </span>
   );
 }
 
+/* ----------------------- component ----------------------- */
 export default function PortfolioValueCard() {
-  const [totalUsd, setTotalUsd] = useState(0); // LS fallback for Portfolio page total
-  const [pct24h, setPct24h] = useState(0);
-  const [chainTotals, setChainTotals] = useState({});
+  // Wallet signature (context → LS → default), same as Portfolio.jsx
+  let ctx;
+  try { ctx = useWallets(); } catch { ctx = undefined; }
+  const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
+  const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
+  const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
+  const walletsSig = (wallets || [])
+    .map((w) => (w.address || '').toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join(',');
 
-  // aggregated sources from global context
+  const [totalUsd, setTotalUsd] = useState(0);
+  const [pct24h, setPct24h] = useState(0);
+
+  const [{ eth, pulse, base }, setChainTotals] = useState({ eth: 0, pulse: 0, base: 0 });
+  const lastTsRef = useRef(0);
+
   const { total: aggregatedTotal, sources } = usePortfolioValue();
 
-  // --- width-driven show/hide for the pie (keeps your layout) ---
   const bodyRef = useRef(null);
   const [showPie, setShowPie] = useState(true);
 
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
-
-    const BASE = 336 + 36 + 188; // min-left + gutter + pie size
-    const HIDE_AT = BASE - 50;   // hide below this
+    const BASE = 336 + 36 + 188;
+    const HIDE_AT = BASE - 50;
     const SHOW_AT = HIDE_AT + 12;
-
     const ro = new ResizeObserver(([entry]) => {
       const w = entry?.contentRect?.width || el.clientWidth || 0;
-      setShowPie((prev) => (prev ? w >= HIDE_AT : w >= SHOW_AT));
+      setShowPie(prev => (prev ? w >= HIDE_AT : w >= SHOW_AT));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
+  // One-time migration: if per-wallet missing but legacy exists, migrate then delete legacy.
+  useEffect(() => {
+    try {
+      const key = chainTotalsKeyFor(walletsSig);
+      if (!localStorage.getItem(key)) {
+        const legacy = localStorage.getItem(LS_CHAIN_TOTALS_KEY);
+        if (legacy) {
+          localStorage.setItem(key, legacy);
+          try { localStorage.removeItem(LS_CHAIN_TOTALS_KEY); } catch { }
+          window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'migrated' }));
+        }
+      }
+    } catch { }
+  }, [walletsSig]);
+
+  // sticky totals + per-chain totals (storage listener + same-tab polling)
   useEffect(() => {
     const pullTotals = () => {
       try {
         setTotalUsd(Number(localStorage.getItem(LS_TOTAL_KEY) || 0) || 0);
         setPct24h(Number(localStorage.getItem(LS_PCT_KEY) || 0) || 0);
       } catch {
-        setTotalUsd(0);
-        setPct24h(0);
+        setTotalUsd(0); setPct24h(0);
       }
     };
-    const pullChains = () => setChainTotals(readPerChainTotals());
+    const pullChains = () => {
+      const next = readChainTotalsCache(walletsSig);
+      const changed =
+        next.updatedAt > (lastTsRef.current || 0) ||
+        next.eth !== eth || next.pulse !== pulse || next.base !== base;
+      if (changed) {
+        lastTsRef.current = next.updatedAt || Date.now();
+        setChainTotals({ eth: next.eth, pulse: next.pulse, base: next.base });
+      }
+    };
 
     pullTotals();
     pullChains();
 
     const onStorage = (e) => {
       if (e.key === LS_TOTAL_KEY || e.key === LS_PCT_KEY) pullTotals();
-      if (e.key === LS_CHAIN_TOTALS_KEY) pullChains();
+      if (e.key === chainTotalsKeyFor(walletsSig)) pullChains(); // per-wallet only
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+    const id = setInterval(pullChains, 4000); // same-tab refresh
+    return () => { window.removeEventListener('storage', onStorage); clearInterval(id); };
+  }, [eth, pulse, base, walletsSig]);
 
-  // ---------- aggregated staking value (HEX + eHEX) ----------
+  // staking: HEX + eHEX aggregation with fallbacks
   const stakingUsd = useMemo(() => {
     let sum = 0;
     const used = new Set();
-
-    // 1) canonical keys if present
-    if (HEX_STAKING_SOURCE) {
-      sum += toUsd(sources?.[HEX_STAKING_SOURCE]);
-      used.add(HEX_STAKING_SOURCE);
-    }
-    if (EHEX_STAKING_SOURCE) {
-      sum += toUsd(sources?.[EHEX_STAKING_SOURCE]);
-      used.add(EHEX_STAKING_SOURCE);
-    }
-
-    // 2) if nothing yet, discover any other staking-like keys
+    if (HEX_STAKING_SOURCE) { sum += toUsd(sources?.[HEX_STAKING_SOURCE]); used.add(HEX_STAKING_SOURCE); }
+    if (EHEX_STAKING_SOURCE) { sum += toUsd(sources?.[EHEX_STAKING_SOURCE]); used.add(EHEX_STAKING_SOURCE); }
     if (!sum && sources && typeof sources === 'object') {
       for (const [k, v] of Object.entries(sources)) {
         const kk = String(k || '').toLowerCase();
         if (used.has(k)) continue;
-        if (kk.includes('staking') || kk.includes('stake')) {
-          sum += toUsd(v);
-        }
+        if (kk.includes('staking') || kk.includes('stake')) sum += toUsd(v);
       }
     }
-
-    // 3) LS fallback (if a staking view wrote summaries)
     if (!sum) {
       try {
         const hexLS = JSON.parse(localStorage.getItem(LS_HEX_STAKE_SUMMARY) || 'null');
         const ehexLS = JSON.parse(localStorage.getItem(LS_EHEX_STAKE_SUMMARY) || 'null');
         sum = toUsd(hexLS) + toUsd(ehexLS);
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
-
     return sum || 0;
   }, [sources]);
 
-  // rows: pulse, eth, base + staking (descending)
+  // rows (sorted)
   const chainList = useMemo(() => {
     const entries = [
-      ['pulse', Number(chainTotals.pulse || 0)],
-      ['eth', Number(chainTotals.eth || 0)],
-      ['base', Number(chainTotals.base || 0)],
-      ['staking', stakingUsd]
+      ['pulse', num(pulse)],
+      ['eth', num(eth)],
+      ['base', num(base)],
+      ['staking', num(stakingUsd)]
     ].filter(([, v]) => v > 0);
-
     entries.sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((acc, [, v]) => acc + v, 0) || 0;
-
     return entries.map(([id, usd]) => ({ id, usd, pct: total ? (usd / total) * 100 : 0 }));
-  }, [chainTotals, stakingUsd]);
+  }, [pulse, eth, base, stakingUsd]);
 
-  // Keep the donut as chain allocation only (Pulse/Eth/Base)
+  // donut (chains only)
   const donutData = useMemo(
-    () =>
-      chainList
-        .filter(({ id }) => id === 'pulse' || id === 'eth' || id === 'base')
-        .map(({ id, usd }) => ({ id, valueUsd: usd })),
+    () => chainList.filter(({ id }) => id === 'pulse' || id === 'eth' || id === 'base')
+      .map(({ id, usd }) => ({ id, valueUsd: usd })),
     [chainList]
   );
 
-  // ---------- total display (prefer context; else sum of rows; else LS) ----------
+  // headline = max(context, rows sum), else sticky LS
   const displayTotalRaw = useMemo(() => {
-    const ctxTotal = Number(aggregatedTotal) || 0;
-    if (ctxTotal > 0) return ctxTotal;
-
-    // sum what we're showing in the rows (keeps top in-sync with chips)
-    const rowsSum =
-      Number(chainTotals.pulse || 0) +
-      Number(chainTotals.eth || 0) +
-      Number(chainTotals.base || 0) +
-      Number(stakingUsd || 0);
-
-    if (rowsSum > 0) return rowsSum;
-
-    // final fallback to sticky LS portfolio total
-    return Number(totalUsd) || 0;
-  }, [aggregatedTotal, chainTotals, stakingUsd, totalUsd]);
+    const ctx = num(aggregatedTotal);
+    const rows = num(pulse) + num(eth) + num(base) + num(stakingUsd);
+    if (ctx >= rows) return ctx;
+    if (rows > 0) return rows;
+    return num(totalUsd);
+  }, [aggregatedTotal, pulse, eth, base, stakingUsd, totalUsd]);
 
   const formattedTotal = useMemo(
-    () =>
-      (Number(displayTotalRaw) || 0).toLocaleString(undefined, {
-        maximumFractionDigits: 2,
-        minimumFractionDigits: 2
-      }),
+    () => (Number(displayTotalRaw) || 0).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }),
     [displayTotalRaw]
   );
 
-  const fmtUsd0 = (n) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(Number(n || 0));
+  const fmtUsd0 = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    .format(Number(n || 0));
 
   const up = Number(pct24h) >= 0;
 
@@ -226,20 +252,13 @@ export default function PortfolioValueCard() {
     <Card className="h-100">
       <Card.Body ref={bodyRef} className="d-flex align-items-stretch">
         {/* LEFT: numbers + per-asset rows */}
-        <div
-          style={{
-            minWidth: 336,
-            flex: '1 1 336px',
-            paddingRight: 36 // ← keep your gutter
-          }}
-        >
+        <div style={{ minWidth: 336, flex: '1 1 336px', paddingRight: 36 }}>
           <div className="text-muted mb-1">Total Portfolio Value</div>
           <div className="h3 mb-1">USD ${formattedTotal}</div>
           <div className={up ? 'text-success mb-3' : 'text-danger mb-3'}>
             {up ? '▲' : '▼'} {Math.abs(Number(pct24h) || 0).toFixed(2)}% (24h)
           </div>
 
-          {/* Right-aligned $ and %; balanced widths & spacing */}
           <div style={{ display: 'grid', gap: 8 }}>
             {chainList.map((row) => (
               <div
@@ -254,12 +273,8 @@ export default function PortfolioValueCard() {
               >
                 {row.id === 'staking' ? (
                   <>
-                    {/* pill sized like ChainBadge; colours overridable via props */}
                     <StakingChip />
-                    {/* same muted label colour as others */}
-                    <span style={{ opacity: 0.9 }}>
-                      Staking &amp; Mining
-                    </span>
+                    <span style={{ opacity: 0.9 }}>Staking &amp; Mining</span>
                   </>
                 ) : (
                   <>
@@ -269,10 +284,7 @@ export default function PortfolioValueCard() {
                     </span>
                   </>
                 )}
-
-                <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtUsd0(row.usd)}
-                </span>
+                <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd0(row.usd)}</span>
                 <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
                   {row.pct.toFixed(1)}%
                 </span>
@@ -281,25 +293,19 @@ export default function PortfolioValueCard() {
           </div>
         </div>
 
-        {/* RIGHT: donut — hidden only when the card is genuinely too narrow */}
+        {/* RIGHT: donut */}
         <div
           style={{
             flex: '0 0 auto',
             display: showPie ? 'flex' : 'none',
             alignItems: 'center',
             justifyContent: 'flex-end',
-            marginRight: -10, // keep your nudge
-            paddingLeft: 8,   // tidy gap
+            marginRight: -10,
+            paddingLeft: 8,
             overflow: 'visible'
           }}
         >
-          <KwChainAllocationPie
-            items={donutData}
-            size={188}
-            thickness={22}
-            showLegend={false}
-            showCenter={false}
-          />
+          <KwChainAllocationPie items={donutData} size={188} thickness={22} showLegend={false} showCenter={false} />
         </div>
       </Card.Body>
     </Card>

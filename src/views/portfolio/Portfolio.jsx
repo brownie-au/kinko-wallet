@@ -26,19 +26,38 @@ const LS_PCT_KEY = 'kw:lastChangePct24h';
 const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
 const TOPN_DASHBOARD = 6;
 
-// === per‑chain totals cache (used by Dashboard + here for instant chips) ===
+// === per-chain totals cache (used by Dashboard + here for instant chips) ===
+// NOTE: we now write/read under `${LS_CHAIN_TOTALS_KEY}:${walletsSig}` to avoid stale cross-wallet values.
 const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
 
 // ---- helpers: cache IO ----
 const now = () => Date.now();
-function readChainTotalsCache() {
+
+// Build the LS key with optional wallet signature
+const chainTotalsKeyFor = (sig) => (sig ? `${LS_CHAIN_TOTALS_KEY}:${sig}` : LS_CHAIN_TOTALS_KEY);
+
+// Read per-chain totals (tries wallet-specific key first, then legacy).
+function readChainTotalsCache(sig) {
   try {
-    const raw = localStorage.getItem(LS_CHAIN_TOTALS_KEY);
-    if (!raw) return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
-    const { totals = {}, updatedAt = 0 } = JSON.parse(raw);
-    return { eth: +totals.eth || 0, pulse: +totals.pulse || 0, base: +totals.base || 0, updatedAt: +updatedAt || 0 };
-  } catch { return { eth: 0, pulse: 0, base: 0, updatedAt: 0 }; }
+    const tryKeys = [chainTotalsKeyFor(sig), LS_CHAIN_TOTALS_KEY];
+    for (const key of tryKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const { totals = {}, updatedAt = 0 } = JSON.parse(raw);
+      return {
+        eth: +totals.eth || 0,
+        pulse: +totals.pulse || 0,
+        base: +totals.base || 0,
+        updatedAt: +updatedAt || 0
+      };
+    }
+    return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
+  } catch {
+    return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
+  }
 }
+
+// Legacy single-key writer (kept for compatibility in case something else imports it)
 function publishChainTotalsFromTokens(list = []) {
   try {
     const totals = { eth: 0, pulse: 0, base: 0 };
@@ -62,6 +81,47 @@ function publishChainTotalsFromTokens(list = []) {
     window.dispatchEvent(new StorageEvent('storage', { key: LS_CHAIN_TOTALS_KEY, newValue: 'updated' }));
   } catch { /* ignore */ }
 }
+
+// replace existing publishChainTotalsForWalletSig with this:
+function publishChainTotalsForWalletSig(list = [], sig) {
+  try {
+    if (!sig) return;
+
+    // EXACTLY match chip logic
+    const totals = { eth: 0, pulse: 0, base: 0 };
+    for (const t of list) {
+      if (isJunkToken(t)) continue;                          // ← filter junk/spam
+      const chain = String(t?.chain || '').toLowerCase();
+      const price = Number(t.priceUsd ?? t.price ?? 0);
+      const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
+      if (val <= 0) continue;
+
+      if (chain.startsWith('eth')) totals.eth += val;
+      else if (chain === 'pulse' || chain.startsWith('pls')) totals.pulse += val;
+      else if (chain.startsWith('base')) totals.base += val;
+    }
+
+    const out = {
+      updatedAt: Date.now(),
+      totals: {
+        // alias-safe: every reader will see the same number
+        eth: totals.eth,
+        ethereum: totals.eth,
+        pulse: totals.pulse,
+        pulsechain: totals.pulse,
+        pls: totals.pulse,
+        base: totals.base
+      }
+    };
+
+    const key = `${LS_CHAIN_TOTALS_KEY}:${sig}`;
+    localStorage.setItem(key, JSON.stringify(out));
+    try { localStorage.removeItem(LS_CHAIN_TOTALS_KEY); } catch { }
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'updated' }));
+  } catch { /* ignore */ }
+}
+
+
 
 function saveTotalsToLS(totalUsd, changePct24h = 0) {
   try {
@@ -401,7 +461,7 @@ export default function Portfolio() {
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
       maybeExpandFromFocus(memHit.tokens);
-      if (mode === 'all') publishChainTotalsFromTokens(memHit.tokens);
+      if (mode === 'all') publishChainTotalsForWalletSig(memHit.tokens, walletsSig);
       setBooting(false);
       setRefreshing(false);
       return;
@@ -414,7 +474,7 @@ export default function Portfolio() {
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
       maybeExpandFromFocus(ls.tokens);
-      if (mode === 'all') publishChainTotalsFromTokens(ls.tokens);
+      if (mode === 'all') publishChainTotalsForWalletSig(ls.tokens, walletsSig);
       setBooting(false);
       setRefreshing(false);
       memCacheRef.current.set(memKey, { ...ls });
@@ -442,7 +502,7 @@ export default function Portfolio() {
       persistTotal(st);
       setTokens(stale.tokens || []);
       setBreakdown(new Map(stale.breakdown || []));
-      if (mode === 'all') publishChainTotalsFromTokens(stale.tokens || []);
+      if (mode === 'all') publishChainTotalsForWalletSig(stale.tokens || [], walletsSig);
       setBooting(false);
       setRefreshing(true);
     } else {
@@ -471,7 +531,7 @@ export default function Portfolio() {
       writeCache(mode, walletsSig, payload);
       saveTotalsToLS(totalUsd, 0);
 
-      if (mode === 'all') publishChainTotalsFromTokens(tokensWithValue);
+      if (mode === 'all') publishChainTotalsForWalletSig(tokensWithValue, walletsSig);
 
       if (mode === 'all') {
         try {
@@ -526,7 +586,7 @@ export default function Portfolio() {
   }, [tokens]);
 
   // ====== choose totals to show in chips immediately (cache-first) ======
-  const cached = readChainTotalsCache();
+  const cached = readChainTotalsCache(walletsSig);
   const effectiveTotals = useMemo(() => {
     // If fresh build hasn't populated tokens yet, fall back to cached totals so chips render instantly.
     const computed = chainTotalsFromTokens;

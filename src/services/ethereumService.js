@@ -31,7 +31,7 @@ const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
 const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0); // e.g. 0.01
 const ENV_BLOCKLIST = new Set(
   (import.meta.env.VITE_ETH_BLOCKLIST || '')
-    .split(',') 
+    .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
 );
@@ -50,7 +50,52 @@ const toBN = (hex) => {
   const s = String(hex);
   return s.startsWith('0x') ? BigInt(s) : BigInt(`0x${s}`);
 };
-const weiToEth = (weiBig) => Number(weiBig) / 1e18;
+
+// PRECISION-SAFE BigInt → decimal helpers (avoid float overflow/rounding)
+const POW10N = (d) => 10n ** BigInt(d);
+
+/** Convert a bigint integer representing base-10^decimals units to a JS Number safely. */
+function bigIntToDecimal(bi, decimals) {
+  try {
+    const base = POW10N(decimals);
+    const whole = bi / base;
+    const frac = bi % base;
+
+    // keep up to 9 fractional digits to limit FP error
+    const keep = Math.min(9, Math.max(0, decimals));
+    const scale = POW10N(decimals - keep);
+    const fracScaled = Number(frac / scale); // now fits into Number safely
+    return Number(whole) + fracScaled / 10 ** keep;
+  } catch {
+    return 0;
+  }
+}
+
+/** Accepts bigint | decimal string | number and converts using decimals. */
+function toDecimal(raw, decimals = 18) {
+  try {
+    if (raw == null) return 0;
+    if (typeof raw === 'bigint') return bigIntToDecimal(raw, decimals);
+    const s = String(raw);
+    if (/^\d+$/.test(s)) return bigIntToDecimal(BigInt(s), decimals);
+    // last resort
+    const n = Number(raw);
+    return Number.isFinite(n) ? (decimals ? n / 10 ** decimals : n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ETH wei → ETH using precision-safe conversion
+const weiToEth = (weiBig) => {
+  try {
+    const w = typeof weiBig === 'bigint' ? weiBig : BigInt(weiBig ?? 0);
+    return bigIntToDecimal(w, 18);
+  } catch {
+    return 0;
+  }
+};
+
 const toNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 // Encode ERC-20 calls
@@ -77,12 +122,12 @@ function tryDecodeString(hex) {
       const bytes = strHex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [];
       return new TextDecoder().decode(new Uint8Array(bytes)).replace(/\u0000/g, '').trim();
     }
-  } catch {}
+  } catch { }
   try {
     const bytes = hex.replace(/^0x/, '').slice(0, 64);
     const buf = bytes.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [];
     return new TextDecoder().decode(new Uint8Array(buf)).replace(/\u0000/g, '').trim();
-  } catch {}
+  } catch { }
   return '';
 }
 
@@ -219,7 +264,7 @@ async function ethCall(to, data) {
 async function fetchNativeETH(address) {
   try {
     const hex = await rpc('eth_getBalance', [address, 'latest']);
-    const eth = weiToEth(toBN(hex));
+    const eth = weiToEth(toBN(hex)); // precision-safe
     return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
   } catch (e) {
     console.error('[ETH] eth_getBalance failed:', e?.message || e);
@@ -242,10 +287,7 @@ async function fetchERC20sFromQuickNode(address) {
             symbol: t?.symbol,
             name: t?.name,
             decimals: Number(t?.decimals ?? 18),
-            balance:
-              t?.decimals != null
-                ? Number(t?.balance ?? 0) / 10 ** Number(t.decimals)
-                : Number(t?.balance ?? 0)
+            balance: toDecimal(t?.balance ?? 0, Number(t?.decimals ?? 18))
           })
         );
       }
@@ -261,10 +303,7 @@ async function fetchERC20sFromQuickNode(address) {
             symbol: t?.symbol,
             name: t?.name,
             decimals: Number(t?.decimals ?? 18),
-            balance:
-              t?.decimals != null
-                ? Number(t?.balance ?? 0) / 10 ** Number(t.decimals)
-                : Number(t?.balance ?? 0)
+            balance: toDecimal(t?.balance ?? 0, Number(t?.decimals ?? 18))
           })
         );
       }
@@ -282,10 +321,7 @@ async function fetchERC20sFromQuickNode(address) {
               symbol: t?.symbol || '',
               name: t?.name || '',
               decimals: Number(t?.decimals ?? 18),
-              balance:
-                t?.tokenBalance != null && t?.decimals != null
-                  ? Number(BigInt(t.tokenBalance)) / 10 ** Number(t.decimals)
-                  : 0
+              balance: toDecimal(t?.tokenBalance ?? 0, Number(t?.decimals ?? 18))
             })
           );
       }
@@ -317,14 +353,12 @@ async function fetchERC20sFromMoralis(address) {
     return (data || [])
       .map((t) => {
         const dec = Number(t?.decimals ?? 18);
-        const raw = Number(t?.balance ?? 0);
-        const bal = dec ? raw / 10 ** dec : raw;
         return row({
           address: t?.token_address,
           symbol: t?.symbol,
           name: t?.name,
           decimals: dec,
-          balance: bal
+          balance: toDecimal(t?.balance ?? 0, dec)
         });
       })
       .filter((t) => t.balance > 0);
@@ -372,7 +406,7 @@ async function fetchERC20sFromEtherscan(address) {
           const symbol = tryDecodeString(symHex) || '';
           const name = tryDecodeString(nameHex) || '';
           const balRaw = toBN(balHex);
-          const balance = decimals ? Number(balRaw) / 10 ** decimals : Number(balRaw);
+          const balance = toDecimal(balRaw, decimals);
 
           if (balance > 0) {
             out.push(row({ address: ca, symbol, name, decimals, balance }));
@@ -400,14 +434,12 @@ async function fetchERC20sFromEthplorer(address) {
       .map((t) => {
         const info = t?.tokenInfo || {};
         const dec = Number(info?.decimals ?? 18);
-        const raw = Number(t?.balance ?? 0);
-        const bal = dec ? raw / 10 ** dec : raw;
         return row({
           address: info?.address,
           symbol: info?.symbol,
           name: info?.name,
           decimals: dec,
-          balance: bal
+          balance: toDecimal(t?.balance ?? 0, dec)
         });
       })
       .filter((t) => t.balance > 0);
@@ -427,8 +459,8 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     const cachedArr = Array.isArray(cachedRaw)
       ? cachedRaw
       : Array.isArray(cachedRaw?.tokens)
-      ? cachedRaw.tokens
-      : null;
+        ? cachedRaw.tokens
+        : null;
 
     if (cachedArr) {
       const fixed = applyKnownTokenFixes(cachedArr.slice());
