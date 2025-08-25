@@ -17,11 +17,13 @@ import { getEthTokenPricesLlama, getEthUsdPriceLlama } from './priceService';
 // ----- toggles -----
 const USE_ETH_PRICE_BACKFILL = false; // we use DefiLlama now
 
-// Visibility threshold (USD). Default 0.01 if not set.
+// Visibility threshold (USD).
+// Requirement: only the Value (USD) column determines visibility.
+// Default 0.02 if not set.
 const HIDE_USD_MIN = Number(
   import.meta.env.VITE_PORTFOLIO_HIDE_USD_MIN ??
   import.meta.env.VITE_HIDE_USD_MIN ??
-  0.01
+  0.02
 );
 
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
@@ -269,18 +271,16 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     breakdown.get(k).sort((a, b) => (b.amount || 0) - (a.amount || 0));
   }
 
-  // Build token list, then apply visibility filter
+  // Build token list
   const tokensAll = [...byKey.values()]
     .map((t) => ({ ...t, valueUsd: t.valueUsd || (t.amount || 0) * (t.priceUsd || 0) }))
     .sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
 
-  // Show tokens if they have either:
-  // - valueUsd >= threshold, OR
-  // - a non-zero amount (even if price is 0)
+  // ✅ Visibility filter: ONLY the Value (USD) column controls visibility.
+  // Hide tokens whose aggregated valueUsd is below the threshold.
   const tokens = tokensAll.filter((t) => {
     const v = Number(t.valueUsd) || 0;
-    const a = Number(t.amount) || 0;
-    return v >= HIDE_USD_MIN || a > 0;
+    return v >= HIDE_USD_MIN;
   });
 
   // Prune breakdown to only visible tokens

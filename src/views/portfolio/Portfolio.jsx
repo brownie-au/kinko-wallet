@@ -121,8 +121,6 @@ function publishChainTotalsForWalletSig(list = [], sig) {
   } catch { /* ignore */ }
 }
 
-
-
 function saveTotalsToLS(totalUsd, changePct24h = 0) {
   try {
     localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
@@ -302,6 +300,32 @@ const Styles = () => (
       outline-offset: 2px;
     }
 
+    /* --- copy icon button + toast --- */
+    .kw-copy-btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:22px; height:22px; margin-left:8px;
+      border-radius:8px; cursor:pointer;
+      border:1px solid var(--bs-border-color);
+      background: var(--bs-secondary-bg);
+      opacity:.85; transition: opacity .15s ease, background-color .15s ease, transform .06s ease;
+    }
+    .kw-copy-btn:hover{ opacity:1; background: color-mix(in srgb, var(--bs-secondary-bg) 85%, #fff 15%); }
+    .kw-copy-btn:active{ transform: translateY(1px); }
+    [data-pc-theme='dark'] .kw-copy-btn{ background:#2b2f36; border-color:#3e4451; }
+    .kw-copy-btn svg{ width:16px; height:16px; }
+
+    .kw-toast{
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: rgba(0,0,0,.85); color:#fff;
+      padding:10px 14px; border-radius:10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      font-size:14px; pointer-events:none;
+      opacity:0; transition: opacity .25s ease, transform .25s ease;
+      z-index: 9999;
+    }
+    .kw-toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
     @media (max-width: 768px){
       .kwp-scope{
         --kw-price: 120px;
@@ -313,6 +337,24 @@ const Styles = () => (
     }
   `}</style>
 );
+
+// Small copy icon (overlapping squares)
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect
+        x="9" y="9" width="12" height="12" rx="2" ry="2"
+        fill="none" stroke="currentColor" strokeWidth="2"
+      />
+      <path
+        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function LoadingBlock({ label = 'Loading…' }) {
   return (
     <div className="kinko-loading-cell mb-2">
@@ -408,6 +450,16 @@ export default function Portfolio() {
   const [q, setQ] = useState('');
 
   const memCacheRef = useRef(new Map());
+
+  // toast state for copy feedback
+  const [toast, setToast] = useState({ show: false, text: '' });
+  const toastTimerRef = useRef(null);
+  const showToast = (text) => {
+    setToast({ show: true, text });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast({ show: false, text: '' }), 2000);
+  };
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   const walletCount = wallets.length;
 
@@ -637,6 +689,29 @@ export default function Portfolio() {
     setExpanded(next);
   };
 
+  // copy contract handler (only used on mode === 'all')
+  const copyContract = async (addr) => {
+    if (!addr) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(addr);
+      } else {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = addr;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showToast('Contract copied to clipboard');
+    } catch {
+      showToast('Copy failed');
+    }
+  };
+
   const lastUpdatedLabel = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '—';
@@ -754,6 +829,9 @@ export default function Portfolio() {
                 const logoChainId = chainIdOf(t.chain);
                 const logoAddr = (t.address || t.contract || '') || null;
 
+                // address we can copy (only if exists)
+                const copyAddr = (t.address || t.contract || '').trim();
+
                 return (
                   <div key={`${k}:${i}`} className="kwp-row">
                     <div className="d-flex align-items-center justify-content-between">
@@ -771,8 +849,20 @@ export default function Portfolio() {
                               {t.name || (t.address ? `${t.address.slice(0, 6)}…${t.address.slice(-4)}` : 'Native')}
                             </span>
                           </div>
-                          <div className="kwp-sub">
+                          <div className="kwp-sub d-flex align-items-center">
                             {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
+                            {/* Copy icon ONLY on View All + when token has a contract address */}
+                            {mode === 'all' && !!copyAddr && (
+                              <button
+                                type="button"
+                                className="kw-copy-btn"
+                                title="Copy contract to clipboard"
+                                onClick={() => copyContract(copyAddr)}
+                                aria-label="Copy contract"
+                              >
+                                <CopyIcon />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -831,6 +921,9 @@ export default function Portfolio() {
           </Card>
         </Col>
       </Row>
+
+      {/* toast */}
+      <div className={`kw-toast ${toast.show ? 'show' : ''}`}>{toast.text}</div>
     </>
   );
 }
