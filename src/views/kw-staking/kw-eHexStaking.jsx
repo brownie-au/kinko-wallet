@@ -9,7 +9,7 @@ import {
     refreshEhexStakesAndCache
 } from '../../services/kw-ehexStakingService';
 
-import { usePortfolioValue, HEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+import { usePortfolioValue, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
 import KwEHexStakingHeaderContainer from '../../components/kw-EHexStakingHeaderContainer.jsx';
 import WalletFilterChips from '../../components/WalletFilterChips.jsx';
 import '../../styles/kw-hex-staking-header.css';
@@ -211,7 +211,7 @@ function buildAestTenAmUTC(y, m, d) { return new Date(Date.UTC(y, m - 1, d, 0, 0
 function dateForHexDay(dayNumber, currentHexDay, now = new Date()) {
     if (!Number(dayNumber) || !Number(currentHexDay)) return null;
     const { y, m, d } = getBrisbaneYMD(now);
-    const base = buildAestTenAmUTC(y, m, d);
+    const base = buildAestTenAmUTC(y, m - 1, d); // keep consistent with other pages
     const deltaDays = Number(dayNumber) - Number(currentHexDay);
     return new Date(base.getTime() + deltaDays * 86400000);
 }
@@ -691,7 +691,7 @@ export default function KwEhexStaking({ config }) {
 
     /* Publish page total (only eHEX stakes here) */
     const { setSource } = usePortfolioValue();
-    const hexStakingUsdTotal = useMemo(() => {
+    const ehexStakingUsdTotal = useMemo(() => {
         const price = Number(hexPriceUsd) || 0; if (!price) return 0;
         return (rows || []).reduce((acc, r) => {
             const y = Number(yieldMap[r.id]?.yieldHex || 0);
@@ -699,7 +699,11 @@ export default function KwEhexStaking({ config }) {
             return acc + totalHex * price;
         }, 0);
     }, [rows, yieldMap, hexPriceUsd]);
-    useEffect(() => { setSource(HEX_STAKING_SOURCE, Number(hexStakingUsdTotal) || 0); }, [hexStakingUsdTotal, setSource]);
+
+    // ✅ publish to the correct global key so HEX + eHEX can coexist
+    useEffect(() => {
+        setSource(EHEX_STAKING_SOURCE, Number(ehexStakingUsdTotal) || 0);
+    }, [ehexStakingUsdTotal, setSource]);
 
     const unit = cfg.unit || 'eHEX';
 

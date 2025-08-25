@@ -4,12 +4,24 @@ import { Card } from 'react-bootstrap';
 
 import KwChainAllocationPie from '../../../components/kw-ChainAllocationPie';
 import { ChainBadge } from '../../../components/ChainUI';
-import { usePortfolioValue } from '../../../contexts/PortfolioValueContext.jsx';
+import {
+  usePortfolioValue,
+  HEX_STAKING_SOURCE,
+  EHEX_STAKING_SOURCE
+} from '../../../contexts/PortfolioValueContext.jsx';
 
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
 const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
 
+// optional LS fallbacks some staking views may write
+const LS_HEX_STAKE_SUMMARY = 'kw:staking:hex:summary';
+const LS_EHEX_STAKE_SUMMARY = 'kw:staking:ehex:summary';
+
+// orange/yellow accent for staking chip
+const STAKING_COLOUR = '#F5A200';
+
+// read cached per-chain totals used by this tile
 function readPerChainTotals() {
   try {
     const raw = localStorage.getItem(LS_CHAIN_TOTALS_KEY);
@@ -21,12 +33,50 @@ function readPerChainTotals() {
   }
 }
 
+// robust numeric extraction from number/string/object
+function toUsd(value) {
+  if (value == null) return 0;
+
+  // direct numeric or numeric string
+  const n = Number(value);
+  if (Number.isFinite(n)) return n;
+
+  // object shapes we’ve seen: { usd }, { totalUsd }, { total }, { value }
+  if (typeof value === 'object') {
+    const candidates = [value.usd, value.totalUsd, value.total, value.value, value.amountUsd];
+    for (const c of candidates) {
+      const m = Number(c);
+      if (Number.isFinite(m)) return m;
+    }
+  }
+  return 0;
+}
+
+// Chip sized & styled to match ChainBadge pills; colour overridable
+function StakingChip({ bgColor = STAKING_COLOUR, fgColor = '#fff', label = 'STAKES' }) {
+  return (
+    <span
+      className="badge rounded-pill"
+      style={{
+        backgroundColor: bgColor,
+        color: fgColor,
+        // keep sizing consistent with other ChainBadge pills
+        padding: '4px 8.2px',
+        fontSize: 11,
+        lineHeight: 1
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function PortfolioValueCard() {
-  const [totalUsd, setTotalUsd] = useState(0);   // LS fallback for Portfolio page total
+  const [totalUsd, setTotalUsd] = useState(0); // LS fallback for Portfolio page total
   const [pct24h, setPct24h] = useState(0);
   const [chainTotals, setChainTotals] = useState({});
 
-  // Read aggregated sources from global context
+  // aggregated sources from global context
   const { total: aggregatedTotal, sources } = usePortfolioValue();
 
   // --- width-driven show/hide for the pie (keeps your layout) ---
@@ -72,22 +122,87 @@ export default function PortfolioValueCard() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // ---------- KEY FIX ----------
-  // Sum all context sources AND add LS portfolio fallback if portfolio isn't in context yet.
+  // ---------- aggregated staking value (HEX + eHEX) ----------
+  const stakingUsd = useMemo(() => {
+    let sum = 0;
+    const used = new Set();
+
+    // 1) canonical keys if present
+    if (HEX_STAKING_SOURCE) {
+      sum += toUsd(sources?.[HEX_STAKING_SOURCE]);
+      used.add(HEX_STAKING_SOURCE);
+    }
+    if (EHEX_STAKING_SOURCE) {
+      sum += toUsd(sources?.[EHEX_STAKING_SOURCE]);
+      used.add(EHEX_STAKING_SOURCE);
+    }
+
+    // 2) if nothing yet, discover any other staking-like keys
+    if (!sum && sources && typeof sources === 'object') {
+      for (const [k, v] of Object.entries(sources)) {
+        const kk = String(k || '').toLowerCase();
+        if (used.has(k)) continue;
+        if (kk.includes('staking') || kk.includes('stake')) {
+          sum += toUsd(v);
+        }
+      }
+    }
+
+    // 3) LS fallback (if a staking view wrote summaries)
+    if (!sum) {
+      try {
+        const hexLS = JSON.parse(localStorage.getItem(LS_HEX_STAKE_SUMMARY) || 'null');
+        const ehexLS = JSON.parse(localStorage.getItem(LS_EHEX_STAKE_SUMMARY) || 'null');
+        sum = toUsd(hexLS) + toUsd(ehexLS);
+      } catch {
+        // ignore
+      }
+    }
+
+    return sum || 0;
+  }, [sources]);
+
+  // rows: pulse, eth, base + staking (descending)
+  const chainList = useMemo(() => {
+    const entries = [
+      ['pulse', Number(chainTotals.pulse || 0)],
+      ['eth', Number(chainTotals.eth || 0)],
+      ['base', Number(chainTotals.base || 0)],
+      ['staking', stakingUsd]
+    ].filter(([, v]) => v > 0);
+
+    entries.sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((acc, [, v]) => acc + v, 0) || 0;
+
+    return entries.map(([id, usd]) => ({ id, usd, pct: total ? (usd / total) * 100 : 0 }));
+  }, [chainTotals, stakingUsd]);
+
+  // Keep the donut as chain allocation only (Pulse/Eth/Base)
+  const donutData = useMemo(
+    () =>
+      chainList
+        .filter(({ id }) => id === 'pulse' || id === 'eth' || id === 'base')
+        .map(({ id, usd }) => ({ id, valueUsd: usd })),
+    [chainList]
+  );
+
+  // ---------- total display (prefer context; else sum of rows; else LS) ----------
   const displayTotalRaw = useMemo(() => {
     const ctxTotal = Number(aggregatedTotal) || 0;
-    const lsPortfolio = Number(totalUsd) || 0;
-    const hasSources = sources && Object.keys(sources).length > 0;
-    const hasPortfolioSource = !!(sources && Object.prototype.hasOwnProperty.call(sources, 'portfolio'));
+    if (ctxTotal > 0) return ctxTotal;
 
-    if (!hasSources) {
-      // No context yet → show LS portfolio (what we used to show before context)
-      return lsPortfolio;
-    }
-    // Context present → add LS portfolio only if portfolio isn't registered yet
-    return ctxTotal + (hasPortfolioSource ? 0 : lsPortfolio);
-  }, [aggregatedTotal, totalUsd, sources]);
-  // --------------------------------
+    // sum what we're showing in the rows (keeps top in-sync with chips)
+    const rowsSum =
+      Number(chainTotals.pulse || 0) +
+      Number(chainTotals.eth || 0) +
+      Number(chainTotals.base || 0) +
+      Number(stakingUsd || 0);
+
+    if (rowsSum > 0) return rowsSum;
+
+    // final fallback to sticky LS portfolio total
+    return Number(totalUsd) || 0;
+  }, [aggregatedTotal, chainTotals, stakingUsd, totalUsd]);
 
   const formattedTotal = useMemo(
     () =>
@@ -97,20 +212,6 @@ export default function PortfolioValueCard() {
       }),
     [displayTotalRaw]
   );
-
-  // rows: pulse, eth, base (descending)
-  const chainList = useMemo(() => {
-    const entries = [
-      ['pulse', Number(chainTotals.pulse || 0)],
-      ['eth', Number(chainTotals.eth || 0)],
-      ['base', Number(chainTotals.base || 0)]
-    ].filter(([, v]) => v > 0);
-    entries.sort((a, b) => b[1] - a[1]);
-    const total = entries.reduce((acc, [, v]) => acc + v, 0) || 0;
-    return entries.map(([id, usd]) => ({ id, usd, pct: total ? (usd / total) * 100 : 0 }));
-  }, [chainTotals]);
-
-  const donutData = useMemo(() => chainList.map(({ id, usd }) => ({ id, valueUsd: usd })), [chainList]);
 
   const fmtUsd0 = (n) =>
     new Intl.NumberFormat('en-US', {
@@ -124,7 +225,7 @@ export default function PortfolioValueCard() {
   return (
     <Card className="h-100">
       <Card.Body ref={bodyRef} className="d-flex align-items-stretch">
-        {/* LEFT: numbers + per-chain rows */}
+        {/* LEFT: numbers + per-asset rows */}
         <div
           style={{
             minWidth: 336,
@@ -151,10 +252,24 @@ export default function PortfolioValueCard() {
                   fontSize: 13
                 }}
               >
-                <ChainBadge chain={row.id} />
-                <span style={{ opacity: 0.9 }}>
-                  {row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : 'Base'}
-                </span>
+                {row.id === 'staking' ? (
+                  <>
+                    {/* pill sized like ChainBadge; colours overridable via props */}
+                    <StakingChip />
+                    {/* same muted label colour as others */}
+                    <span style={{ opacity: 0.9 }}>
+                      Staking &amp; Mining
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <ChainBadge chain={row.id} />
+                    <span style={{ opacity: 0.9 }}>
+                      {row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : 'Base'}
+                    </span>
+                  </>
+                )}
+
                 <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {fmtUsd0(row.usd)}
                 </span>
@@ -174,11 +289,17 @@ export default function PortfolioValueCard() {
             alignItems: 'center',
             justifyContent: 'flex-end',
             marginRight: -10, // keep your nudge
-            paddingLeft: 8, // keep your tidy gap
+            paddingLeft: 8,   // tidy gap
             overflow: 'visible'
           }}
         >
-          <KwChainAllocationPie items={donutData} size={188} thickness={22} showLegend={false} showCenter={false} />
+          <KwChainAllocationPie
+            items={donutData}
+            size={188}
+            thickness={22}
+            showLegend={false}
+            showCenter={false}
+          />
         </div>
       </Card.Body>
     </Card>

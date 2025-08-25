@@ -4,11 +4,13 @@ import PropTypes from 'prop-types';
 
 // Brand base colours (hex for reliable HSL math)
 const CHAIN_COLOURS = {
-    pulse: '#8E44AD',   // PulseChain (purple)
-    eth: '#16C784',   // Ethereum (green)
-    base: '#0A5BFF',   // Base (blue)
+    pulse: '#8E44AD', // Pulsechain purple
+    eth: '#16C784', // ETH green
+    base: '#0A5BFF', // Base blue
+    staking: '#F5A200', // orange/yellow for staking & mining
     other: '#7a8899'
 };
+
 
 // --- tiny color helpers (hex <-> hsl) ---
 function hexToHsl(hex) {

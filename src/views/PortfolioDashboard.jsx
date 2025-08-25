@@ -1,21 +1,28 @@
 // src/views/PortfolioDashboard.jsx
 /* eslint-disable import/no-relative-parent-imports */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Row, Col, Card } from 'react-bootstrap';
 
 import wallets from '../data/wallets.js';
 import { getWalletCache } from '../utils/walletCache';
 
+// read staking totals from global context (cache-first via provider)
+import { usePortfolioValue } from '../contexts/PortfolioValueContext.jsx';
+
 // optional: render the big portfolio line chart in the middle
 import PortfolioBalanceChart from '../sections/dashboard/crypto/default/PortfolioBalanceChart.jsx';
 
-// ---------- formats ----------
+/* ---------- formats ---------- */
 const fmtUsd = (n) =>
   `USD $${(Number(n) || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
 
+// colour to match the requested orange/yellow accent
+const STAKING_COLOUR = '#F5A200';
+
+/* ---------- helpers ---------- */
 // helper to read sticky total (what View All writes)
 function getStickyTotal() {
   try {
@@ -57,6 +64,21 @@ export default function PortfolioDashboard() {
     return sticky > 0 ? sticky : getCachedPortfolioUsd();
   });
 
+  // pull staking totals from context (cache-first; updates when staking pages refresh)
+  const { sources } = usePortfolioValue();
+
+  const stakingUsd = useMemo(() => {
+    if (!sources || typeof sources !== 'object') return 0;
+    let sum = 0;
+    for (const [k, v] of Object.entries(sources)) {
+      if (k.startsWith('staking:')) {
+        const val = Number(v?.usd ?? v?.total ?? v ?? 0);
+        if (Number.isFinite(val)) sum += val;
+      }
+    }
+    return sum;
+  }, [sources]);
+
   useEffect(() => {
     // watch for localStorage updates from View All
     const tick = () => {
@@ -86,6 +108,31 @@ export default function PortfolioDashboard() {
             <div className="text-muted mb-1">Total Portfolio Value</div>
             <div className="fs-4 fw-semibold" data-scrub="true">{fmtUsd(total)}</div>
             <div className="text-success small mt-1" data-scrub="true">▲ 0.00% (24h)</div>
+
+            {/* --- Staking & Mining summary (HEX + eHEX) --- */}
+            <div
+              className="small mt-2 d-flex align-items-center"
+              title="Aggregated value of all staking sources (HEX + eHEX)"
+              style={{ gap: 8 }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: STAKING_COLOUR,
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.08) inset',
+                  display: 'inline-block'
+                }}
+              />
+              <span style={{ color: STAKING_COLOUR, fontWeight: 600 }}>
+                Staking &amp; Mining:
+              </span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {fmtUsd(stakingUsd)}
+              </span>
+            </div>
           </Card.Body>
         </Card>
       </Col>
