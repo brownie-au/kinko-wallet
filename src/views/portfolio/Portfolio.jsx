@@ -539,7 +539,12 @@ export default function Portfolio() {
             .map((t) => ({
               symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
               address: t.address || t.contract || '', logo: t.logo || t.icon || '',
-              valueUsd: Number(t.valueUsd) || 0, change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
+              valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
+ priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
+                 Number(t.amount ?? t.balance) > 0
+                     ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
+                   : 0
+               ), change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
         } catch { }
@@ -594,7 +599,12 @@ export default function Portfolio() {
             .map((t) => ({
               symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
               address: t.address || t.contract || '', logo: t.logo || t.icon || '',
-              valueUsd: Number(t.valueUsd) || 0, change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
+              valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
+ priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
+                 Number(t.amount ?? t.balance) > 0
+                     ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
+                   : 0
+               ), change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
         } catch { }
