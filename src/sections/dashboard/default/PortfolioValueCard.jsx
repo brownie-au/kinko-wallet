@@ -222,12 +222,17 @@ export default function PortfolioValueCard() {
     return entries.map(([id, usd]) => ({ id, usd, pct: total ? (usd / total) * 100 : 0 }));
   }, [pulse, eth, base, stakingUsd]);
 
-  // donut (chains only)
-  const donutData = useMemo(
-    () => chainList.filter(({ id }) => id === 'pulse' || id === 'eth' || id === 'base')
-      .map(({ id, usd }) => ({ id, valueUsd: usd })),
+  // donut (chains + staking)
+    const donutData = useMemo(
+        () =>
+        chainList.map(({ id, usd }) => {
+            if (id === 'staking') {
+                return { id, valueUsd: usd, color: STAKING_COLOUR };
+              }
+            return { id, valueUsd: usd };
+          }),
     [chainList]
-  );
+      );
 
   // headline = max(context, rows sum), else sticky LS
   const displayTotalRaw = useMemo(() => {
