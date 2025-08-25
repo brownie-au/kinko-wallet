@@ -81,6 +81,24 @@ const fmtAmt = (n, p = 6) => {
       ? x.toLocaleString(undefined, { maximumFractionDigits: 4 })
       : x.toPrecision(p);
 };
+
+// NEW: smart precision for token prices (keeps big prices tidy)
+const fmtPriceUSD = (n) => {
+  const p = Number(n) || 0;
+  let d;
+  if (p >= 0.5) d = 2;        // normal assets
+  else if (p >= 0.1) d = 4;   // 0.10 - 0.4999
+  else if (p >= 0.01) d = 5;  // 0.01 - 0.09999 (e.g., HEX)
+  else if (p >= 0.001) d = 6; // 0.001 - 0.009999
+  else if (p >= 0.0001) d = 7;// 0.0001 - 0.0009999 (PLSD/PLSX)
+  else d = 8;                 // ultra small
+  const s = p.toLocaleString(undefined, {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d
+  });
+  return `USD $${s}`;
+};
+
 const keyFor = (t) =>
   `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
@@ -687,7 +705,7 @@ export default function Portfolio() {
                       <div className="kwp-cols">
                         <div className="kwp-col kwp-price">
                           <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
-                          <div>{fmtUSD(price)}</div>
+                          <div>{fmtPriceUSD(price)}</div>
                           {delta != null && (
                             <div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>
                           )}

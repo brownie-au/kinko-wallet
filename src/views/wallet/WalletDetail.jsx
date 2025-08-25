@@ -15,6 +15,9 @@ import { ChainSelector, ChainChip } from '../../components/ChainUI';
 // use the same logo component as the portfolio page
 import TokenLogo from '../../components/TokenLogo';
 
+// ✅ smart low‑price formatter (shared)
+import { fmtPriceUSD } from '../../utils/priceFormat';
+
 import wallets from '../../data/wallets.js';
 import {
   setWalletCache,
@@ -780,7 +783,7 @@ export default function WalletDetail() {
                             </div>
                           </td>
 
-                          <td className="text-end">{fmtUSD(price)}</td>
+                          <td className="text-end">{fmtPriceUSD(price)}</td>
                           <td className="text-end">{fmtNum(amount)}</td>
                           <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
                           <td>
