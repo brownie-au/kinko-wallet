@@ -7,6 +7,12 @@ import { useWallets } from '../../contexts/WalletContext';
 import walletsStatic from '../../data/wallets.js';
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 
+// NEW: 24h change service (batch via DexScreener for contract tokens)
+import { fetchChange24hFromDexScreener, tokenKey as changeKey } from '../../services/change24hService';
+
+// NEW: 24h change for native coins (ETH, PLS, etc.)
+import { fetchNativeChange24h, tokenKey as nativeKey } from '../../services/change24hNativeService';
+
 // shared chain UI (chips + small chain badge)
 import { ChainSelector, ChainBadge } from '../../components/ChainUI';
 import TokenLogo from '../../components/TokenLogo';
@@ -540,11 +546,12 @@ export default function Portfolio() {
               symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
               address: t.address || t.contract || '', logo: t.logo || t.icon || '',
               valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
- priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
-                 Number(t.amount ?? t.balance) > 0
-                     ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
-                   : 0
-               ), change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
+              priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
+                Number(t.amount ?? t.balance) > 0
+                  ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
+                  : 0
+              ),
+              change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
         } catch { }
@@ -572,12 +579,32 @@ export default function Portfolio() {
       setTotalUsd(totalUsd);
       persistTotal(totalUsd);
 
-      const tokensWithValue = (tokens || []).map((t) => {
+      // Compute value for each token
+      let tokensWithValue = (tokens || []).map((t) => {
         const price = Number(t.priceUsd ?? t.price ?? 0);
         const amount = Number(t.amount ?? 0);
         const valueUsd = Number(t.valueUsd ?? (t.usd ?? (amount * price)));
         return { ...t, valueUsd };
       });
+
+      // 1) Attach 24h % change for contract tokens (DexScreener)
+      try {
+        const changeMap = await fetchChange24hFromDexScreener(tokensWithValue);
+        tokensWithValue = tokensWithValue.map((t) => {
+          const pct = changeMap.get(changeKey(t));
+          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
+        });
+      } catch { /* non-fatal, skip if fetch fails */ }
+
+      // 2) Attach 24h % change for native coins (ETH, PLS, etc.)
+      try {
+        const nativeMap = await fetchNativeChange24h(tokensWithValue);
+        tokensWithValue = tokensWithValue.map((t) => {
+          if (t.address || t.contract) return t; // contract tokens handled above
+          const pct = nativeMap.get(nativeKey(t));
+          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
+        });
+      } catch { /* non-fatal */ }
 
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
@@ -600,11 +627,14 @@ export default function Portfolio() {
               symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
               address: t.address || t.contract || '', logo: t.logo || t.icon || '',
               valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
- priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
-                 Number(t.amount ?? t.balance) > 0
-                     ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
-                   : 0
-               ), change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
+              priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
+                Number(t.amount ?? t.balance) > 0
+                  ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
+                  : 0
+              ),
+              // pass through our new field so the dashboard tiles show ▲/▼
+              change24hPct: getChangePct(t),
+              dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
         } catch { }

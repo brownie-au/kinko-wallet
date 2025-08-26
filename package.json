@@ -102,6 +102,7 @@
     "react-to-print": "3.1.0",
     "react-toastify": "10.0.6",
     "reactstrap": "^9.2.3",
+    "recharts": "^3.1.2",
     "simplebar-react": "3.3.0",
     "slick-carousel": "1.8.1",
     "sweetalert2": "11.14.5",

@@ -1,12 +1,12 @@
 // src/services/portfolioAggService.js
+// 24h change (DexScreener batch for contract tokens)
+import { fetchChange24hFromDexScreener, tokenKey as changeKey } from './change24hService';
 // Aggregates balances across wallets/chains and returns totals + breakdown.
-
 import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainService';
 // Keep ethereumService import ONLY if you still want legacy backfill elsewhere.
 // We won't use it for prices here.
 import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
 import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
-
 // 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
 import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
 // Read native ETH balance via public RPCs from .env (no API keys)
