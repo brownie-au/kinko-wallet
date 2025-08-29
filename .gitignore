@@ -72,7 +72,11 @@ web_modules/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
+# dotenv environment variable files (keep secrets out of git)
+.env
+.env.*
+!.env.example
+# Explicitly ignore common local variants
 .env.development.local
 .env.test.local
 .env.production.local

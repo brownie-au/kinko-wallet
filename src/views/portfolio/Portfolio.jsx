@@ -26,11 +26,8 @@ import { writeTopTokensCache } from '../../services/topTokensService';
 // ✅ publish this page’s total to the global PortfolioValueContext
 import { usePortfolioValue, PORTFOLIO_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
 
-// --- shared keys so other pages can read the total ---
-const LS_TOTAL_KEY = 'kw:lastTotalUsd';
-const LS_PCT_KEY = 'kw:lastChangePct24h';
-const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
-const TOPN_DASHBOARD = 6;
+// ✅ NEW: write a single AI snapshot for the AI card
+import { aiSnapshotUpdatePortfolio } from '../../services/aiSnapshot';
 
 // === per-chain totals cache (used by Dashboard + here for instant chips) ===
 // NOTE: we now write/read under `${LS_CHAIN_TOTALS_KEY}:${walletsSig}` to avoid stale cross-wallet values.
@@ -126,6 +123,12 @@ function publishChainTotalsForWalletSig(list = [], sig) {
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'updated' }));
   } catch { /* ignore */ }
 }
+
+// ---------- shared LS keys (used by Dashboard + Score strip) ----------
+const LS_TOTAL_KEY = 'kw:lastTotalUsd';
+const LS_PCT_KEY = 'kw:lastChangePct24h';
+const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
+const TOPN_DASHBOARD = 6;
 
 function saveTotalsToLS(totalUsd, changePct24h = 0) {
   try {
@@ -353,7 +356,7 @@ function CopyIcon() {
         fill="none" stroke="currentColor" strokeWidth="2"
       />
       <path
-        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        d="M5 15H4a2 2 0 1 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
         fill="none" stroke="currentColor" strokeWidth="2"
         strokeLinecap="round" strokeLinejoin="round"
       />
@@ -436,7 +439,7 @@ export default function Portfolio() {
 
   useEffect(() => {
     if (wallets && wallets.length) replaceWallets(wallets);
-  }, [walletsSig, replaceWallets]);
+  }, [wallets, walletsSig, replaceWallets]); // ← include 'wallets' to satisfy linter & avoid stale data
 
   // 'all' | 'eth' | 'pulse' | 'base'
   const [mode, setMode] = useState('all');
@@ -647,10 +650,16 @@ export default function Portfolio() {
     }
   }
 
-  useEffect(() => { load(false); /* eslint-disable-next-line */ }, [walletsSig, mode]);
+  useEffect(() => {
+    load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletsSig, mode]);
 
   // Retry expand whenever tokens update (in case timing was off)
-  useEffect(() => { maybeExpandFromFocus(tokens); /* eslint-disable-next-line */ }, [tokens]);
+  useEffect(() => {
+    maybeExpandFromFocus(tokens);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens]);
 
   // ====== publish this page’s total into the global context ======
   const { setSource, removeSource } = usePortfolioValue();
@@ -680,7 +689,6 @@ export default function Portfolio() {
   // ====== choose totals to show in chips immediately (cache-first) ======
   const cached = readChainTotalsCache(walletsSig);
   const effectiveTotals = useMemo(() => {
-    // If fresh build hasn't populated tokens yet, fall back to cached totals so chips render instantly.
     const computed = chainTotalsFromTokens;
     const hasAny = (computed.eth + computed.pulse + computed.base) > 0;
     return hasAny ? computed : { eth: cached.eth, pulse: cached.pulse, base: cached.base };
@@ -704,10 +712,9 @@ export default function Portfolio() {
     ];
 
     const filtered = mode === 'all'
-      ? possible // show all chips in All
+      ? possible
       : possible.filter(r => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : 'base'));
 
-    // Keep Base visible even if 0.00; other non-selected chains are hidden by the filter above.
     filtered.sort((a, b) => b.usd - a.usd);
     return filtered;
   }, [effectiveTotals, mode]);
@@ -736,7 +743,6 @@ export default function Portfolio() {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(addr);
       } else {
-        // fallback
         const ta = document.createElement('textarea');
         ta.value = addr;
         ta.style.position = 'fixed';
@@ -755,6 +761,40 @@ export default function Portfolio() {
   const lastUpdatedLabel = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '—';
+
+  // ---------- NEW: memoised top tokens & snapshot writer ----------
+  const topTokensSnap = useMemo(() => {
+    return tokens
+      .filter(t => !isJunkToken(t) && Number(t.valueUsd) > 0)
+      .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
+      .slice(0, 25)
+      .map(t => ({
+        symbol: t.symbol || '',
+        name: t.name || t.symbol || '',
+        usd: Number(t.valueUsd) || 0
+      }));
+  }, [tokens]);
+
+  useEffect(() => {
+    const byChainSnap = [
+      { chain: 'Ethereum', usd: Number(chainTotalsFromTokens.eth || 0) },
+      { chain: 'PulseChain', usd: Number(chainTotalsFromTokens.pulse || 0) },
+      { chain: 'Base', usd: Number(chainTotalsFromTokens.base || 0) }
+    ].filter(r => r.usd > 0);
+
+    aiSnapshotUpdatePortfolio({
+      totalUsd: Number(totalUsd) || 0,
+      byChain: byChainSnap,
+      topTokens: topTokensSnap,
+      pnl: {} // hook up PnL when available
+    });
+  }, [
+    totalUsd,
+    chainTotalsFromTokens.eth,
+    chainTotalsFromTokens.pulse,
+    chainTotalsFromTokens.base,
+    topTokensSnap
+  ]);
 
   return (
     <>

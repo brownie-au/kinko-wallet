@@ -1,12 +1,16 @@
 // src/sections/dashboard/default/TopTokensRow.jsx
 /* eslint-disable import/no-relative-parent-imports */
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Card, Button } from 'react-bootstrap';
 import useTopTokens from '../../../hooks/useTopTokens';
 import TokenLogo from '../../../components/TokenLogo';
 import { ChainBadge } from '../../../components/ChainUI';
 import { getWalletCache } from '../../../utils/walletCache';
+import { ensureManagedAddressCache } from '../../../services/managedAddressCache';
 import wallets from '../../../data/wallets.js';
+
+// NEW: Analyzer UI (mounted below Top Tokens)
+import AiPortfolioAnalyzer from '../ai/AiPortfolioAnalyzer.jsx';
 
 /* ---------- formatters ---------- */
 const fmtUsd = (n) =>
@@ -48,7 +52,7 @@ const tokenKey = (t) =>
     }`;
 
 /* ---------- wallet-cache lookup ---------- */
-// Build a per‑token bag from wallet caches (same source as the table).
+// Build a per-token bag from wallet caches (same source as the table).
 // Each entry: { chain, address, symbol, amount, valueUsd, priceUsd }
 function useWalletTokenLookup() {
     return useMemo(() => {
@@ -241,6 +245,42 @@ export default function TopTokensRow() {
         window.location.assign('/portfolio');
     };
 
+    // Auto-refresh the managed addresses JSON (5-minute TTL) when Dashboard loads.
+    useEffect(() => { ensureManagedAddressCache().catch(() => { }); }, []);
+
+    // Build a LIVE portfolio summary for the Analyzer (from wallet caches)
+    const aiPortfolio = useMemo(() => {
+        const byKey = new Map();
+        let total = 0;
+        const chains = new Set();
+
+        for (const r of (lookupRows || [])) {
+            const key = `${r.chain}:${r.address || 'native'}:${r.symbol}`;
+            const prev = byKey.get(key) || {
+                symbol: r.symbol,
+                name: r.symbol,
+                chain: r.chain,
+                address: r.address || null,
+                amount: 0,
+                valueUsd: 0,
+                priceUsd: 0
+            };
+            prev.amount += Number(r.amount) || 0;
+            prev.valueUsd += Number(r.valueUsd) || 0;
+            prev.priceUsd = prev.amount > 0 ? prev.valueUsd / prev.amount : (prev.priceUsd || r.priceUsd || 0);
+            byKey.set(key, prev);
+
+            if (r.chain) chains.add(r.chain);
+            total += Number(r.valueUsd) || 0;
+        }
+
+        return {
+            totalUsd: Number(total) || 0,
+            assets: Array.from(byKey.values()),
+            chains: Array.from(chains)
+        };
+    }, [lookupRows]);
+
     return (
         <div className="kwt5-wrap">
             <Styles />
@@ -262,6 +302,11 @@ export default function TopTokensRow() {
                         </Card>
                     ))
                 }
+            </div>
+
+            {/* AI Analyzer mounted directly below the Top Tokens grid */}
+            <div className="mt-3">
+                <AiPortfolioAnalyzer portfolio={aiPortfolio} />
             </div>
         </div>
     );
