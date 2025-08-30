@@ -1,0 +1,16 @@
+{
+  "name": "kinko-ai-proxy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node geminiProxy.js",
+    "dev": "node --watch geminiProxy.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2"
+  }
+}
+
