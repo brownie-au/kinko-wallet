@@ -98,12 +98,7 @@ export default function MainDrawer() {
         <div className="m-header">
           {/* Make the brand a link back to the landing page */}
           <Link to="/" className="b-brand text-primary" aria-label="Go to Kinko Wallet home">
-            <Image
-              src={sidebarTheme === true ? DarkLogo : logo}
-              fluid
-              className="logo logo-lg"
-              alt="Kinko Wallet"
-            />
+            <Image src={sidebarTheme === true ? DarkLogo : logo} fluid className="logo logo-lg" alt="Kinko Wallet" />
           </Link>
         </div>
 

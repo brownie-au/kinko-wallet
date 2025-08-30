@@ -4,7 +4,6 @@
 
 export default function RatingCard() {
   if (import.meta?.env?.DEV) {
-    // eslint-disable-next-line no-console
     console.debug('[RatingCard] noop render (component retired)');
   }
   return null;

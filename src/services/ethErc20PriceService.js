@@ -8,12 +8,12 @@ const DEX = 'https://api.dexscreener.com/latest/dex';
 const CHUNK = 30;
 
 // Cache TTLS
-const TTL_MS_PRICE = 2 * 60 * 1000;       // 2 min for prices
-const TTL_MS_META  = 24 * 60 * 60 * 1000; // 24h for token metadata
+const TTL_MS_PRICE = 2 * 60 * 1000; // 2 min for prices
+const TTL_MS_META = 24 * 60 * 60 * 1000; // 24h for token metadata
 
 // Bump namespace to drop any old cross-chain prices
 const NS_PRICE = 'kw:v2:eth:erc20:price:'; // <-- bumped
-const NS_META  = 'kw:eth:erc20:meta:';
+const NS_META = 'kw:eth:erc20:meta:';
 
 const ETHPLORER = 'https://api.ethplorer.io';
 const ETHPLORER_KEY = import.meta.env.VITE_ETHPLORER_KEY || 'freekey';
@@ -37,7 +37,9 @@ function getCached(ns, key, ttl) {
   return null;
 }
 function setCached(ns, key, v) {
-  try { localStorage.setItem(ns + key, JSON.stringify({ v, t: Date.now() })); } catch {}
+  try {
+    localStorage.setItem(ns + key, JSON.stringify({ v, t: Date.now() }));
+  } catch {}
 }
 
 async function fetchBatch(addresses) {
@@ -87,9 +89,7 @@ async function fetchTokenMetaEthplorer(addr) {
 export async function enrichErc20Prices(tokens) {
   if (!Array.isArray(tokens) || !tokens.length) return tokens;
 
-  const erc20 = tokens.filter(
-    (t) => t.chain === 'eth' && t.address && t.address !== 'native' && t.balance > 0
-  );
+  const erc20 = tokens.filter((t) => t.chain === 'eth' && t.address && t.address !== 'native' && t.balance > 0);
   if (!erc20.length) return tokens;
 
   // 1) Peg stables

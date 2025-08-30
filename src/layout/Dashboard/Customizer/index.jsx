@@ -15,10 +15,7 @@ import { ThemeDirection } from 'config';
 import useConfig from 'hooks/useConfig';
 
 export default function Customization() {
-  const {
-    onReset,
-    themeDirection
-  } = useConfig();
+  const { onReset, themeDirection } = useConfig();
 
   const [show, setShow] = useState(false);
   const handleClose = () => setShow(false);
@@ -63,11 +60,7 @@ export default function Customization() {
             >
               Reset
             </Button>
-            <Button
-              variant="link-danger"
-              className="avatar avatar-xs btn-pc-default"
-              onClick={handleClose}
-            >
+            <Button variant="link-danger" className="avatar avatar-xs btn-pc-default" onClick={handleClose}>
               <i className="ti ti-x f-20" />
             </Button>
           </Stack>
@@ -81,9 +74,7 @@ export default function Customization() {
         {/* Only Layout Width remains */}
         <SimpleBarScroll style={{ height: 'calc(100vh - 240px)' }}>
           <Offcanvas.Body className="py-0">
-            <ListGroup variant="flush">
-              {window.innerWidth > 1025 && <ThemeWidth />}
-            </ListGroup>
+            <ListGroup variant="flush">{window.innerWidth > 1025 && <ThemeWidth />}</ListGroup>
           </Offcanvas.Body>
         </SimpleBarScroll>
       </Offcanvas>

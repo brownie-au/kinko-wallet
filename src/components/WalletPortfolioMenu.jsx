@@ -5,9 +5,15 @@ import { LinkContainer } from 'react-router-bootstrap';
 import { useWallets } from '../contexts/WalletContext';
 
 const WalletPortfolioMenu = () => {
-  const ctx = (() => { try { return useWallets(); } catch { return undefined; } })();
+  const ctx = (() => {
+    try {
+      return useWallets();
+    } catch {
+      return undefined;
+    }
+  })();
   const wallets = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
-  const tail = (a='') => (a ? a.slice(-4) : '----');
+  const tail = (a = '') => (a ? a.slice(-4) : '----');
 
   return (
     <div>

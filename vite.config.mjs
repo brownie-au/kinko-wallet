@@ -15,6 +15,7 @@ const resolvePath = (str) => path.resolve(__dirname, str);
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const BASE = env.VITE_APP_BASE_NAME || '/';
+  const isProd = mode === 'production';
   const PORT = 3000;
 
   return {
@@ -67,12 +68,23 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1600,
+      minify: 'esbuild',
+      cssMinify: true,
+      cssCodeSplit: true,
+      sourcemap: false,
+      reportCompressedSize: false,
+      target: 'es2020',
+      manifest: true,
+      // Drop noisy debug statements in production bundles
       rollupOptions: {
         input: {
           main: resolvePath('index.html'),
           legacy: resolvePath('index.html')
         }
       }
+    },
+    esbuild: {
+      drop: isProd ? ['console', 'debugger'] : []
     },
     base: BASE,
     plugins: [react(), jsconfigPaths()]

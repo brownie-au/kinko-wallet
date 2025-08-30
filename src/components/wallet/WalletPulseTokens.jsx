@@ -9,7 +9,9 @@ export default function WalletPulseTokens({ address }) {
   const [loading, setLoading] = useState(true);
   const [chip, setChip] = useState(() => localStorage.getItem(CHIP_KEY) || 'all');
 
-  useEffect(() => { localStorage.setItem(CHIP_KEY, chip); }, [chip]);
+  useEffect(() => {
+    localStorage.setItem(CHIP_KEY, chip);
+  }, [chip]);
 
   async function loadTokens(force = false) {
     if (!address) return;
@@ -23,16 +25,26 @@ export default function WalletPulseTokens({ address }) {
   }
 
   // load on mount + when the wallet address changes
-  useEffect(() => { loadTokens(false); }, [address]);
+  useEffect(() => {
+    loadTokens(false);
+  }, [address]);
 
   return (
     <div>
       <div className="toolbar">
         <div className="chips">
-          <button className={chip==='all'?'active':''}        onClick={() => setChip('all')}>All</button>
-          <button className={chip==='ethereum'?'active':''}   onClick={() => setChip('ethereum')}>Ethereum</button>
-          <button className={chip==='pulsechain'?'active':''} onClick={() => setChip('pulsechain')}>PulseChain</button>
-          <button className={chip==='base'?'active':''}       onClick={() => setChip('base')}>Base</button>
+          <button className={chip === 'all' ? 'active' : ''} onClick={() => setChip('all')}>
+            All
+          </button>
+          <button className={chip === 'ethereum' ? 'active' : ''} onClick={() => setChip('ethereum')}>
+            Ethereum
+          </button>
+          <button className={chip === 'pulsechain' ? 'active' : ''} onClick={() => setChip('pulsechain')}>
+            PulseChain
+          </button>
+          <button className={chip === 'base' ? 'active' : ''} onClick={() => setChip('base')}>
+            Base
+          </button>
         </div>
         <button onClick={() => loadTokens(true)}>Refresh</button>
       </div>
@@ -42,7 +54,15 @@ export default function WalletPulseTokens({ address }) {
       ) : (
         <table className="tokens">
           {/* render your rows here */}
-          <thead><tr><th>Token</th><th>Price</th><th>Amount</th><th>Value</th><th>Contract</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Price</th>
+              <th>Amount</th>
+              <th>Value</th>
+              <th>Contract</th>
+            </tr>
+          </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={`${r.address}-${i}`}>

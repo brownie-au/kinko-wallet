@@ -38,6 +38,6 @@ export function generatePortfolioId(len = 8) {
 }
 
 // legacy aliases (kept so other files import without errors)
-export const loadPortfolio   = loadById;
-export const savePortfolio   = saveById;
+export const loadPortfolio = loadById;
+export const savePortfolio = saveById;
 export const createPortfolio = saveById;

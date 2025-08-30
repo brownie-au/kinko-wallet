@@ -6,8 +6,8 @@ import { useEffect } from 'react';
  * Kills any top padding/margin reserved for a fixed header or ticker.
  */
 export default function KwNoGap() {
-    useEffect(() => {
-        const css = `
+  useEffect(() => {
+    const css = `
 /* ==== Kinko Wallet: final boss gap killer (injected) ==== */
 
 html, body { margin:0 !important; padding:0 !important; }
@@ -104,29 +104,29 @@ body .kw-ticker + .pc-content {
 }
     `.trim();
 
-        // Inject at the very end of <head>
-        let style = document.getElementById('kw-no-gap-style');
-        if (!style) {
-            style = document.createElement('style');
-            style.id = 'kw-no-gap-style';
-            style.type = 'text/css';
-            style.appendChild(document.createTextNode(css));
-            document.head.appendChild(style);
-        } else {
-            style.textContent = css;
-            document.head.appendChild(style); // move it to the end
-        }
+    // Inject at the very end of <head>
+    let style = document.getElementById('kw-no-gap-style');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'kw-no-gap-style';
+      style.type = 'text/css';
+      style.appendChild(document.createTextNode(css));
+      document.head.appendChild(style);
+    } else {
+      style.textContent = css;
+      document.head.appendChild(style); // move it to the end
+    }
 
-        // MutationObserver keeps our style last if something reorders head
-        const obs = new MutationObserver(() => {
-            if (document.head.lastElementChild !== style) {
-                document.head.appendChild(style);
-            }
-        });
-        obs.observe(document.head, { childList: true });
+    // MutationObserver keeps our style last if something reorders head
+    const obs = new MutationObserver(() => {
+      if (document.head.lastElementChild !== style) {
+        document.head.appendChild(style);
+      }
+    });
+    obs.observe(document.head, { childList: true });
 
-        return () => obs.disconnect();
-    }, []);
+    return () => obs.disconnect();
+  }, []);
 
-    return null;
+  return null;
 }

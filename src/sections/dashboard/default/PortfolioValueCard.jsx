@@ -3,11 +3,7 @@ import { Card } from 'react-bootstrap';
 
 import KwChainAllocationPie from '../../../components/kw-ChainAllocationPie';
 import { ChainBadge } from '../../../components/ChainUI';
-import {
-  usePortfolioValue,
-  HEX_STAKING_SOURCE,
-  EHEX_STAKING_SOURCE
-} from '../../../contexts/PortfolioValueContext.jsx';
+import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../../../contexts/PortfolioValueContext.jsx';
 import { useWallets } from '../../../contexts/WalletContext.jsx';
 import walletsStatic from '../../../data/wallets.js';
 
@@ -36,7 +32,7 @@ function num(x) {
 
 /** Prefer canonical key when aliases disagree by >20% */
 function preferCanonical({ aliases, totals }) {
-  const vals = aliases.map(k => num(totals?.[k]));
+  const vals = aliases.map((k) => num(totals?.[k]));
   const max = Math.max(...vals);
   if (!Number.isFinite(max) || max <= 0) return 0;
 
@@ -103,10 +99,20 @@ function StakingChip({ bgColor = STAKING_COLOUR, fgColor = '#fff', label = 'STAK
 export default function PortfolioValueCard() {
   // Wallet signature (context → LS → default), same as Portfolio.jsx
   let ctx;
-  try { ctx = useWallets(); } catch { ctx = undefined; }
+  try {
+    ctx = useWallets();
+  } catch {
+    ctx = undefined;
+  }
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
-  const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
-  const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
+  const fromLS = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('wallets') || '[]');
+    } catch {
+      return [];
+    }
+  })();
+  const wallets = fromCtx.length ? fromCtx : fromLS.length ? fromLS : walletsStatic;
   const walletsSig = (wallets || [])
     .map((w) => (w.address || '').toLowerCase())
     .filter(Boolean)
@@ -132,7 +138,7 @@ export default function PortfolioValueCard() {
     const SHOW_AT = HIDE_AT + 12;
     const ro = new ResizeObserver(([entry]) => {
       const w = entry?.contentRect?.width || el.clientWidth || 0;
-      setShowPie(prev => (prev ? w >= HIDE_AT : w >= SHOW_AT));
+      setShowPie((prev) => (prev ? w >= HIDE_AT : w >= SHOW_AT));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -146,11 +152,13 @@ export default function PortfolioValueCard() {
         const legacy = localStorage.getItem(LS_CHAIN_TOTALS_KEY);
         if (legacy) {
           localStorage.setItem(key, legacy);
-          try { localStorage.removeItem(LS_CHAIN_TOTALS_KEY); } catch { }
+          try {
+            localStorage.removeItem(LS_CHAIN_TOTALS_KEY);
+          } catch {}
           window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'migrated' }));
         }
       }
-    } catch { }
+    } catch {}
   }, [walletsSig]);
 
   // sticky totals + per-chain totals (storage listener + same-tab polling)
@@ -160,14 +168,13 @@ export default function PortfolioValueCard() {
         setTotalUsd(Number(localStorage.getItem(LS_TOTAL_KEY) || 0) || 0);
         setPct24h(Number(localStorage.getItem(LS_PCT_KEY) || 0) || 0);
       } catch {
-        setTotalUsd(0); setPct24h(0);
+        setTotalUsd(0);
+        setPct24h(0);
       }
     };
     const pullChains = () => {
       const next = readChainTotalsCache(walletsSig);
-      const changed =
-        next.updatedAt > (lastTsRef.current || 0) ||
-        next.eth !== eth || next.pulse !== pulse || next.base !== base;
+      const changed = next.updatedAt > (lastTsRef.current || 0) || next.eth !== eth || next.pulse !== pulse || next.base !== base;
       if (changed) {
         lastTsRef.current = next.updatedAt || Date.now();
         setChainTotals({ eth: next.eth, pulse: next.pulse, base: next.base });
@@ -183,15 +190,24 @@ export default function PortfolioValueCard() {
     };
     window.addEventListener('storage', onStorage);
     const id = setInterval(pullChains, 4000); // same-tab refresh
-    return () => { window.removeEventListener('storage', onStorage); clearInterval(id); };
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(id);
+    };
   }, [eth, pulse, base, walletsSig]);
 
   // staking: HEX + eHEX aggregation with fallbacks
   const stakingUsd = useMemo(() => {
     let sum = 0;
     const used = new Set();
-    if (HEX_STAKING_SOURCE) { sum += toUsd(sources?.[HEX_STAKING_SOURCE]); used.add(HEX_STAKING_SOURCE); }
-    if (EHEX_STAKING_SOURCE) { sum += toUsd(sources?.[EHEX_STAKING_SOURCE]); used.add(EHEX_STAKING_SOURCE); }
+    if (HEX_STAKING_SOURCE) {
+      sum += toUsd(sources?.[HEX_STAKING_SOURCE]);
+      used.add(HEX_STAKING_SOURCE);
+    }
+    if (EHEX_STAKING_SOURCE) {
+      sum += toUsd(sources?.[EHEX_STAKING_SOURCE]);
+      used.add(EHEX_STAKING_SOURCE);
+    }
     if (!sum && sources && typeof sources === 'object') {
       for (const [k, v] of Object.entries(sources)) {
         const kk = String(k || '').toLowerCase();
@@ -204,7 +220,9 @@ export default function PortfolioValueCard() {
         const hexLS = JSON.parse(localStorage.getItem(LS_HEX_STAKE_SUMMARY) || 'null');
         const ehexLS = JSON.parse(localStorage.getItem(LS_EHEX_STAKE_SUMMARY) || 'null');
         sum = toUsd(hexLS) + toUsd(ehexLS);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     return sum || 0;
   }, [sources]);
@@ -223,16 +241,16 @@ export default function PortfolioValueCard() {
   }, [pulse, eth, base, stakingUsd]);
 
   // donut (chains + staking)
-    const donutData = useMemo(
-        () =>
-        chainList.map(({ id, usd }) => {
-            if (id === 'staking') {
-                return { id, valueUsd: usd, color: STAKING_COLOUR };
-              }
-            return { id, valueUsd: usd };
-          }),
+  const donutData = useMemo(
+    () =>
+      chainList.map(({ id, usd }) => {
+        if (id === 'staking') {
+          return { id, valueUsd: usd, color: STAKING_COLOUR };
+        }
+        return { id, valueUsd: usd };
+      }),
     [chainList]
-      );
+  );
 
   // headline = max(context, rows sum), else sticky LS
   const displayTotalRaw = useMemo(() => {
@@ -248,8 +266,8 @@ export default function PortfolioValueCard() {
     [displayTotalRaw]
   );
 
-  const fmtUsd0 = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-    .format(Number(n || 0));
+  const fmtUsd0 = (n) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(n || 0));
 
   const up = Number(pct24h) >= 0;
 
@@ -284,15 +302,11 @@ export default function PortfolioValueCard() {
                 ) : (
                   <>
                     <ChainBadge chain={row.id} />
-                    <span style={{ opacity: 0.9 }}>
-                      {row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : 'Base'}
-                    </span>
+                    <span style={{ opacity: 0.9 }}>{row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : 'Base'}</span>
                   </>
                 )}
                 <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd0(row.usd)}</span>
-                <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
-                  {row.pct.toFixed(1)}%
-                </span>
+                <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>{row.pct.toFixed(1)}%</span>
               </div>
             ))}
           </div>

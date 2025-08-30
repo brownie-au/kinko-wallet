@@ -14,10 +14,16 @@ import menuItems from 'menu-items';
 const LS_KEY = 'kw:sidebarOpen:v1';
 
 const readOpenMap = () => {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
+  } catch {
+    return {};
+  }
 };
 const writeOpenMap = (map) => {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(map || {})); } catch { }
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(map || {}));
+  } catch {}
 };
 
 const collectUrls = (node) => {
@@ -83,13 +89,7 @@ function NestedCollapse({ node, openMap, setOpen, themeDirection }) {
             child.type === 'item' ? (
               <MenuItem key={child.id} item={child} />
             ) : child.type === 'collapse' ? (
-              <NestedCollapse
-                key={child.id}
-                node={child}
-                openMap={openMap}
-                setOpen={setOpen}
-                themeDirection={themeDirection}
-              />
+              <NestedCollapse key={child.id} node={child} openMap={openMap} setOpen={setOpen} themeDirection={themeDirection} />
             ) : null
           )}
       </ul>
@@ -165,10 +165,7 @@ export default function Navigation() {
   }, [pathname]);
 
   return (
-    <ul
-      ref={navRef}
-      className={`pc-navbar d-block ${menuOrientation === MenuOrientation.TAB ? 'pc-tab-link nav flex-column' : ''}`}
-    >
+    <ul ref={navRef} className={`pc-navbar d-block ${menuOrientation === MenuOrientation.TAB ? 'pc-tab-link nav flex-column' : ''}`}>
       {groups.map((group) => {
         if (group.type !== 'group') {
           return (
@@ -180,9 +177,7 @@ export default function Navigation() {
 
         return (
           <ListGroup as="li" key={group.id} className="pc-item border-0 bg-transparent">
-            {group.title && (
-              <div className="pc-navbar-title px-3 pt-2 pb-1 text-uppercase opacity-75 small">{group.title}</div>
-            )}
+            {group.title && <div className="pc-navbar-title px-3 pt-2 pb-1 text-uppercase opacity-75 small">{group.title}</div>}
 
             {(group.children || []).map((node) => {
               if (node.type === 'item') {
@@ -195,10 +190,7 @@ export default function Navigation() {
               if (node.type === 'collapse') {
                 const isOpen = !!openMap[node.id];
                 return (
-                  <ListGroup
-                    key={node.id}
-                    className={clsx('pc-item kw-hasmenu border-0 bg-transparent', isOpen && 'kw-open')}
-                  >
+                  <ListGroup key={node.id} className={clsx('pc-item kw-hasmenu border-0 bg-transparent', isOpen && 'kw-open')}>
                     <div className="kw-toggle">
                       <button
                         type="button"
@@ -219,13 +211,7 @@ export default function Navigation() {
                       </button>
                     </div>
 
-                    <ul
-                      className={clsx(
-                        'pc-submenu',
-                        themeDirection === ThemeDirection.RTL && 'edge',
-                        isOpen ? 'kw-show' : 'kw-hide'
-                      )}
-                    >
+                    <ul className={clsx('pc-submenu', themeDirection === ThemeDirection.RTL && 'edge', isOpen ? 'kw-show' : 'kw-hide')}>
                       {Array.isArray(node.children) &&
                         node.children.map((child) =>
                           child.type === 'item' ? (

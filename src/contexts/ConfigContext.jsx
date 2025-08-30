@@ -15,7 +15,7 @@ const STORAGE_KEY = 'datta-able-react-ts-config';
 // Base config with a dark-mode default (only used when nothing in storage)
 const initialConfig = {
   ...config,
-  mode: (config?.mode ?? 'dark')
+  mode: config?.mode ?? 'dark'
 };
 
 // Handler stubs to shape context defaults
@@ -46,7 +46,6 @@ function ConfigProvider({ children }) {
     if (width < 1025 && cfg.menuOrientation !== 'vertical') {
       setCfg((prev) => ({ ...prev, menuOrientation: 'vertical' }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
   // Reflect theme mode to the DOM early and on every change

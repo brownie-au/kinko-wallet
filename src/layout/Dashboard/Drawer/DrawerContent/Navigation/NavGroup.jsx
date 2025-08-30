@@ -178,9 +178,7 @@ export default function NavGroup({
                 }
               }}
             >
-              {state?.icon && (
-                <i className={`f-20  ${typeof state?.icon === 'string' ? state?.icon : state?.icon?.props.className}`} />
-              )}
+              {state?.icon && <i className={`f-20  ${typeof state?.icon === 'string' ? state?.icon : state?.icon?.props.className}`} />}
             </Link>
           </OverlayTrigger>
         </li>

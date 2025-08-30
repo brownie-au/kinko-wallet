@@ -9,12 +9,12 @@ import Chart from 'react-apexcharts';
 // We pair each value with an x:Date so the axis + footer are correct.
 // ------------------------------------------------------------------
 const MOCK = {
-  '7D':  [42000, 42350, 42110, 42780, 43120, 43500, 43120],
-  '1M':  [39600, 40200, 40850, 41520, 42200, 42950, 43120, 43010, 42880, 43120],
-  '3M':  [36500, 37200, 38900, 40400, 41750, 43300, 43120, 43600, 44400, 43120],
-  '1Y':  [38500, 39200, 40100, 40800, 41400, 42000, 42500, 43120, 43650, 44200, 44800, 43120],
-  'YTD': [31800, 33300, 35200, 38100, 40400, 42900, 43120],
-  'ALL': [12000, 15000, 21000, 27500, 33000, 38500, 43120]
+  '7D': [42000, 42350, 42110, 42780, 43120, 43500, 43120],
+  '1M': [39600, 40200, 40850, 41520, 42200, 42950, 43120, 43010, 42880, 43120],
+  '3M': [36500, 37200, 38900, 40400, 41750, 43300, 43120, 43600, 44400, 43120],
+  '1Y': [38500, 39200, 40100, 40800, 41400, 42000, 42500, 43120, 43650, 44200, 44800, 43120],
+  YTD: [31800, 33300, 35200, 38100, 40400, 42900, 43120],
+  ALL: [12000, 15000, 21000, 27500, 33000, 38500, 43120]
 };
 
 const RANGES = ['7D', '1M', '3M', '1Y', 'YTD', 'ALL'];
@@ -118,15 +118,13 @@ export default function PortfolioBalanceChart() {
       },
       yaxis: {
         labels: {
-          formatter: (val) =>
-            `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+          formatter: (val) => `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         }
       },
       tooltip: {
         x: { format: 'dd MMM yyyy' },
         y: {
-          formatter: (val) =>
-            `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+          formatter: (val) => `$${Number(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
         }
       }
     }),
@@ -140,11 +138,7 @@ export default function PortfolioBalanceChart() {
           <div className="text-muted">Portfolio Balance</div>
           <ButtonGroup size="sm" aria-label="range">
             {RANGES.map((r) => (
-              <Button
-                key={r}
-                variant={r === range ? 'primary' : 'outline-secondary'}
-                onClick={() => setRange(r)}
-              >
+              <Button key={r} variant={r === range ? 'primary' : 'outline-secondary'} onClick={() => setRange(r)}>
                 {r}
               </Button>
             ))}

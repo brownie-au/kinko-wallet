@@ -11,65 +11,66 @@
 */
 
 import { useEffect, useState, useCallback } from 'react';
-import {
-    ensureManagedAddressCache,
-    readManagedAddressCache,
-    subscribeManagedAddressCache,
-} from '../services/managedAddressCache';
+import { ensureManagedAddressCache, readManagedAddressCache, subscribeManagedAddressCache } from '../services/managedAddressCache';
 
 export default function useManagedAddresses(options = {}) {
-    const {
-        autoRefresh = true,  // listen for cache updates
-        preferFresh = true,  // if a fresh cache exists, use it without forcing
-    } = options;
+  const {
+    autoRefresh = true, // listen for cache updates
+    preferFresh = true // if a fresh cache exists, use it without forcing
+  } = options;
 
-    const [addresses, setAddresses] = useState([]);
-    const [updatedAt, setUpdatedAt] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+  const [addresses, setAddresses] = useState([]);
+  const [updatedAt, setUpdatedAt] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-    const load = useCallback(async ({ force = false } = {}) => {
-        setError('');
-        try {
-            setLoading(true);
+  const load = useCallback(
+    async ({ force = false } = {}) => {
+      setError('');
+      try {
+        setLoading(true);
 
-            if (!force) {
-                const cached = readManagedAddressCache({ freshOnly: preferFresh });
-                if (cached) {
-                    setAddresses(cached.addresses.map(a => a.address));
-                    setUpdatedAt(Number(cached.updatedAt) || 0);
-                    setLoading(false);
-                    return;
-                }
-            }
-
-            const snap = await ensureManagedAddressCache({ force });
-            setAddresses((snap.addresses || []).map(a => a.address));
-            setUpdatedAt(Number(snap.updatedAt) || Date.now());
-        } catch (e) {
-            setError(e?.message || 'Failed to load managed addresses');
-        } finally {
+        if (!force) {
+          const cached = readManagedAddressCache({ freshOnly: preferFresh });
+          if (cached) {
+            setAddresses(cached.addresses.map((a) => a.address));
+            setUpdatedAt(Number(cached.updatedAt) || 0);
             setLoading(false);
+            return;
+          }
         }
-    }, [preferFresh]);
 
-    // Initial load
-    useEffect(() => { load({ force: false }); }, [load]);
+        const snap = await ensureManagedAddressCache({ force });
+        setAddresses((snap.addresses || []).map((a) => a.address));
+        setUpdatedAt(Number(snap.updatedAt) || Date.now());
+      } catch (e) {
+        setError(e?.message || 'Failed to load managed addresses');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [preferFresh]
+  );
 
-    // Subscribe to updates
-    useEffect(() => {
-        if (!autoRefresh) return () => { };
-        const unsub = subscribeManagedAddressCache(() => {
-            const cached = readManagedAddressCache({ freshOnly: false });
-            if (cached) {
-                setAddresses(cached.addresses.map(a => a.address));
-                setUpdatedAt(Number(cached.updatedAt) || 0);
-            }
-        });
-        return unsub;
-    }, [autoRefresh]);
+  // Initial load
+  useEffect(() => {
+    load({ force: false });
+  }, [load]);
 
-    const refresh = useCallback(() => load({ force: true }), [load]);
+  // Subscribe to updates
+  useEffect(() => {
+    if (!autoRefresh) return () => {};
+    const unsub = subscribeManagedAddressCache(() => {
+      const cached = readManagedAddressCache({ freshOnly: false });
+      if (cached) {
+        setAddresses(cached.addresses.map((a) => a.address));
+        setUpdatedAt(Number(cached.updatedAt) || 0);
+      }
+    });
+    return unsub;
+  }, [autoRefresh]);
 
-    return { addresses, updatedAt, loading, error, refresh };
+  const refresh = useCallback(() => load({ force: true }), [load]);
+
+  return { addresses, updatedAt, loading, error, refresh };
 }

@@ -81,21 +81,17 @@ export default function PnLCard() {
         if (Array.isArray(histMaybe) && histMaybe.length) {
           // Shape A: combined rows
           if (histMaybe[0] && (histMaybe[0].cap !== undefined || histMaybe[0].vol !== undefined)) {
-            capRows = histMaybe.map(r => ({ x: r.t ?? r.x, y: r.cap ?? 0 }))
-              .filter(p => isFinite(p.x) && isFinite(p.y));
-            volRows = histMaybe.map(r => ({ x: r.t ?? r.x, y: r.vol ?? 0 }))
-              .filter(p => isFinite(p.x) && isFinite(p.y));
+            capRows = histMaybe.map((r) => ({ x: r.t ?? r.x, y: r.cap ?? 0 })).filter((p) => isFinite(p.x) && isFinite(p.y));
+            volRows = histMaybe.map((r) => ({ x: r.t ?? r.x, y: r.vol ?? 0 })).filter((p) => isFinite(p.x) && isFinite(p.y));
           } else {
             // Shape B: single series (assume this is CAP)
-            capRows = histMaybe.map(r => ({ x: r.t ?? r.x, y: r.y ?? 0 }))
-              .filter(p => isFinite(p.x) && isFinite(p.y));
+            capRows = histMaybe.map((r) => ({ x: r.t ?? r.x, y: r.y ?? 0 })).filter((p) => isFinite(p.x) && isFinite(p.y));
 
             // Try to fetch a separate VOL series if the service supports a metric arg
             try {
               const volMaybe = await getGlobalHistory1yWeekly?.('last', 'volume');
               if (Array.isArray(volMaybe) && volMaybe.length) {
-                volRows = volMaybe.map(r => ({ x: r.t ?? r.x, y: r.y ?? r.vol ?? 0 }))
-                  .filter(p => isFinite(p.x) && isFinite(p.y));
+                volRows = volMaybe.map((r) => ({ x: r.t ?? r.x, y: r.y ?? r.vol ?? 0 })).filter((p) => isFinite(p.x) && isFinite(p.y));
               }
             } catch {
               // ignore, will fallback below
@@ -121,7 +117,9 @@ export default function PnLCard() {
       }
     })();
 
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const capUp = (snap?.changePct24h ?? 0) >= 0;
@@ -138,7 +136,9 @@ export default function PnLCard() {
           <div className="text-muted mb-1">Global Crypto Market Cap</div>
           <div className="d-flex align-items-center gap-2">
             <OverlayTrigger placement="left" overlay={<Tooltip>Bitcoin share of total market cap</Tooltip>}>
-              <Badge bg="secondary" pill>BTC {Number(snap.btcDominancePct || 0).toFixed(1)}%</Badge>
+              <Badge bg="secondary" pill>
+                BTC {Number(snap.btcDominancePct || 0).toFixed(1)}%
+              </Badge>
             </OverlayTrigger>
             <Badge bg="dark" pill title="Snapshot time">
               {new Date(snap.updatedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
@@ -232,4 +232,7 @@ export default function PnLCard() {
 }
 
 // ---- helpers ----
-function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function safeNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}

@@ -33,12 +33,7 @@ export default function Footer() {
           <Col xs="auto" className="my-1">
             <p className="m-0">
               {branding.brandName} ♥ Built by Brownie{' '}
-              <a
-                href="https://x.com/RobBrow22393477"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary"
-              >
+              <a href="https://x.com/RobBrow22393477" target="_blank" rel="noopener noreferrer" className="text-primary">
                 X
               </a>
             </p>
@@ -59,21 +54,10 @@ export default function Footer() {
                 >
                   {donationAddress}
                 </a>
-                <FaRegCopy
-                  role="button"
-                  onClick={handleCopy}
-                  style={{ cursor: 'pointer' }}
-                  title="Copy to clipboard"
-                />
+                <FaRegCopy role="button" onClick={handleCopy} style={{ cursor: 'pointer' }} title="Copy to clipboard" />
               </div>
 
-              <Nav.Link
-                className="p-0"
-                as="a"
-                href="https://x.com/RobBrow22393477"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <Nav.Link className="p-0" as="a" href="https://x.com/RobBrow22393477" target="_blank" rel="noopener noreferrer">
                 Suggestions
               </Nav.Link>
             </Stack>

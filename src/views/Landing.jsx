@@ -27,11 +27,7 @@ export default function LandingPage() {
               Get Started
             </Link>
 
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-lg"
-              onClick={() => setShowUsePid(true)}
-            >
+            <button type="button" className="btn btn-outline-secondary btn-lg" onClick={() => setShowUsePid(true)}>
               Use Portfolio ID
             </button>
           </div>
@@ -39,8 +35,7 @@ export default function LandingPage() {
 
         <br />
         <div className="lp-copy text-center">
-          © {new Date().getFullYear()} Kinko Wallet —{' '}
-          <span className="nowrap">Always stay in control.</span>
+          © {new Date().getFullYear()} Kinko Wallet — <span className="nowrap">Always stay in control.</span>
         </div>
         <div
           className="lp-copy text-center"
@@ -48,11 +43,11 @@ export default function LandingPage() {
             marginTop: '0.25rem',
             maxWidth: '600px',
             marginLeft: 'auto',
-            marginRight: 'auto',
+            marginRight: 'auto'
           }}
         >
-          <strong>Disclaimer:</strong> Prices are sourced from third parties and may not be accurate. We display
-          a weighted average, but always verify with other sources before making any trading decisions.
+          <strong>Disclaimer:</strong> Prices are sourced from third parties and may not be accurate. We display a weighted average, but
+          always verify with other sources before making any trading decisions.
         </div>
         <div className="lp-hero-divider" />
       </header>

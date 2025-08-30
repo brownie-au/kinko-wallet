@@ -26,7 +26,7 @@ function save(data) {
     setCachedJSON(KEY, data);
   } catch (e) {
     // non-fatal
-    // eslint-disable-next-line no-console
+
     console.warn('pnlService save failed:', e);
   }
 }
@@ -66,19 +66,29 @@ function rangeStartISO(rangeKey) {
 
   switch ((rangeKey || '').toLowerCase()) {
     case '7d': {
-      const d = new Date(now); d.setDate(d.getDate() - 7); return isoDateOnly(d);
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return isoDateOnly(d);
     }
     case '1m': {
-      const d = new Date(now); d.setMonth(d.getMonth() - 1); return isoDateOnly(d);
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 1);
+      return isoDateOnly(d);
     }
     case '3m': {
-      const d = new Date(now); d.setMonth(d.getMonth() - 3); return isoDateOnly(d);
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 3);
+      return isoDateOnly(d);
     }
     case '1y': {
-      const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return isoDateOnly(d);
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      return isoDateOnly(d);
     }
     case 'ytd': {
-      const d = new Date(now); d.setMonth(0, 1); return isoDateOnly(d);
+      const d = new Date(now);
+      d.setMonth(0, 1);
+      return isoDateOnly(d);
     }
     case 'all':
     default:
@@ -93,7 +103,9 @@ export function getPnL(rangeKey, currentUsdOverride) {
 
   const currentValue = Number.isFinite(Number(currentUsdOverride))
     ? Number(currentUsdOverride)
-    : (pts.length ? pts[pts.length - 1].valueUsd : 0);
+    : pts.length
+      ? pts[pts.length - 1].valueUsd
+      : 0;
 
   const startISO = rangeStartISO(rangeKey);
   const baseValue = valueAtOrAfter(data, startISO);

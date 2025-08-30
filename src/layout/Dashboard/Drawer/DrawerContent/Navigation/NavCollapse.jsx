@@ -30,7 +30,7 @@ const readOpenMap = () => {
 const writeOpenMap = (map) => {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(map || {}));
-  } catch { }
+  } catch {}
 };
 // -------------------------------------------------------------------
 

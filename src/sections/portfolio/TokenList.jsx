@@ -21,7 +21,7 @@ function TokenRow({ token, open, onToggle }) {
       <tr className="token-row" onClick={onToggle}>
         <td className="d-flex align-items-center gap-2">
           {token.iconUrl ? (
-            <img src={token.iconUrl} alt="" width={22} height={22} style={{ borderRadius: 6, opacity: .95 }} />
+            <img src={token.iconUrl} alt="" width={22} height={22} style={{ borderRadius: 6, opacity: 0.95 }} />
           ) : (
             <span className="token-fallback" />
           )}
@@ -34,9 +34,13 @@ function TokenRow({ token, open, onToggle }) {
           {token.priceUSD != null ? (
             <>
               US${token.priceUSD.toLocaleString(undefined, { maximumFractionDigits: 6 })}
-              <div className="small"><ChangeCell pct={token.change24hPct} /></div>
+              <div className="small">
+                <ChangeCell pct={token.change24hPct} />
+              </div>
             </>
-          ) : '—'}
+          ) : (
+            '—'
+          )}
         </td>
         <td>{token.amount?.toLocaleString(undefined, { maximumFractionDigits: 6 }) ?? '—'}</td>
         <td className="text-end fw-semibold">
@@ -51,18 +55,24 @@ function TokenRow({ token, open, onToggle }) {
             <div className="breakdown-row px-3 py-3">
               <div className="text-muted small mb-2">Balance Breakdown</div>
               <div className="d-flex flex-column gap-1">
-                {token.breakdown?.length ? token.breakdown.map((b) => (
-                  <div key={`${token.symbol}-${b.address}`} className="d-flex w-100">
-                    <div className="flex-grow-1">
-                      <span className="fw-medium">{b.walletName || short(b.address)}</span>{' '}
-                      <Badge bg="secondary" pill>{short(b.address)}</Badge>
+                {token.breakdown?.length ? (
+                  token.breakdown.map((b) => (
+                    <div key={`${token.symbol}-${b.address}`} className="d-flex w-100">
+                      <div className="flex-grow-1">
+                        <span className="fw-medium">{b.walletName || short(b.address)}</span>{' '}
+                        <Badge bg="secondary" pill>
+                          {short(b.address)}
+                        </Badge>
+                      </div>
+                      <div className="text-end flex-shrink-0">
+                        <span className="text-muted small me-3">
+                          {b.amount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {token.symbol}
+                        </span>
+                        <span className="fw-semibold">US${b.valueUSD?.toLocaleString()}</span>
+                      </div>
                     </div>
-                    <div className="text-end flex-shrink-0">
-                      <span className="text-muted small me-3">{b.amount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {token.symbol}</span>
-                      <span className="fw-semibold">US${b.valueUSD?.toLocaleString()}</span>
-                    </div>
-                  </div>
-                )) : (
+                  ))
+                ) : (
                   <div className="text-muted">No breakdown data.</div>
                 )}
               </div>
@@ -86,17 +96,14 @@ export default function TokenList({ tokens }) {
             <th style={{ width: '38%' }}>Token</th>
             <th style={{ width: '22%' }}>Price</th>
             <th style={{ width: '20%' }}>Amount</th>
-            <th className="text-end" style={{ width: '20%' }}>Value</th>
+            <th className="text-end" style={{ width: '20%' }}>
+              Value
+            </th>
           </tr>
         </thead>
         <tbody>
           {tokens.map((t) => (
-            <TokenRow
-              key={t.id || t.symbol}
-              token={t}
-              open={openId === (t.id || t.symbol)}
-              onToggle={() => toggle(t.id || t.symbol)}
-            />
+            <TokenRow key={t.id || t.symbol} token={t} open={openId === (t.id || t.symbol)} onToggle={() => toggle(t.id || t.symbol)} />
           ))}
         </tbody>
       </Table>

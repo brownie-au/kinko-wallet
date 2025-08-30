@@ -1,5 +1,5 @@
 // src/components/WalletFilterChips.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
 
 /**
  * Rectangular wallet filter buttons (same style/behavior used on the eHEX page).
@@ -10,16 +10,16 @@ import { useEffect, useMemo, useState } from "react";
  * - lsKey?: string  // optional localStorage key (defaults to shared key)
  */
 export default function WalletFilterChips({ wallets = [], onChange, lsKey }) {
-  const LS_KEY = lsKey || "kw:staking:walletChipSel";
+  const LS_KEY = lsKey || 'kw:staking:walletChipSel';
 
   // unique, normalized list
   const items = useMemo(() => {
     const m = new Map();
     (wallets || []).forEach((w) => {
-      const addr = String(w?.address || "").toLowerCase();
+      const addr = String(w?.address || '').toLowerCase();
       if (!addr) return;
       if (!m.has(addr)) {
-        const short = "0x…" + addr.slice(-4);
+        const short = '0x…' + addr.slice(-4);
         m.set(addr, { address: addr, label: w?.label || short });
       }
     });
@@ -44,7 +44,7 @@ export default function WalletFilterChips({ wallets = [], onChange, lsKey }) {
     sel.forEach((s) => allowed.has(s) && next.add(s));
     if (next.size !== sel.size) setSel(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((i) => i.address).join("|")]);
+  }, [items.map((i) => i.address).join('|')]);
 
   const isAll = sel.size === 0 || sel.size === items.length;
 
@@ -54,9 +54,9 @@ export default function WalletFilterChips({ wallets = [], onChange, lsKey }) {
     onChange?.(isAll ? allAddrs : Array.from(sel), isAll);
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(Array.from(sel)));
-    } catch { }
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAll, sel, items.map((i) => i.address).join("|")]);
+  }, [isAll, sel, items.map((i) => i.address).join('|')]);
 
   const toggleAll = () => setSel(new Set()); // collapse to All
   const toggleOne = (addr) => {
@@ -71,7 +71,7 @@ export default function WalletFilterChips({ wallets = [], onChange, lsKey }) {
     <div className="d-flex flex-wrap align-items-center gap-2">
       <button
         type="button"
-        className={`btn btn-sm ${isAll ? "btn-primary" : "btn-outline-secondary"}`}
+        className={`btn btn-sm ${isAll ? 'btn-primary' : 'btn-outline-secondary'}`}
         onClick={toggleAll}
         aria-pressed={isAll}
       >
@@ -84,7 +84,7 @@ export default function WalletFilterChips({ wallets = [], onChange, lsKey }) {
           <button
             key={w.address}
             type="button"
-            className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-secondary"}`}
+            className={`btn btn-sm ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
             onClick={() => toggleOne(w.address)}
             aria-pressed={active}
             title={w.address}

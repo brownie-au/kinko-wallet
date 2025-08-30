@@ -19,20 +19,9 @@ import TokenLogo from '../../components/TokenLogo';
 import { fmtPriceUSD } from '../../utils/priceFormat';
 
 import wallets from '../../data/wallets.js';
-import {
-  setWalletCache,
-  getWalletCache,
-  clearWalletCache,
-  clearWalletPrefix,
-  WALLET_CACHE_DEFAULT_TTL
-} from '../../utils/walletCache';
+import { setWalletCache, getWalletCache, clearWalletCache, clearWalletPrefix, WALLET_CACHE_DEFAULT_TTL } from '../../utils/walletCache';
 
-import {
-  getLastSection,
-  setLastSection,
-  getWalletNetChip,
-  setWalletNetChip
-} from '../../utils/uiState';
+import { getLastSection, setLastSection, getWalletNetChip, setWalletNetChip } from '../../utils/uiState';
 
 // ----------------------------- utils -----------------------------
 const fmtUSD = (n) => {
@@ -43,8 +32,7 @@ const fmtUSD = (n) => {
   return `USD $${amt}`;
 };
 
-const fmtNum = (n) =>
-  (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
+const fmtNum = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
 
@@ -59,11 +47,14 @@ const addrStyle = {
 // helper to translate chain code -> numeric chainId for TokenLogo
 const chainIdOf = (chain) => {
   switch (String(chain || '').toLowerCase()) {
-    case 'pulse': return 369;
-    case 'base': return 8453;
+    case 'pulse':
+      return 369;
+    case 'base':
+      return 8453;
     case 'eth':
     case 'ethereum':
-    default: return 1;
+    default:
+      return 1;
   }
 };
 
@@ -72,9 +63,7 @@ function findByAddrLoose(arr, addrLower) {
   const array = Array.isArray(arr) ? arr : [];
   const addrFields = ['address', 'addr', 'account', 'publicKey', 'public_key', 'hash', 'id', 'wallet'];
 
-  let item = array.find((w) =>
-    addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower)
-  );
+  let item = array.find((w) => addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower));
   if (item) return item;
 
   item = array.find((w) => {
@@ -99,7 +88,9 @@ function findAnyWalletRecord(addressLower) {
       if (Array.isArray(parsed)) groups.push(parsed);
       else if (parsed && typeof parsed === 'object') {
         groups.push([parsed]);
-        Object.values(parsed).forEach((v) => { if (Array.isArray(v)) groups.push(v); });
+        Object.values(parsed).forEach((v) => {
+          if (Array.isArray(v)) groups.push(v);
+        });
       }
 
       for (const g of groups) {
@@ -107,7 +98,9 @@ function findAnyWalletRecord(addressLower) {
         if (hit) return hit;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
@@ -128,16 +121,7 @@ function resolveWalletName(address) {
 
 function resolveGroupId(address) {
   const rec = findAnyWalletRecord((address || '').toLowerCase()) || {};
-  return (
-    rec.group ||
-    rec.grp ||
-    rec.collection ||
-    rec.folder ||
-    rec.section ||
-    rec.category ||
-    rec.groupId ||
-    'default'
-  );
+  return rec.group || rec.grp || rec.collection || rec.folder || rec.section || rec.category || rec.groupId || 'default';
 }
 
 // -------- tiny icon button --------
@@ -154,8 +138,16 @@ const IconButton = ({ title, onClick, children }) => (
 );
 
 const CopyIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
@@ -272,7 +264,9 @@ export default function WalletDetail() {
   const { address = '' } = useParams();
   const walletName = useMemo(() => resolveWalletName(address), [address]);
 
-  useEffect(() => { setLastSection('wallets'); }, []);
+  useEffect(() => {
+    setLastSection('wallets');
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -289,26 +283,34 @@ export default function WalletDetail() {
   const initialChip = useMemo(() => {
     const last = getLastSection();
     const saved = getWalletNetChip(groupId);
-    return (last === 'wallets' && saved) ? saved : 'all';
+    return last === 'wallets' && saved ? saved : 'all';
   }, [groupId]);
   const [activeChain, setActiveChain] = useState(initialChip);
-  useEffect(() => { setActiveChain(initialChip); }, [address, groupId, initialChip]);
+  useEffect(() => {
+    setActiveChain(initialChip);
+  }, [address, groupId, initialChip]);
 
   // Default to "All" when switching wallets
   const prevAddrRef = useRef('');
   useEffect(() => {
-    if (!prevAddrRef.current) { prevAddrRef.current = address; return; }
+    if (!prevAddrRef.current) {
+      prevAddrRef.current = address;
+      return;
+    }
     if (prevAddrRef.current !== address) {
       setActiveChain('all');
       try {
         const gid = resolveGroupId(address);
         setWalletNetChip(gid, 'all');
-      } catch { }
+      } catch {}
       prevAddrRef.current = address;
     }
   }, [address]);
 
-  const onChipChange = (code) => { setActiveChain(code); setWalletNetChip(groupId, code); };
+  const onChipChange = (code) => {
+    setActiveChain(code);
+    setWalletNetChip(groupId, code);
+  };
 
   // Normalise any token for cache format
   const mapTokenForCache = (t, chainHint) => {
@@ -316,9 +318,11 @@ export default function WalletDetail() {
     const amount = Number(t.amount ?? 0);
     const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
     return {
-      symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
+      symbol: (t.symbol || t.ticker || t.name || 'TOKEN').toUpperCase(),
       name: t.name || t.symbol || 'Token',
-      amount, priceUsd, valueUsd,
+      amount,
+      priceUsd,
+      valueUsd,
       contract: t.contract || t.address || null,
       logo: t.logo || t.iconUrl || null,
       chain: t.chain ?? chainHint
@@ -328,24 +332,22 @@ export default function WalletDetail() {
   // ---- adapt Pulse -> UI (ensure priceUsd/valueUsd) ----
   const adaptPulseTokens = (rows) => {
     const list = Array.isArray(rows) ? rows.slice() : [];
-    const plsIdx = list.findIndex(
-      (r) => r.address === 'PLS' || r.symbol === 'PLS' || r.address === 'native'
-    );
+    const plsIdx = list.findIndex((r) => r.address === 'PLS' || r.symbol === 'PLS' || r.address === 'native');
     const pls = plsIdx >= 0 ? list.splice(plsIdx, 1)[0] : null;
 
     const nat = pls
       ? {
-        name: 'PulseChain',
-        symbol: 'PLS',
-        amount: Number(pls.balance || 0),
-        price: Number(pls.price || 0),
-        priceUsd: Number(pls.price || 0),
-        value: Number(pls.value || 0),
-        valueUsd: Number(pls.value || 0),
-        contract: 'native',
-        logo: pls.iconUrl || null,
-        chain: 'pulse'
-      }
+          name: 'PulseChain',
+          symbol: 'PLS',
+          amount: Number(pls.balance || 0),
+          price: Number(pls.price || 0),
+          priceUsd: Number(pls.price || 0),
+          value: Number(pls.value || 0),
+          valueUsd: Number(pls.value || 0),
+          contract: 'native',
+          logo: pls.iconUrl || null,
+          chain: 'pulse'
+        }
       : null;
 
     const toks = list.map((r) => {
@@ -372,27 +374,25 @@ export default function WalletDetail() {
 
   // ---- adapt ETH list (ethereumService -> UI) ----
   const adaptEthFromList = (rows) => {
-    const list = Array.isArray(rows)
-      ? rows.slice()
-      : Array.isArray(rows?.tokens)
-        ? rows.tokens.slice()
-        : [];
+    const list = Array.isArray(rows) ? rows.slice() : Array.isArray(rows?.tokens) ? rows.tokens.slice() : [];
 
-    const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
+    const natIdx = list.findIndex((r) => r.symbol === 'ETH' || r.address === 'native');
     const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
 
-    const nat = natRow ? {
-      name: 'Ethereum',
-      symbol: 'ETH',
-      amount: Number(natRow.balance || 0),
-      price: Number(natRow.price || 0),
-      priceUsd: Number(natRow.price || 0),
-      value: Number(natRow.value || 0),
-      valueUsd: Number(natRow.value || 0),
-      contract: 'native',
-      logo: natRow.iconUrl || null,
-      chain: 'eth'
-    } : null;
+    const nat = natRow
+      ? {
+          name: 'Ethereum',
+          symbol: 'ETH',
+          amount: Number(natRow.balance || 0),
+          price: Number(natRow.price || 0),
+          priceUsd: Number(natRow.price || 0),
+          value: Number(natRow.value || 0),
+          valueUsd: Number(natRow.value || 0),
+          contract: 'native',
+          logo: natRow.iconUrl || null,
+          chain: 'eth'
+        }
+      : null;
 
     const toks = list.map((r) => {
       const price = Number(r.price || r.priceUsd || 0);
@@ -430,20 +430,20 @@ export default function WalletDetail() {
     const res = await getPortfolioWithPrices(address, chainCode);
     const nat = res?.native
       ? {
-        ...res.native,
-        chain: chainCode,
-        priceUsd: Number(res?.native?.priceUsd ?? res?.native?.price ?? 0),
-        valueUsd: Number(res?.native?.valueUsd ?? res?.native?.value ?? 0)
-      }
+          ...res.native,
+          chain: chainCode,
+          priceUsd: Number(res?.native?.priceUsd ?? res?.native?.price ?? 0),
+          valueUsd: Number(res?.native?.valueUsd ?? res?.native?.value ?? 0)
+        }
       : null;
 
     const toks = Array.isArray(res?.tokens)
       ? res.tokens.map((t) => {
-        const price = Number(t.priceUsd ?? t.price ?? 0);
-        const amt = Number(t.amount ?? 0);
-        const val = Number(t.valueUsd ?? t.value ?? amt * price);
-        return { ...t, chain: chainCode, priceUsd: price, valueUsd: val };
-      })
+          const price = Number(t.priceUsd ?? t.price ?? 0);
+          const amt = Number(t.amount ?? 0);
+          const val = Number(t.valueUsd ?? t.value ?? amt * price);
+          return { ...t, chain: chainCode, priceUsd: price, valueUsd: val };
+        })
       : [];
 
     const totalUSD = Number(res?.totalUSD || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0));
@@ -494,7 +494,7 @@ export default function WalletDetail() {
     const { tokens: tok, native: nat } = result || { tokens: [], native: null };
     const cachedTokens = [
       ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' }, chain)] : []),
-      ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : []),
+      ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : [])
     ];
     const cachedTotal = Number.isFinite(result?.totalUSD)
       ? Number(result.totalUSD)
@@ -522,9 +522,7 @@ export default function WalletDetail() {
           let result;
           if (activeChain === 'all') {
             const parts = await Promise.allSettled(CHAINS_FOR_ALL.map(fetchOneChain));
-            const ok = parts
-              .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null))
-              .filter(Boolean);
+            const ok = parts.map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null)).filter(Boolean);
 
             ok.forEach((r) => writeCache(r._c, r));
 
@@ -552,7 +550,9 @@ export default function WalletDetail() {
     }
 
     if (address) load();
-    return () => { dead = true; };
+    return () => {
+      dead = true;
+    };
   }, [address, walletName, activeChain, refreshBump]);
 
   // ----------------------------- table data & sorting -----------------------------
@@ -561,11 +561,11 @@ export default function WalletDetail() {
     const s = (q || '').trim().toLowerCase();
     const filtered = s
       ? base.filter(
-        (t) =>
-          (t.name || '').toLowerCase().includes(s) ||
-          (t.symbol || '').toLowerCase().includes(s) ||
-          (t.contract || '').toLowerCase().includes(s)
-      )
+          (t) =>
+            (t.name || '').toLowerCase().includes(s) ||
+            (t.symbol || '').toLowerCase().includes(s) ||
+            (t.contract || '').toLowerCase().includes(s)
+        )
       : base;
 
     const cmp = (a, b) => {
@@ -592,20 +592,20 @@ export default function WalletDetail() {
     return filtered.sort(cmp);
   }, [native, tokens, q, sortKey, sortDir]);
 
-  const totalUSD = useMemo(
-    () => items.reduce((s, t) => s + (t.value ?? t.valueUsd ?? 0), 0),
-    [items]
-  );
+  const totalUSD = useMemo(() => items.reduce((s, t) => s + (t.value ?? t.valueUsd ?? 0), 0), [items]);
 
   const onSort = (k) => {
     setSortKey((prev) => {
-      if (prev !== k) { setSortDir('desc'); return k; }
+      if (prev !== k) {
+        setSortDir('desc');
+        return k;
+      }
       setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
       return k;
     });
   };
 
-  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => { });
+  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
 
   const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'base' ? 'Base' : 'ETH');
 
@@ -624,9 +624,8 @@ export default function WalletDetail() {
   return (
     <>
       <LoadingStyles /> {/* inject shimmer CSS */}
-      <ChipStyles />    {/* chip styles */}
+      <ChipStyles /> {/* chip styles */}
       <TokenCellStyles /> {/* token cell styles */}
-
       {/* HEADER */}
       <Row className="mb-4">
         <Col>
@@ -659,15 +658,10 @@ export default function WalletDetail() {
           </Card>
         </Col>
       </Row>
-
       {/* CONTROLS */}
       <Row className="mb-3">
         <Col md={6} className="mb-2">
-          <Form.Control
-            placeholder="Search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <Form.Control placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
         </Col>
         <Col md={6} className="text-md-end">
           {/* Use span to avoid button defaults, match View All pill */}
@@ -683,7 +677,6 @@ export default function WalletDetail() {
           </span>
         </Col>
       </Row>
-
       {/* TABLE */}
       <Row className="mb-2">
         <Col>
@@ -696,7 +689,6 @@ export default function WalletDetail() {
           </small>
         </Col>
       </Row>
-
       <Row>
         <Col>
           <Card className="shadow-sm">
@@ -706,34 +698,22 @@ export default function WalletDetail() {
                   <thead className="sticky-top" style={{ position: 'sticky', top: 0 }}>
                     <tr>
                       <th style={{ width: '38%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('name')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('name')}>
                           Token {sortKey === 'name' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('price')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('price')}>
                           Price {sortKey === 'price' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('amount')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('amount')}>
                           Amount {sortKey === 'amount' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('value')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('value')}>
                           Value {sortKey === 'value' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
@@ -742,63 +722,81 @@ export default function WalletDetail() {
                   </thead>
 
                   <tbody>
-                    {loading && <LoadingRow label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} colSpan={5} />}
-                    {!loading && err && <tr><td colSpan={5} className="text-danger py-4 text-center">{err}</td></tr>}
+                    {loading && (
+                      <LoadingRow
+                        label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`}
+                        colSpan={5}
+                      />
+                    )}
+                    {!loading && err && (
+                      <tr>
+                        <td colSpan={5} className="text-danger py-4 text-center">
+                          {err}
+                        </td>
+                      </tr>
+                    )}
                     {!loading && !err && items.length === 0 && (
-                      <tr><td colSpan={5} className="py-4 text-center">No tokens found.</td></tr>
+                      <tr>
+                        <td colSpan={5} className="py-4 text-center">
+                          No tokens found.
+                        </td>
+                      </tr>
                     )}
 
-                    {!loading && !err && items.map((t, i) => {
-                      const price = (t.price ?? t.priceUsd ?? 0);
-                      const amount = (t.amount ?? 0);
-                      const value = (t.value ?? t.valueUsd ?? (amount * price));
-                      const c = (t.chain || activeChain);
+                    {!loading &&
+                      !err &&
+                      items.map((t, i) => {
+                        const price = t.price ?? t.priceUsd ?? 0;
+                        const amount = t.amount ?? 0;
+                        const value = t.value ?? t.valueUsd ?? amount * price;
+                        const c = t.chain || activeChain;
 
-                      // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
-                      const addrForLogo = (t.contract && t.contract !== 'native') ? t.contract : null;
+                        // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
+                        const addrForLogo = t.contract && t.contract !== 'native' ? t.contract : null;
 
-                      return (
-                        <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
-                          <td>
-                            <div className="kw-cell">
-                              <TokenLogo
-                                chainId={chainIdOf(c)}
-                                address={addrForLogo}
-                                symbol={t.symbol}
-                                logoURI={t.logo}
-                                size={28}                 // set to 36 if you want it larger
-                                className="kw-logo"
-                              />
-                              <div className="kw-name">
-                                <div className="kw-symbol">
-                                  <strong>{t.symbol || '—'}</strong>
-                                  <span className="kw-name-inline">
-                                    {' - '}{t.name || short(t.contract)}
-                                  </span>
-                                </div>
-                                <div className="kw-sub">
-                                  {activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}
+                        return (
+                          <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
+                            <td>
+                              <div className="kw-cell">
+                                <TokenLogo
+                                  chainId={chainIdOf(c)}
+                                  address={addrForLogo}
+                                  symbol={t.symbol}
+                                  logoURI={t.logo}
+                                  size={28} // set to 36 if you want it larger
+                                  className="kw-logo"
+                                />
+                                <div className="kw-name">
+                                  <div className="kw-symbol">
+                                    <strong>{t.symbol || '—'}</strong>
+                                    <span className="kw-name-inline">
+                                      {' - '}
+                                      {t.name || short(t.contract)}
+                                    </span>
+                                  </div>
+                                  <div className="kw-sub">{activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}</div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
 
-                          <td className="text-end">{fmtPriceUSD(price)}</td>
-                          <td className="text-end">{fmtNum(amount)}</td>
-                          <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
-                          <td>
-                            <span
-                              className="badge bg-secondary"
-                              style={{ cursor: t.contract ? 'pointer' : 'default' }}
-                              title={t.contract ? 'Copy contract' : undefined}
-                              onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
-                            >
-                              {t.contract ? short(t.contract) : 'native'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <td className="text-end">{fmtPriceUSD(price)}</td>
+                            <td className="text-end">{fmtNum(amount)}</td>
+                            <td className="text-end">
+                              <strong>{fmtUSD(value)}</strong>
+                            </td>
+                            <td>
+                              <span
+                                className="badge bg-secondary"
+                                style={{ cursor: t.contract ? 'pointer' : 'default' }}
+                                title={t.contract ? 'Copy contract' : undefined}
+                                onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
+                              >
+                                {t.contract ? short(t.contract) : 'native'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -806,7 +804,6 @@ export default function WalletDetail() {
           </Card>
         </Col>
       </Row>
-
       {/* QR MODAL */}
       <Modal show={showQR} onHide={() => setShowQR(false)} centered>
         <Modal.Header closeButton>
@@ -820,8 +817,16 @@ export default function WalletDetail() {
             style={{ imageRendering: 'pixelated' }}
             src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(address)}`}
           />
-          <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{address}</div>
-          <Button className="mt-3" onClick={() => { navigator.clipboard?.writeText(address); setShowQR(false); }}>
+          <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>
+            {address}
+          </div>
+          <Button
+            className="mt-3"
+            onClick={() => {
+              navigator.clipboard?.writeText(address);
+              setShowQR(false);
+            }}
+          >
             Copy Address
           </Button>
         </Modal.Body>

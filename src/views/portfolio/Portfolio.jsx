@@ -66,23 +66,24 @@ function publishChainTotalsFromTokens(list = []) {
     const totals = { eth: 0, pulse: 0, base: 0 };
     for (const t of list) {
       const chain = String(t?.chain || '').toLowerCase();
-      const id =
-        chain.startsWith('eth') ? 'eth'
-          : chain.startsWith('base') ? 'base'
-            : (chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')) ? 'pulse'
-              : null;
+      const id = chain.startsWith('eth')
+        ? 'eth'
+        : chain.startsWith('base')
+          ? 'base'
+          : chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')
+            ? 'pulse'
+            : null;
       if (!id) continue;
       const price = Number(t.priceUsd ?? t.price ?? 0);
       const amount = Number(t.amount ?? 0);
-      const valueUsd = Number(t.valueUsd ?? (amount * price) ?? 0);
+      const valueUsd = Number(t.valueUsd ?? amount * price ?? 0);
       if (valueUsd > 0) totals[id] += valueUsd;
     }
-    localStorage.setItem(
-      LS_CHAIN_TOTALS_KEY,
-      JSON.stringify({ updatedAt: Date.now(), totals })
-    );
+    localStorage.setItem(LS_CHAIN_TOTALS_KEY, JSON.stringify({ updatedAt: Date.now(), totals }));
     window.dispatchEvent(new StorageEvent('storage', { key: LS_CHAIN_TOTALS_KEY, newValue: 'updated' }));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // replace existing publishChainTotalsForWalletSig with this:
@@ -93,10 +94,10 @@ function publishChainTotalsForWalletSig(list = [], sig) {
     // EXACTLY match chip logic
     const totals = { eth: 0, pulse: 0, base: 0 };
     for (const t of list) {
-      if (isJunkToken(t)) continue;                          // ← filter junk/spam
+      if (isJunkToken(t)) continue; // ← filter junk/spam
       const chain = String(t?.chain || '').toLowerCase();
       const price = Number(t.priceUsd ?? t.price ?? 0);
-      const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
+      const val = Number(t.valueUsd ?? Number(t.amount || 0) * price) || 0;
       if (val <= 0) continue;
 
       if (chain.startsWith('eth')) totals.eth += val;
@@ -119,9 +120,13 @@ function publishChainTotalsForWalletSig(list = [], sig) {
 
     const key = `${LS_CHAIN_TOTALS_KEY}:${sig}`;
     localStorage.setItem(key, JSON.stringify(out));
-    try { localStorage.removeItem(LS_CHAIN_TOTALS_KEY); } catch { }
+    try {
+      localStorage.removeItem(LS_CHAIN_TOTALS_KEY);
+    } catch {}
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'updated' }));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---------- shared LS keys (used by Dashboard + Score strip) ----------
@@ -135,7 +140,7 @@ function saveTotalsToLS(totalUsd, changePct24h = 0) {
     localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
     localStorage.setItem(LS_PCT_KEY, String(Number(changePct24h) || 0));
     localStorage.setItem(LS_UPDATED_KEY, String(Date.now()));
-  } catch { }
+  } catch {}
 }
 
 // ---------- formats ----------
@@ -148,11 +153,7 @@ const fmtUSD = (n) => {
 };
 const fmtAmt = (n, p = 6) => {
   const x = Number(n) || 0;
-  return !isFinite(x)
-    ? '0'
-    : x >= 1
-      ? x.toLocaleString(undefined, { maximumFractionDigits: 4 })
-      : x.toPrecision(p);
+  return !isFinite(x) ? '0' : x >= 1 ? x.toLocaleString(undefined, { maximumFractionDigits: 4 }) : x.toPrecision(p);
 };
 
 // smart precision for token prices
@@ -169,15 +170,16 @@ const fmtPriceUSD = (n) => {
   return `USD $${s}`;
 };
 
-const keyFor = (t) =>
-  `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
+const keyFor = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 // ---- minimal junk filter ----
 const DENY = new Set(['ETHG', 'AICC']);
 function isJunkToken(t) {
   const addr = String(t.address || t.contract || '').toLowerCase();
   if (addr && isBlockedToken && isBlockedToken(addr)) return true;
-  const sym = String(t.symbol || '').toUpperCase().trim();
+  const sym = String(t.symbol || '')
+    .toUpperCase()
+    .trim();
   if (DENY.has(sym)) return true;
   if (t.possible_spam === true || t.is_spam === true) return true;
   const price = Number(t.priceUsd ?? t.price);
@@ -351,14 +353,14 @@ const Styles = () => (
 function CopyIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect
-        x="9" y="9" width="12" height="12" rx="2" ry="2"
-        fill="none" stroke="currentColor" strokeWidth="2"
-      />
+      <rect x="9" y="9" width="12" height="12" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="2" />
       <path
         d="M5 15H4a2 2 0 1 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-        fill="none" stroke="currentColor" strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -390,24 +392,22 @@ function readCache(mode, sig) {
     if (!data || !data.updatedAt) return null;
     const fresh = now() - Number(data.updatedAt) < CACHE_TTL;
     return { ...data, fresh };
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function writeCache(mode, sig, payload) {
   try {
     const data = { ...payload, updatedAt: now() };
     localStorage.setItem(CACHE_PREFIX + mode + ':' + sig, JSON.stringify(data));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---- extract % change if present on token ----
 function getChangePct(t) {
-  const candidates = [
-    t.change24hPct,
-    t.change24h,
-    t.priceChange24hPct,
-    t.price_change_pct_24h,
-    t.price_change_24h_pct
-  ];
+  const candidates = [t.change24hPct, t.change24h, t.priceChange24hPct, t.price_change_pct_24h, t.price_change_24h_pct];
   const val = candidates.find((v) => typeof v === 'number' && isFinite(v));
   return typeof val === 'number' ? val : null;
 }
@@ -415,11 +415,14 @@ function getChangePct(t) {
 // ---- chainId resolver for TokenLogo ----
 function chainIdOf(chain) {
   switch (String(chain || '').toLowerCase()) {
-    case 'pulse': return 369;   // PulseChain
-    case 'base': return 8453;   // Base
+    case 'pulse':
+      return 369; // PulseChain
+    case 'base':
+      return 8453; // Base
     case 'eth':
     case 'ethereum':
-    default: return 1;          // Ethereum
+    default:
+      return 1; // Ethereum
   }
 }
 
@@ -429,12 +432,22 @@ const norm = (n) => (Number.isFinite(+n) ? +n : 0);
 export default function Portfolio() {
   // Context (safe if provider missing)
   let ctx;
-  try { ctx = useWallets(); } catch { ctx = undefined; }
-  const replaceWallets = ctx?.replaceWallets ?? (() => { });
+  try {
+    ctx = useWallets();
+  } catch {
+    ctx = undefined;
+  }
+  const replaceWallets = ctx?.replaceWallets ?? (() => {});
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
 
-  const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
-  const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
+  const fromLS = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('wallets') || '[]');
+    } catch {
+      return [];
+    }
+  })();
+  const wallets = fromCtx.length ? fromCtx : fromLS.length ? fromLS : walletsStatic;
   const walletsSig = walletsSigOf(wallets);
 
   useEffect(() => {
@@ -450,7 +463,11 @@ export default function Portfolio() {
 
   const [totalUsd, setTotalUsd] = useState(() => getPortfolioTotalUsd());
   const [lastUpdated, setLastUpdated] = useState(() => {
-    try { return Number(localStorage.getItem('kw:lastPortfolioTotalUsdAt') || 0); } catch { return 0; }
+    try {
+      return Number(localStorage.getItem('kw:lastPortfolioTotalUsdAt') || 0);
+    } catch {
+      return 0;
+    }
   });
 
   const [tokens, setTokens] = useState([]);
@@ -468,14 +485,16 @@ export default function Portfolio() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast({ show: false, text: '' }), 2000);
   };
-  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    []
+  );
 
   const walletCount = wallets.length;
 
-  const walletName = (addr) =>
-    wallets.find(
-      (w) => (w.address || '').toLowerCase() === (addr || '').toLowerCase()
-    )?.name || 'Wallet';
+  const walletName = (addr) => wallets.find((w) => (w.address || '').toLowerCase() === (addr || '').toLowerCase())?.name || 'Wallet';
 
   const persistTotal = (v) => {
     setPortfolioTotalUsd(v);
@@ -489,12 +508,12 @@ export default function Portfolio() {
       const wantKey = (localStorage.getItem('kw:focusTokenKey') || '').trim();
       if (!want && !wantKey) return;
 
-      const match = (list || []).find((tt) =>
-        (wantKey && keyFor(tt).toLowerCase() === wantKey.toLowerCase()) ||
-        (want && (
-          (tt.symbol || '').toLowerCase() === want.toLowerCase() ||
-          ((tt.address || tt.contract || '').toLowerCase() === want.toLowerCase())
-        ))
+      const match = (list || []).find(
+        (tt) =>
+          (wantKey && keyFor(tt).toLowerCase() === wantKey.toLowerCase()) ||
+          (want &&
+            ((tt.symbol || '').toLowerCase() === want.toLowerCase() ||
+              (tt.address || tt.contract || '').toLowerCase() === want.toLowerCase()))
       );
 
       if (match) {
@@ -507,7 +526,9 @@ export default function Portfolio() {
         localStorage.removeItem('kw:focusToken');
         localStorage.removeItem('kw:focusTokenKey');
       }
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   };
 
   async function load(force = false) {
@@ -546,18 +567,21 @@ export default function Portfolio() {
             .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
             .slice(0, TOPN_DASHBOARD)
             .map((t) => ({
-              symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
-              address: t.address || t.contract || '', logo: t.logo || t.icon || '',
-              valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
-              priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
-                Number(t.amount ?? t.balance) > 0
-                  ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
-                  : 0
-              ),
-              change24hPct: getChangePct(t), dexUrl: t.dexUrl || null
+              symbol: t.symbol,
+              name: t.name || t.symbol,
+              chain: t.chain,
+              address: t.address || t.contract || '',
+              logo: t.logo || t.icon || '',
+              valueUsd: Number(t.valueUsd) || 0,
+              amount: Number(t.amount ?? t.balance) || 0,
+              priceUsd:
+                Number(t.priceUsd ?? t.price ?? 0) ||
+                (Number(t.amount ?? t.balance) > 0 ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance) : 0),
+              change24hPct: getChangePct(t),
+              dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
-        } catch { }
+        } catch {}
       }
       return;
     }
@@ -586,7 +610,7 @@ export default function Portfolio() {
       let tokensWithValue = (tokens || []).map((t) => {
         const price = Number(t.priceUsd ?? t.price ?? 0);
         const amount = Number(t.amount ?? 0);
-        const valueUsd = Number(t.valueUsd ?? (t.usd ?? (amount * price)));
+        const valueUsd = Number(t.valueUsd ?? t.usd ?? amount * price);
         return { ...t, valueUsd };
       });
 
@@ -595,9 +619,11 @@ export default function Portfolio() {
         const changeMap = await fetchChange24hFromDexScreener(tokensWithValue);
         tokensWithValue = tokensWithValue.map((t) => {
           const pct = changeMap.get(changeKey(t));
-          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
+          return pct != null && Number.isFinite(pct) ? { ...t, change24hPct: Number(pct) } : t;
         });
-      } catch { /* non-fatal, skip if fetch fails */ }
+      } catch {
+        /* non-fatal, skip if fetch fails */
+      }
 
       // 2) Attach 24h % change for native coins (ETH, PLS, etc.)
       try {
@@ -605,9 +631,11 @@ export default function Portfolio() {
         tokensWithValue = tokensWithValue.map((t) => {
           if (t.address || t.contract) return t; // contract tokens handled above
           const pct = nativeMap.get(nativeKey(t));
-          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
+          return pct != null && Number.isFinite(pct) ? { ...t, change24hPct: Number(pct) } : t;
         });
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
 
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
@@ -627,20 +655,22 @@ export default function Portfolio() {
             .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
             .slice(0, TOPN_DASHBOARD)
             .map((t) => ({
-              symbol: t.symbol, name: t.name || t.symbol, chain: t.chain,
-              address: t.address || t.contract || '', logo: t.logo || t.icon || '',
-              valueUsd: Number(t.valueUsd) || 0, amount: Number(t.amount ?? t.balance) || 0,
-              priceUsd: Number(t.priceUsd ?? t.price ?? 0) || (
-                Number(t.amount ?? t.balance) > 0
-                  ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
-                  : 0
-              ),
+              symbol: t.symbol,
+              name: t.name || t.symbol,
+              chain: t.chain,
+              address: t.address || t.contract || '',
+              logo: t.logo || t.icon || '',
+              valueUsd: Number(t.valueUsd) || 0,
+              amount: Number(t.amount ?? t.balance) || 0,
+              priceUsd:
+                Number(t.priceUsd ?? t.price ?? 0) ||
+                (Number(t.amount ?? t.balance) > 0 ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance) : 0),
               // pass through our new field so the dashboard tiles show ▲/▼
               change24hPct: getChangePct(t),
               dexUrl: t.dexUrl || null
             }));
           writeTopTokensCache(topN);
-        } catch { }
+        } catch {}
       }
     } catch (e) {
       setError(e?.message || 'Failed to load portfolio');
@@ -658,7 +688,6 @@ export default function Portfolio() {
   // Retry expand whenever tokens update (in case timing was off)
   useEffect(() => {
     maybeExpandFromFocus(tokens);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
 
   // ====== publish this page’s total into the global context ======
@@ -677,7 +706,7 @@ export default function Portfolio() {
       if (isJunkToken(t)) continue;
       const chain = String(t.chain || '').toLowerCase();
       const price = Number(t.priceUsd ?? t.price ?? 0);
-      const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
+      const val = Number(t.valueUsd ?? Number(t.amount || 0) * price) || 0;
       if (val <= 0) continue;
       if (chain.startsWith('eth')) totals.eth += val;
       else if (chain === 'pulse' || chain.startsWith('pls')) totals.pulse += val;
@@ -690,7 +719,7 @@ export default function Portfolio() {
   const cached = readChainTotalsCache(walletsSig);
   const effectiveTotals = useMemo(() => {
     const computed = chainTotalsFromTokens;
-    const hasAny = (computed.eth + computed.pulse + computed.base) > 0;
+    const hasAny = computed.eth + computed.pulse + computed.base > 0;
     return hasAny ? computed : { eth: cached.eth, pulse: cached.pulse, base: cached.base };
   }, [chainTotalsFromTokens, cached.eth, cached.pulse, cached.base]);
 
@@ -700,7 +729,7 @@ export default function Portfolio() {
     if (mode === 'pulse') return effectiveTotals.pulse || 0;
     if (mode === 'base') return effectiveTotals.base || 0;
     // all
-    return (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.base) || Number(totalUsd) || 0;
+    return effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.base || Number(totalUsd) || 0;
   }, [mode, effectiveTotals, totalUsd]);
 
   // ====== chips: All shows all; others show only the selected chain ======
@@ -711,9 +740,8 @@ export default function Portfolio() {
       { key: 'base', label: 'Base', usd: norm(effectiveTotals.base), color: '#3b82f6' }
     ];
 
-    const filtered = mode === 'all'
-      ? possible
-      : possible.filter(r => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : 'base'));
+    const filtered =
+      mode === 'all' ? possible : possible.filter((r) => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : 'base'));
 
     filtered.sort((a, b) => b.usd - a.usd);
     return filtered;
@@ -723,10 +751,11 @@ export default function Portfolio() {
     const base = tokens.filter((t) => !isJunkToken(t));
     const s = (q || '').trim().toLowerCase();
     if (!s) return base;
-    return base.filter((t) =>
-      (t.name || '').toLowerCase().includes(s) ||
-      (t.symbol || '').toLowerCase().includes(s) ||
-      (t.address || t.contract || '').toLowerCase().includes(s)
+    return base.filter(
+      (t) =>
+        (t.name || '').toLowerCase().includes(s) ||
+        (t.symbol || '').toLowerCase().includes(s) ||
+        (t.address || t.contract || '').toLowerCase().includes(s)
     );
   }, [tokens, q]);
 
@@ -758,17 +787,15 @@ export default function Portfolio() {
     }
   };
 
-  const lastUpdatedLabel = lastUpdated
-    ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '—';
+  const lastUpdatedLabel = lastUpdated ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 
   // ---------- NEW: memoised top tokens & snapshot writer ----------
   const topTokensSnap = useMemo(() => {
     return tokens
-      .filter(t => !isJunkToken(t) && Number(t.valueUsd) > 0)
+      .filter((t) => !isJunkToken(t) && Number(t.valueUsd) > 0)
       .sort((a, b) => Number(b.valueUsd) - Number(a.valueUsd))
       .slice(0, 25)
-      .map(t => ({
+      .map((t) => ({
         symbol: t.symbol || '',
         name: t.name || t.symbol || '',
         usd: Number(t.valueUsd) || 0
@@ -780,7 +807,7 @@ export default function Portfolio() {
       { chain: 'Ethereum', usd: Number(chainTotalsFromTokens.eth || 0) },
       { chain: 'PulseChain', usd: Number(chainTotalsFromTokens.pulse || 0) },
       { chain: 'Base', usd: Number(chainTotalsFromTokens.base || 0) }
-    ].filter(r => r.usd > 0);
+    ].filter((r) => r.usd > 0);
 
     aiSnapshotUpdatePortfolio({
       totalUsd: Number(totalUsd) || 0,
@@ -788,13 +815,7 @@ export default function Portfolio() {
       topTokens: topTokensSnap,
       pnl: {} // hook up PnL when available
     });
-  }, [
-    totalUsd,
-    chainTotalsFromTokens.eth,
-    chainTotalsFromTokens.pulse,
-    chainTotalsFromTokens.base,
-    topTokensSnap
-  ]);
+  }, [totalUsd, chainTotalsFromTokens.eth, chainTotalsFromTokens.pulse, chainTotalsFromTokens.base, topTokensSnap]);
 
   return (
     <>
@@ -817,9 +838,7 @@ export default function Portfolio() {
                   {/* Chips: cache-first values; All shows all, chain views show one */}
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-1" style={{ fontSize: 12 }}>
                     {assetChips.map((r) => {
-                      const denom = (mode === 'all')
-                        ? (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.base)
-                        : headerTotalUsd;
+                      const denom = mode === 'all' ? effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.base : headerTotalUsd;
                       const pct = denom > 0 ? Math.round((r.usd / denom) * 1000) / 10 : 0;
                       return (
                         <div
@@ -829,7 +848,14 @@ export default function Portfolio() {
                           title={`${r.label}: USD ${r.usd.toLocaleString('en-AU', { maximumFractionDigits: 0 })}${denom > 0 ? ` (${pct}%)` : ''}`}
                         >
                           <span
-                            style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', marginRight: 8, backgroundColor: r.color }}
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              display: 'inline-block',
+                              marginRight: 8,
+                              backgroundColor: r.color
+                            }}
                           />
                           <span className="me-2">{r.label}</span>
                           <span className="text-muted">
@@ -844,7 +870,10 @@ export default function Portfolio() {
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span className="text-success">24h: +0.00%</span>
                     <span className="text-muted">• Wallets: {walletCount}</span>
-                    <span className="text-muted">• Updated: {lastUpdatedLabel}{refreshing ? ' (refreshing...)' : ''}</span>
+                    <span className="text-muted">
+                      • Updated: {lastUpdatedLabel}
+                      {refreshing ? ' (refreshing...)' : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -881,14 +910,22 @@ export default function Portfolio() {
       </Row>
 
       {error && (
-        <Row><Col><Card className="mb-3"><Card.Body className="text-danger">{error}</Card.Body></Card></Col></Row>
+        <Row>
+          <Col>
+            <Card className="mb-3">
+              <Card.Body className="text-danger">{error}</Card.Body>
+            </Card>
+          </Col>
+        </Row>
       )}
 
       {/* Token rows (aggregated) */}
       <Row>
         <Col>
           <Card className="shadow-sm kwp-scope">
-            <Card.Header><strong>Top Tokens</strong></Card.Header>
+            <Card.Header>
+              <strong>Top Tokens</strong>
+            </Card.Header>
             <Card.Body>
               {booting && (
                 <LoadingBlock label={`Loading ${mode === 'pulse' ? 'PRC-20' : mode === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} />
@@ -896,107 +933,125 @@ export default function Portfolio() {
 
               {!booting && visibleTokens.length === 0 && <div className="text-muted">No tokens found.</div>}
 
-              {!booting && visibleTokens.map((t, i) => {
-                const k = keyFor(t);
-                const open = expanded.has(k);
-                const rows = breakdown.get(k) || [];
-                const price = Number(t.priceUsd ?? t.price ?? 0);
-                const delta = getChangePct(t);
-                const deltaCls = delta == null ? '' : delta >= 0 ? 'up' : 'down';
-                const deltaTxt = delta == null ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
+              {!booting &&
+                visibleTokens.map((t, i) => {
+                  const k = keyFor(t);
+                  const open = expanded.has(k);
+                  const rows = breakdown.get(k) || [];
+                  const price = Number(t.priceUsd ?? t.price ?? 0);
+                  const delta = getChangePct(t);
+                  const deltaCls = delta == null ? '' : delta >= 0 ? 'up' : 'down';
+                  const deltaTxt = delta == null ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
 
-                const label = (t.chain === 'pulse') ? 'Pulse' : (t.chain === 'base') ? 'Base' : 'ETH';
-                const logoChainId = chainIdOf(t.chain);
-                const logoAddr = (t.address || t.contract || '') || null;
+                  const label = t.chain === 'pulse' ? 'Pulse' : t.chain === 'base' ? 'Base' : 'ETH';
+                  const logoChainId = chainIdOf(t.chain);
+                  const logoAddr = t.address || t.contract || '' || null;
 
-                // address we can copy (only if exists)
-                const copyAddr = (t.address || t.contract || '').trim();
+                  // address we can copy (only if exists)
+                  const copyAddr = (t.address || t.contract || '').trim();
 
-                return (
-                  <div key={`${k}:${i}`} className="kwp-row">
-                    <div className="d-flex align-items-center justify-content-between">
-                      {/* LEFT: icon + spacer + symbol/name */}
-                      <div className="kwp-left">
-                        <div className="kwp-logo">
-                          <TokenLogo chainId={logoChainId} address={logoAddr} symbol={t.symbol} size={36} />
-                        </div>
-                        <div className="kwp-spacer" />
-                        <div className="kwp-name">
-                          <div className="kwp-symbol">
-                            <strong className="kwp-ticker">{t.symbol || '—'}</strong>
-                            <span className="kwp-name-inline">
-                              {' - '}
-                              {t.name || (t.address ? `${t.address.slice(0, 6)}…${t.address.slice(-4)}` : 'Native')}
-                            </span>
+                  return (
+                    <div key={`${k}:${i}`} className="kwp-row">
+                      <div className="d-flex align-items-center justify-content-between">
+                        {/* LEFT: icon + spacer + symbol/name */}
+                        <div className="kwp-left">
+                          <div className="kwp-logo">
+                            <TokenLogo chainId={logoChainId} address={logoAddr} symbol={t.symbol} size={36} />
                           </div>
-                          <div className="kwp-sub d-flex align-items-center">
-                            {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
-                            {/* Copy icon ONLY on View All + when token has a contract address */}
-                            {mode === 'all' && !!copyAddr && (
-                              <button
-                                type="button"
-                                className="kw-copy-btn"
-                                title="Copy contract to clipboard"
-                                onClick={() => copyContract(copyAddr)}
-                                aria-label="Copy contract"
-                              >
-                                <CopyIcon />
-                              </button>
+                          <div className="kwp-spacer" />
+                          <div className="kwp-name">
+                            <div className="kwp-symbol">
+                              <strong className="kwp-ticker">{t.symbol || '—'}</strong>
+                              <span className="kwp-name-inline">
+                                {' - '}
+                                {t.name || (t.address ? `${t.address.slice(0, 6)}…${t.address.slice(-4)}` : 'Native')}
+                              </span>
+                            </div>
+                            <div className="kwp-sub d-flex align-items-center">
+                              {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
+                              {/* Copy icon ONLY on View All + when token has a contract address */}
+                              {mode === 'all' && !!copyAddr && (
+                                <button
+                                  type="button"
+                                  className="kw-copy-btn"
+                                  title="Copy contract to clipboard"
+                                  onClick={() => copyContract(copyAddr)}
+                                  aria-label="Copy contract"
+                                >
+                                  <CopyIcon />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RIGHT: price/amount/value + expand */}
+                        <div className="kwp-cols">
+                          <div className="kwp-col kwp-price">
+                            <div className="text-muted" style={{ fontSize: 12 }}>
+                              Price
+                            </div>
+                            <div>{fmtPriceUSD(price)}</div>
+                            {delta != null && (
+                              <div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>
+                                {deltaTxt}
+                              </div>
                             )}
                           </div>
+                          <div className="kwp-col kwp-amount">
+                            <div className="text-muted" style={{ fontSize: 12 }}>
+                              Amount
+                            </div>
+                            <div>
+                              {fmtAmt(t.amount)} {t.symbol}
+                            </div>
+                          </div>
+                          <div className="kwp-col kwp-value">
+                            <div className="text-muted" style={{ fontSize: 12 }}>
+                              Value
+                            </div>
+                            <div className="fw-semibold">{fmtUSD(Number(t.valueUsd ?? Number(t.amount || 0) * price))}</div>
+                          </div>
+                          <div style={{ width: 'var(--kw-action)' }}>
+                            <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => toggleExpand(k)}>
+                              {open ? 'Hide' : 'Expand'}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
-                      {/* RIGHT: price/amount/value + expand */}
-                      <div className="kwp-cols">
-                        <div className="kwp-col kwp-price">
-                          <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
-                          <div>{fmtPriceUSD(price)}</div>
-                          {delta != null && (<div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>)}
+                      {open && (
+                        <div className="kwp-break">
+                          <div className="kwp-break-hdr">
+                            <div className="kwp-break-title text-muted">Balance Breakdown</div>
+                            <div /> <div /> <div /> <div />
+                          </div>
+
+                          {rows.length === 0 && (
+                            <div className="kwp-break-row">
+                              <div className="text-muted">No holdings.</div>
+                              <div></div>
+                              <div></div>
+                              <div></div>
+                              <div></div>
+                            </div>
+                          )}
+                          {rows.map((r, idx) => (
+                            <div key={idx} className="kwp-break-row">
+                              <div className="kwp-break-name">{walletName(r.wallet)}</div>
+                              <div></div>
+                              <div className="kwp-right">
+                                {fmtAmt(r.amount)} {t.symbol}
+                              </div>
+                              <div className="kwp-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
+                              <div></div>
+                            </div>
+                          ))}
                         </div>
-                        <div className="kwp-col kwp-amount">
-                          <div className="text-muted" style={{ fontSize: 12 }}>Amount</div>
-                          <div>{fmtAmt(t.amount)} {t.symbol}</div>
-                        </div>
-                        <div className="kwp-col kwp-value">
-                          <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
-                          <div className="fw-semibold">{fmtUSD(Number(t.valueUsd ?? (Number(t.amount || 0) * price)))}</div>
-                        </div>
-                        <div style={{ width: 'var(--kw-action)' }}>
-                          <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => toggleExpand(k)}>
-                            {open ? 'Hide' : 'Expand'}
-                          </button>
-                        </div>
-                      </div>
+                      )}
                     </div>
-
-                    {open && (
-                      <div className="kwp-break">
-                        <div className="kwp-break-hdr">
-                          <div className="kwp-break-title text-muted">Balance Breakdown</div>
-                          <div /> <div /> <div /> <div />
-                        </div>
-
-                        {rows.length === 0 && (
-                          <div className="kwp-break-row">
-                            <div className="text-muted">No holdings.</div>
-                            <div></div><div></div><div></div><div></div>
-                          </div>
-                        )}
-                        {rows.map((r, idx) => (
-                          <div key={idx} className="kwp-break-row">
-                            <div className="kwp-break-name">{walletName(r.wallet)}</div>
-                            <div></div>
-                            <div className="kwp-right">{fmtAmt(r.amount)} {t.symbol}</div>
-                            <div className="kwp-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
-                            <div></div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </Card.Body>
           </Card>
         </Col>

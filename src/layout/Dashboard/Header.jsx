@@ -21,20 +21,54 @@ import Img4 from 'assets/images/user/avatar-4.png';
 import Img5 from 'assets/images/user/avatar-5.png';
 
 const notifications = [
-  { id: 1, avatar: Img1, time: '2 min ago', title: 'UI/UX Design', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Today' },
-  { id: 2, avatar: Img2, time: '1 hour ago', title: 'Message', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Today' },
-  { id: 3, avatar: Img3, time: '2 hour ago', title: 'Forms', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Yesterday' },
-  { id: 4, avatar: Img4, time: '12 hour ago', title: 'Challenge invitation', description: 'Jonny aber invites you to join the challenge', actions: true, date: 'Yesterday' },
-  { id: 5, avatar: Img5, time: '5 hour ago', title: 'Security', description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.", date: 'Yesterday' }
+  {
+    id: 1,
+    avatar: Img1,
+    time: '2 min ago',
+    title: 'UI/UX Design',
+    description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+    date: 'Today'
+  },
+  {
+    id: 2,
+    avatar: Img2,
+    time: '1 hour ago',
+    title: 'Message',
+    description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+    date: 'Today'
+  },
+  {
+    id: 3,
+    avatar: Img3,
+    time: '2 hour ago',
+    title: 'Forms',
+    description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+    date: 'Yesterday'
+  },
+  {
+    id: 4,
+    avatar: Img4,
+    time: '12 hour ago',
+    title: 'Challenge invitation',
+    description: 'Jonny aber invites you to join the challenge',
+    actions: true,
+    date: 'Yesterday'
+  },
+  {
+    id: 5,
+    avatar: Img5,
+    time: '5 hour ago',
+    title: 'Security',
+    description: "Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+    date: 'Yesterday'
+  }
 ];
 
 /** Robust detector for whether the sidebar is collapsed/off-canvas */
 function computeSidebarCollapsed() {
   const body = document.body;
   const sb = document.getElementById('pc-sidebar');
-  const byBody =
-    body.classList.contains('pc-sidebar-hide') ||
-    body.classList.contains('mob-sidebar-active'); // datta mobile drawer
+  const byBody = body.classList.contains('pc-sidebar-hide') || body.classList.contains('mob-sidebar-active'); // datta mobile drawer
   const byElem = sb ? sb.classList.contains('hide') : false; // datta adds .hide on collapse
   return Boolean(byBody || byElem);
 }
@@ -157,9 +191,7 @@ export default function Header() {
   }, []);
 
   // Inline style to fully collapse header box when hidden (no gap)
-  const headerStyle = shouldShowHeader
-    ? undefined
-    : { height: 0, minHeight: 0, padding: 0, margin: 0, border: 0, overflow: 'hidden' };
+  const headerStyle = shouldShowHeader ? undefined : { height: 0, minHeight: 0, padding: 0, margin: 0, border: 0, overflow: 'hidden' };
 
   return (
     <header className="pc-header" style={headerStyle}>

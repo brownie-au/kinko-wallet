@@ -7,11 +7,7 @@ import { fetchPulsechainTokens } from './pulsechainService';
 import { getPortfolioWithPrices } from './moralisService';
 import walletsData from '../data/wallets.js';
 
-import {
-  setWalletCache,
-  getWalletCache,
-  WALLET_CACHE_DEFAULT_TTL
-} from '../utils/walletCache';
+import { setWalletCache, getWalletCache, WALLET_CACHE_DEFAULT_TTL } from '../utils/walletCache';
 
 const CHAINS = ['eth', 'pulse', 'base'];
 const INF = new Map(); // in-flight: key -> Promise
@@ -21,12 +17,14 @@ const cacheKey = (address, chain) => `${address}:${chain}`.toLowerCase();
 // ---- normalizers (match WalletDetail.jsx) ----
 const mapTokenForCache = (t, chainHint) => {
   const priceUsd = Number(t.priceUsd ?? t.price ?? 0);
-  const amount   = Number(t.amount ?? 0);
+  const amount = Number(t.amount ?? 0);
   const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
   return {
-    symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
+    symbol: (t.symbol || t.ticker || t.name || 'TOKEN').toUpperCase(),
     name: t.name || t.symbol || 'Token',
-    amount, priceUsd, valueUsd,
+    amount,
+    priceUsd,
+    valueUsd,
     contract: t.contract || t.address || null,
     logo: t.logo || t.iconUrl || null,
     chain: t.chain ?? chainHint
@@ -35,9 +33,7 @@ const mapTokenForCache = (t, chainHint) => {
 
 function adaptPulse(rows) {
   const list = Array.isArray(rows) ? rows.slice() : [];
-  const plsIdx = list.findIndex(
-    (r) => r.address === 'PLS' || r.symbol === 'PLS' || r.address === 'native'
-  );
+  const plsIdx = list.findIndex((r) => r.address === 'PLS' || r.symbol === 'PLS' || r.address === 'native');
   const pls = plsIdx >= 0 ? list.splice(plsIdx, 1)[0] : null;
 
   const nat = pls
@@ -78,27 +74,25 @@ function adaptPulse(rows) {
 }
 
 function adaptEth(rows) {
-  const list = Array.isArray(rows)
-    ? rows.slice()
-    : Array.isArray(rows?.tokens)
-    ? rows.tokens.slice()
-    : [];
+  const list = Array.isArray(rows) ? rows.slice() : Array.isArray(rows?.tokens) ? rows.tokens.slice() : [];
 
-  const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
+  const natIdx = list.findIndex((r) => r.symbol === 'ETH' || r.address === 'native');
   const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
 
-  const nat = natRow ? {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    amount: Number(natRow.balance || 0),
-    price: Number(natRow.price || 0),
-    priceUsd: Number(natRow.price || 0),
-    value: Number(natRow.value || 0),
-    valueUsd: Number(natRow.value || 0),
-    contract: 'native',
-    logo: natRow.iconUrl || null,
-    chain: 'eth'
-  } : null;
+  const nat = natRow
+    ? {
+        name: 'Ethereum',
+        symbol: 'ETH',
+        amount: Number(natRow.balance || 0),
+        price: Number(natRow.price || 0),
+        priceUsd: Number(natRow.price || 0),
+        value: Number(natRow.value || 0),
+        valueUsd: Number(natRow.value || 0),
+        contract: 'native',
+        logo: natRow.iconUrl || null,
+        chain: 'eth'
+      }
+    : null;
 
   const toks = list.map((r) => {
     const price = Number(r.price || r.priceUsd || 0);
@@ -135,8 +129,8 @@ function adaptBase(res, chain = 'base') {
   const toks = Array.isArray(res?.tokens)
     ? res.tokens.map((t) => {
         const price = Number(t.priceUsd ?? t.price ?? 0);
-        const amt   = Number(t.amount ?? 0);
-        const val   = Number(t.valueUsd ?? t.value ?? amt * price);
+        const amt = Number(t.amount ?? 0);
+        const val = Number(t.valueUsd ?? t.value ?? amt * price);
         return { ...t, chain, priceUsd: price, valueUsd: val };
       })
     : [];
@@ -147,7 +141,7 @@ function adaptBase(res, chain = 'base') {
 
 // ---- core fetcher per chain (deduped) ----
 async function fetchOne(address, chain) {
-  if (chain === 'eth')  return adaptEth(await fetchEthereumTokens(address));
+  if (chain === 'eth') return adaptEth(await fetchEthereumTokens(address));
   if (chain === 'pulse') return adaptPulse(await fetchPulsechainTokens(address));
   // base (and future chains) via Moralis
   return adaptBase(await getPortfolioWithPrices(address, chain), chain);
@@ -159,9 +153,7 @@ function writeSnapshot(address, chain, res) {
     ...(native ? [mapTokenForCache({ ...native, name: native.name || native.symbol || 'Native' }, chain)] : []),
     ...tokens.map((t) => mapTokenForCache(t, chain))
   ];
-  const total = Number.isFinite(totalUSD)
-    ? Number(totalUSD)
-    : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
+  const total = Number.isFinite(totalUSD) ? Number(totalUSD) : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
 
   setWalletCache(cacheKey(address, chain), {
     chain,
@@ -204,7 +196,10 @@ function uniqLower(arr) {
   const seen = new Set();
   for (const a of arr) {
     const s = (a || '').toLowerCase();
-    if (s && !seen.has(s)) { seen.add(s); out.push(s); }
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
   }
   return out;
 }
@@ -220,9 +215,7 @@ export function getManagedWalletAddresses() {
     }
   } catch {}
   // 2) from data file
-  const fromData = Array.isArray(walletsData)
-    ? walletsData.map((w) => w?.address || w?.addr || '')
-    : [];
+  const fromData = Array.isArray(walletsData) ? walletsData.map((w) => w?.address || w?.addr || '') : [];
 
   return uniqLower([...fromLocal, ...fromData]);
 }

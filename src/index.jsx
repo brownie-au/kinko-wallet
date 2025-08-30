@@ -20,8 +20,12 @@ const root = createRoot(container);
 
 root.render(
   <ConfigProvider>
-    <PrivacyProvider>        {/* ⬅️ Wrap globally so any component can scrub */}
-      <WalletProvider>       {/* existing */}
+    <PrivacyProvider>
+      {' '}
+      {/* ⬅️ Wrap globally so any component can scrub */}
+      <WalletProvider>
+        {' '}
+        {/* existing */}
         <App />
       </WalletProvider>
     </PrivacyProvider>

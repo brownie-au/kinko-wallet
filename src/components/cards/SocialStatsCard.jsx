@@ -4,7 +4,6 @@
 
 export default function SocialStatsCard() {
   if (import.meta?.env?.DEV) {
-    // eslint-disable-next-line no-console
     console.debug('[SocialStatsCard] noop render (component retired)');
   }
   return null;

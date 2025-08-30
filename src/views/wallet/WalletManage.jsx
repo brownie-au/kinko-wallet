@@ -1,17 +1,6 @@
 // src/views/wallet/WalletManage.jsx
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  Button,
-  Form,
-  Row,
-  Col,
-  ListGroup,
-  Alert,
-  ButtonGroup,
-  InputGroup,
-  Modal
-} from 'react-bootstrap';
+import { Card, Button, Form, Row, Col, ListGroup, Alert, ButtonGroup, InputGroup, Modal } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { loadWallets, saveWallets } from '../../utils/walletStorage';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
@@ -24,8 +13,8 @@ const SOFT = {
 };
 
 const ACTION_BTN_STYLE = {
-  minWidth: 84,           // consistent width
-  padding: '3px 10px',    // slimmer
+  minWidth: 84, // consistent width
+  padding: '3px 10px', // slimmer
   lineHeight: '1.1',
   fontWeight: 600
 };
@@ -121,18 +110,10 @@ const WalletManage = () => {
       <h2 className="mb-3">Manage Wallets</h2>
 
       <div className="mb-3 d-flex justify-content-start gap-2 flex-wrap">
-        <Button
-          variant="outline-secondary"
-          className="rounded-pill"
-          onClick={() => setShowUseId(true)}
-        >
+        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowUseId(true)}>
           Use Portfolio ID
         </Button>
-        <Button
-          variant="outline-secondary"
-          className="rounded-pill"
-          onClick={() => setShowCreateId(true)}
-        >
+        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowCreateId(true)}>
           Create / Update Portfolio ID
         </Button>
       </div>
@@ -148,7 +129,10 @@ const WalletManage = () => {
                     type="text"
                     placeholder="0x1234...abcd"
                     value={address}
-                    onChange={(e) => { setAddress(e.target.value); setError(''); }}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      setError('');
+                    }}
                     required
                   />
                 </Form.Group>
@@ -156,12 +140,7 @@ const WalletManage = () => {
               <Col md={4}>
                 <Form.Group controlId="walletName">
                   <Form.Label>Wallet Name</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="My Wallet"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+                  <Form.Control type="text" placeholder="My Wallet" value={name} onChange={(e) => setName(e.target.value)} />
                 </Form.Group>
               </Col>
               <Col md={3} className="d-flex align-items-end">
@@ -171,7 +150,11 @@ const WalletManage = () => {
               </Col>
             </Row>
           </Form>
-          {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
+          {error && (
+            <Alert variant="danger" className="mt-3">
+              {error}
+            </Alert>
+          )}
         </Card.Body>
       </Card>
 
@@ -179,17 +162,12 @@ const WalletManage = () => {
         <Card.Body>
           <h5>Existing Wallets</h5>
           <ListGroup>
-            {wallets.length === 0 && (
-              <ListGroup.Item>No wallets added yet.</ListGroup.Item>
-            )}
+            {wallets.length === 0 && <ListGroup.Item>No wallets added yet.</ListGroup.Item>}
 
             {wallets.map((w, idx) => {
               const isEditing = editingIndex === idx;
               return (
-                <ListGroup.Item
-                  key={`${w.address}-${idx}`}
-                  className="d-flex justify-content-between align-items-center"
-                >
+                <ListGroup.Item key={`${w.address}-${idx}`} className="d-flex justify-content-between align-items-center">
                   <div className="flex-grow-1 me-3" style={{ minWidth: 0 }}>
                     <div className="text-truncate">
                       <strong>{w.address}</strong>
@@ -205,8 +183,12 @@ const WalletManage = () => {
                             onKeyDown={(e) => onEditKey(e, idx)}
                             placeholder="Wallet name"
                           />
-                          <Button variant="primary" onClick={() => saveEdit(idx)}>Save</Button>
-                          <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
+                          <Button variant="primary" onClick={() => saveEdit(idx)}>
+                            Save
+                          </Button>
+                          <Button variant="secondary" onClick={cancelEdit}>
+                            Cancel
+                          </Button>
                         </InputGroup>
                       )}
                     </div>
@@ -233,7 +215,10 @@ const WalletManage = () => {
                         size="sm"
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.warning }}
-                        onClick={(e) => { e.stopPropagation(); startEdit(idx); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEdit(idx);
+                        }}
                       >
                         Edit
                       </Button>
@@ -243,7 +228,10 @@ const WalletManage = () => {
                         variant="outline-danger"
                         size="sm"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.danger }}
-                        onClick={(e) => { e.stopPropagation(); setConfirmIdx(idx); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmIdx(idx);
+                        }}
                       >
                         Delete
                       </Button>
@@ -257,19 +245,11 @@ const WalletManage = () => {
       </Card>
 
       {/* Delete confirmation modal */}
-      <Modal
-        show={confirmIdx !== null}
-        onHide={() => setConfirmIdx(null)}
-        centered
-        backdrop="static"
-        keyboard
-      >
+      <Modal show={confirmIdx !== null} onHide={() => setConfirmIdx(null)} centered backdrop="static" keyboard>
         <Modal.Header closeButton>
           <Modal.Title>Are you sure?</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          Deleting this wallet removes it from your local list. Keys are never stored by Kinko Wallet.
-        </Modal.Body>
+        <Modal.Body>Deleting this wallet removes it from your local list. Keys are never stored by Kinko Wallet.</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setConfirmIdx(null)}>
             Cancel

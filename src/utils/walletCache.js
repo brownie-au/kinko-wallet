@@ -1,6 +1,6 @@
 // src/utils/walletCache.js
 const CACHE_PREFIX = 'kw:wallet-cache:'; // one key per wallet(+chain)
-const DEFAULT_TTL_MS = 30 * 60 * 1000;   // 30 minutes
+const DEFAULT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Save a wallet snapshot (tokens, totals, chain, etc.) */
 export function setWalletCache(key, payload) {

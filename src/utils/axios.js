@@ -7,13 +7,13 @@ const axiosServices = axios.create({ baseURL: VITE_APP_API_URL || 'http://localh
 
 axiosServices.interceptors.request.use(
   async (config) => {
-    config.headers['Authorization'] =
-      'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI1ZTg2ODA5MjgzZTI4Yjk2ZDJkMzg1MzciLCJpYXQiOjE3NDM0MDMxMjEsImV4cCI6MTc0MzQ4OTUyMX0.hvqWYTc1NOylXAp0fA0LmRF6xlfeiCniIV5vjfGteg0';
+    // Only attach mock Authorization in development if provided via env
+    if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API_TOKEN) {
+      config.headers['Authorization'] = `Bearer ${import.meta.env.VITE_MOCK_API_TOKEN}`;
+    }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export default axiosServices;

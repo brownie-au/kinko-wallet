@@ -14,17 +14,17 @@ export async function fetchPulsechainTokens(address) {
       name: 'PulseChain Native',
       balance: plsBalance,
       decimals: 18,
-      value: 0,  // to be calculated
+      value: 0, // to be calculated
       price: 0,
       change24h: 0
     });
 
     // 4) Get token prices
-    const symbols = tokens.map(t => t.symbol);
+    const symbols = tokens.map((t) => t.symbol);
     const prices = await getTokenPrices(symbols);
 
     // 5) Attach price and value
-    return tokens.map(token => {
+    return tokens.map((token) => {
       const price = prices[token.symbol] || 0;
       return {
         ...token,

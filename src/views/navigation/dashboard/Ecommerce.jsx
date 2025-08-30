@@ -7,9 +7,7 @@ import Col from 'react-bootstrap/Col';
 export default function Ecommerce() {
   return (
     <Row>
-      <Col>
-        {/* e‑commerce widgets removed */}
-      </Col>
+      <Col>{/* e‑commerce widgets removed */}</Col>
     </Row>
   );
 }

@@ -30,7 +30,9 @@ export default function PortfolioIdChip({ className = '' }) {
   if (!id) return null;
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(id); } catch {}
+    try {
+      await navigator.clipboard.writeText(id);
+    } catch {}
   };
 
   return (

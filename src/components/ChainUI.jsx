@@ -3,10 +3,10 @@ import React from 'react';
 
 // Accent colours (kept soft so they work on light/dark)
 export const CHAIN_COLORS = {
-  all:   'var(--bs-primary, #0d6efd)',
-  eth:   '#2ecc71',
+  all: 'var(--bs-primary, #0d6efd)',
+  eth: '#2ecc71',
   pulse: '#9b59b6',
-  base:  '#3498db'
+  base: '#3498db'
 };
 
 // --- helpers ---
@@ -34,9 +34,9 @@ export function ChainChip({ chain = 'eth', className = '', style }) {
   const bg = CHAIN_COLORS[key] || CHAIN_COLORS.eth;
   const baseStyle = {
     display: 'inline-block',
-    padding: '1px 6px',     // in-between padding
-    borderRadius: 6,        // subtle rounded
-    fontSize: 10,           // halfway between 8.5 and old ~12
+    padding: '1px 6px', // in-between padding
+    borderRadius: 6, // subtle rounded
+    fontSize: 10, // halfway between 8.5 and old ~12
     lineHeight: 1.2,
     fontWeight: 500,
     color: '#fff',
@@ -68,16 +68,15 @@ export function ChainBadge({ chain = 'eth', children }) {
     boxShadow: '0 1px 0 rgba(0,0,0,.15)',
     minWidth: 56
   };
-  return <span className="k-chain-badge" style={style}>{children ?? key.toUpperCase()}</span>;
+  return (
+    <span className="k-chain-badge" style={style}>
+      {children ?? key.toUpperCase()}
+    </span>
+  );
 }
 
 /** Selector pill used in headers */
-export function ChainSelector({
-  value = 'all',
-  onChange,
-  options = ['all','eth','pulse','base'],
-  size = 'sm'
-}) {
+export function ChainSelector({ value = 'all', onChange, options = ['all', 'eth', 'pulse', 'base'], size = 'sm' }) {
   const baseVars = {
     '--k-chip-padding-y': '6px',
     '--k-chip-padding-x': '12px',
@@ -97,11 +96,7 @@ export function ChainSelector({
     <div className="d-inline-flex align-items-center gap-2">
       {options.map((c) => {
         const active = value === c;
-        const label =
-          c === 'all' ? 'All' :
-          c === 'eth' ? 'Ethereum' :
-          c === 'pulse' ? 'PulseChain' :
-          c === 'base' ? 'Base' : c;
+        const label = c === 'all' ? 'All' : c === 'eth' ? 'Ethereum' : c === 'pulse' ? 'PulseChain' : c === 'base' ? 'Base' : c;
 
         return (
           <button

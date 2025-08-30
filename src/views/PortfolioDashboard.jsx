@@ -44,11 +44,7 @@ function getCachedPortfolioUsd() {
       if (!addr) continue;
 
       const wc = getWalletCache(addr, { maxAge: Number.MAX_SAFE_INTEGER }) || {};
-      const t =
-        wc?.totals?.usd ??
-        wc?.totals?.totalUsd ??
-        wc?.totalUsd ??
-        0;
+      const t = wc?.totals?.usd ?? wc?.totals?.totalUsd ?? wc?.totalUsd ?? 0;
       total += Number(t) || 0;
     }
     return total;
@@ -106,8 +102,12 @@ export default function PortfolioDashboard() {
         <Card className="mb-3">
           <Card.Body>
             <div className="text-muted mb-1">Total Portfolio Value</div>
-            <div className="fs-4 fw-semibold" data-scrub="true">{fmtUsd(total)}</div>
-            <div className="text-success small mt-1" data-scrub="true">▲ 0.00% (24h)</div>
+            <div className="fs-4 fw-semibold" data-scrub="true">
+              {fmtUsd(total)}
+            </div>
+            <div className="text-success small mt-1" data-scrub="true">
+              ▲ 0.00% (24h)
+            </div>
 
             {/* --- Staking & Mining summary (HEX + eHEX) --- */}
             <div
@@ -126,12 +126,8 @@ export default function PortfolioDashboard() {
                   display: 'inline-block'
                 }}
               />
-              <span style={{ color: STAKING_COLOUR, fontWeight: 600 }}>
-                Staking &amp; Mining:
-              </span>
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {fmtUsd(stakingUsd)}
-              </span>
+              <span style={{ color: STAKING_COLOUR, fontWeight: 600 }}>Staking &amp; Mining:</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(stakingUsd)}</span>
             </div>
           </Card.Body>
         </Card>
@@ -141,7 +137,9 @@ export default function PortfolioDashboard() {
         <Card className="mb-3">
           <Card.Body>
             <div className="text-muted mb-1">PnL</div>
-            <div className="fs-4 fw-semibold" data-scrub="true">+ $6,842</div>
+            <div className="fs-4 fw-semibold" data-scrub="true">
+              + $6,842
+            </div>
             <div className="small mt-2">
               <span className="badge bg-secondary me-2">7D</span>
               <span className="badge bg-secondary me-2">1M</span>

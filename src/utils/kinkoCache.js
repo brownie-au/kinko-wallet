@@ -27,7 +27,9 @@ export function setCachedJSON(key, data) {
 }
 
 export function clearCachedJSON(key) {
-  try { localStorage.removeItem(NS + key); } catch {}
+  try {
+    localStorage.removeItem(NS + key);
+  } catch {}
 }
 
 export function clearAllKinkoCache() {

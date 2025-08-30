@@ -9,7 +9,7 @@ function fnv1a32(str) {
     // h *= 16777619 (FNV prime) using bit ops to stay in 32-bit space
     h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
   }
-  return (h >>> 0); // unsigned
+  return h >>> 0; // unsigned
 }
 
 export function walletSignature(wallets) {

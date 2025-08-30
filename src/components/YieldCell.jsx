@@ -11,27 +11,33 @@ import { getCachedYieldPct } from '../../services/hex/hexYieldHDS';
  *  - className?: string
  */
 export default function YieldCell({ stake, chain = 'pls', dayCounter, digits = 2, className = '' }) {
-    const [val, setVal] = useState(null);
+  const [val, setVal] = useState(null);
 
-    useEffect(() => {
-        let alive = true;
-        (async () => {
-            try {
-                const v = await getCachedYieldPct(chain, stake, dayCounter);
-                if (alive) setVal(v);
-            } catch {
-                if (alive) setVal(0);
-            }
-        })();
-        return () => { alive = false; };
-    }, [chain, stake?.stakeId, stake?.lockedDay, stake?.stakedDays, stake?.stakeShares, stake?.stakedHearts, dayCounter]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const v = await getCachedYieldPct(chain, stake, dayCounter);
+        if (alive) setVal(v);
+      } catch {
+        if (alive) setVal(0);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [chain, stake?.stakeId, stake?.lockedDay, stake?.stakedDays, stake?.stakeShares, stake?.stakedHearts, dayCounter]);
 
-    if (val === null) {
-        // light skeleton that won't mess with your row height
-        return <span className={`text-muted ${className}`} style={{ opacity: 0.6 }}>…</span>;
-    }
+  if (val === null) {
+    // light skeleton that won't mess with your row height
+    return (
+      <span className={`text-muted ${className}`} style={{ opacity: 0.6 }}>
+        …
+      </span>
+    );
+  }
 
-    const pct = Number(val);
-    const formatted = Number.isFinite(pct) ? `${pct.toFixed(digits)}%` : '0%';
-    return <span className={className}>{formatted}</span>;
+  const pct = Number(val);
+  const formatted = Number.isFinite(pct) ? `${pct.toFixed(digits)}%` : '0%';
+  return <span className={className}>{formatted}</span>;
 }

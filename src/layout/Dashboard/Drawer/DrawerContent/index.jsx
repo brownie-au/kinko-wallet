@@ -32,9 +32,7 @@ export default function DrawerContent() {
     if (wpIdx >= 0 && Array.isArray(cloned[wpIdx].children)) {
       const ci = cloned[wpIdx].children.findIndex(
         (c) =>
-          c?.id === 'manage-wallets' ||
-          normalizePath(c?.url) === '/wallets/manage' ||
-          (c?.title || '').toLowerCase() === 'manage wallets'
+          c?.id === 'manage-wallets' || normalizePath(c?.url) === '/wallets/manage' || (c?.title || '').toLowerCase() === 'manage wallets'
       );
       if (ci >= 0) {
         const [picked] = cloned[wpIdx].children.splice(ci, 1);
@@ -42,14 +40,13 @@ export default function DrawerContent() {
       }
     }
 
-    const promoted =
-      manageWalletsChild && {
-        id: 'manage-wallets',
-        type: 'item',
-        title: manageWalletsChild.title || 'Manage Wallets',
-        url: normalizePath(manageWalletsChild.url || '/wallets/manage'),
-        icon: manageWalletsChild.icon || <i className="ti ti-settings" aria-hidden="true" />
-      };
+    const promoted = manageWalletsChild && {
+      id: 'manage-wallets',
+      type: 'item',
+      title: manageWalletsChild.title || 'Manage Wallets',
+      url: normalizePath(manageWalletsChild.url || '/wallets/manage'),
+      icon: manageWalletsChild.icon || <i className="ti ti-settings" aria-hidden="true" />
+    };
 
     const dashboard = cloned.find((it) => it?.id === 'dashboard');
     const walletPortfolio = cloned.find((it) => it?.id === 'wallet-portfolio');
@@ -68,10 +65,8 @@ export default function DrawerContent() {
 
   // ---------- OPEN STATE (always collapsed by default; no persistence) ----------
   const [openMap, setOpenMap] = useState({}); // start closed every time
-  const setGroupOpen = (id, next) =>
-    setOpenMap((prev) => ({ ...prev, [id]: !!next }));
-  const toggleOpen = (id) =>
-    setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  const setGroupOpen = (id, next) => setOpenMap((prev) => ({ ...prev, [id]: !!next }));
+  const toggleOpen = (id) => setOpenMap((prev) => ({ ...prev, [id]: !prev[id] }));
 
   // One-time deep-link: if current route sits inside a group, open that group (don’t touch others)
   const didInitRef = useRef(false);
@@ -87,7 +82,7 @@ export default function DrawerContent() {
         if (node.children.some((c) => (c?.url || c?.link) && norm(c.url || c.link) === path)) return true;
         return node.children.some((c) => containsPath(c, path));
       }
-      return (node?.url || node?.link) ? norm(node.url || node.link) === path : false;
+      return node?.url || node?.link ? norm(node.url || node.link) === path : false;
     };
 
     const parentIdForPath = (nodes = [], path) => {
@@ -123,18 +118,15 @@ export default function DrawerContent() {
     // Portfolio special: consider "View All" (/wallets) and any wallet sub-route
     const anyChildActive = isPortfolio
       ? children.some((c) => {
-        const u = normalizePath(c?.url || '');
-        if (!u) return false;
-        if (pathname === u) return true;       // exact (e.g. /wallets)
-        if (pathname.startsWith(u + '/')) return true;
-        return false;
-      })
+          const u = normalizePath(c?.url || '');
+          if (!u) return false;
+          if (pathname === u) return true; // exact (e.g. /wallets)
+          if (pathname.startsWith(u + '/')) return true;
+          return false;
+        })
       : children.some((c) => isExact(c?.url, pathname));
 
-    const isOpen =
-      (openMap[item.id] ?? false) ||
-      anyChildActive ||
-      (isPortfolio && isWalletDetailRoute);
+    const isOpen = (openMap[item.id] ?? false) || anyChildActive || (isPortfolio && isWalletDetailRoute);
 
     return (
       <div key={item.id} className={`pc-item pc-hasmenu${isOpen ? ' pc-trigger active' : ''}`}>
@@ -142,20 +134,13 @@ export default function DrawerContent() {
           <span className="pc-micon">{item.icon || null}</span>
           <span className="pc-mtext">{item.title}</span>
           <span className="pc-arrow">
-            <i
-              className="ti ti-chevron-right"
-              style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
-            />
+            <i className="ti ti-chevron-right" style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
           </span>
         </div>
 
         <ul className="pc-submenu" style={{ display: isOpen ? 'block' : 'none' }}>
           {children.map((child) => (
-            <li
-              key={child.id}
-              className={`pc-item${isActive(child.url) ? ' active' : ''}`}
-              style={{ position: 'relative' }}
-            >
+            <li key={child.id} className={`pc-item${isActive(child.url) ? ' active' : ''}`} style={{ position: 'relative' }}>
               <Link className="pc-link" to={child.url || '#'}>
                 {isActive(child.url) && (
                   <span

@@ -10,11 +10,18 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (show) { setMsg(''); setErr(''); } }, [show]);
+  useEffect(() => {
+    if (show) {
+      setMsg('');
+      setErr('');
+    }
+  }, [show]);
 
   const onCreateOrUpdate = async () => {
     try {
-      setBusy(true); setMsg(''); setErr('');
+      setBusy(true);
+      setMsg('');
+      setErr('');
       const useId = id || generatePortfolioId();
       await createPortfolio(useId, wallets);
       setId(useId);
@@ -30,7 +37,9 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
 
   return (
     <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton><Modal.Title>Create / Update Portfolio ID</Modal.Title></Modal.Header>
+      <Modal.Header closeButton>
+        <Modal.Title>Create / Update Portfolio ID</Modal.Title>
+      </Modal.Header>
       <Modal.Body>
         <p className="mb-2">This writes your current wallets straight to the remote store.</p>
         <Form.Group className="mb-3">
@@ -42,16 +51,37 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
             disabled={busy}
           />
           <div className="mt-2 d-flex gap-2">
-            <Button variant="secondary" onClick={copy} disabled={!id || busy}>Copy</Button>
+            <Button variant="secondary" onClick={copy} disabled={!id || busy}>
+              Copy
+            </Button>
           </div>
         </Form.Group>
-        {msg && <Alert variant="success" className="mb-0">{msg}</Alert>}
-        {err && <Alert variant="danger" className="mb-0">{err}</Alert>}
+        {msg && (
+          <Alert variant="success" className="mb-0">
+            {msg}
+          </Alert>
+        )}
+        {err && (
+          <Alert variant="danger" className="mb-0">
+            {err}
+          </Alert>
+        )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="outline-secondary" onClick={onHide} disabled={busy}>Close</Button>
+        <Button variant="outline-secondary" onClick={onHide} disabled={busy}>
+          Close
+        </Button>
         <Button variant="primary" onClick={onCreateOrUpdate} disabled={busy}>
-          {busy ? (<><Spinner size="sm" className="me-2" />Working…</>) : (id ? 'Update Remote' : 'Create Remote')}
+          {busy ? (
+            <>
+              <Spinner size="sm" className="me-2" />
+              Working…
+            </>
+          ) : id ? (
+            'Update Remote'
+          ) : (
+            'Create Remote'
+          )}
         </Button>
       </Modal.Footer>
     </Modal>

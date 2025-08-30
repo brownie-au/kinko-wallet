@@ -2,9 +2,9 @@
 /* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  loadPortfolioSnapshot,          // cache-first read (may be 'cached' or 'fresh')
-  refreshPortfolioSnapshot,       // background refresh using scheduler
-  buildPortfolioSnapshotNow       // hard, immediate rebuild (for the button)
+  loadPortfolioSnapshot, // cache-first read (may be 'cached' or 'fresh')
+  refreshPortfolioSnapshot, // background refresh using scheduler
+  buildPortfolioSnapshotNow // hard, immediate rebuild (for the button)
 } from '../services/portfolioDataService';
 
 import { useWallets } from '../contexts/WalletContext';
@@ -32,16 +32,25 @@ function resolveWallets(ctx, override) {
  * - expose refreshNow() to force an immediate rebuild
  */
 export function usePortfolioData(walletsOverride) {
-  const [status, setStatus] = useState('idle');  // 'idle' | 'loading' | 'cached' | 'fresh' | 'error'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'cached' | 'fresh' | 'error'
   const [snapshot, setSnapshot] = useState(null);
 
   let ctx;
-  try { ctx = useWallets(); } catch { ctx = undefined; }
+  try {
+    ctx = useWallets();
+  } catch {
+    ctx = undefined;
+  }
 
   const wallets = resolveWallets(ctx, walletsOverride);
 
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    []
+  );
 
   // ---- initial load: cache-first, then silent background refresh
   useEffect(() => {
@@ -73,18 +82,14 @@ export function usePortfolioData(walletsOverride) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(wallets)]);
 
-  const rows = useMemo(
-    () => (Array.isArray(snapshot?.rows) ? snapshot.rows : []),
-    [snapshot]
-  );
-  const totals = useMemo(
-    () => (snapshot?.totals || { totalUsd: 0, count: 0 }),
-    [snapshot]
-  );
+  const rows = useMemo(() => (Array.isArray(snapshot?.rows) ? snapshot.rows : []), [snapshot]);
+  const totals = useMemo(() => snapshot?.totals || { totalUsd: 0, count: 0 }, [snapshot]);
 
   // Explicit hard refresh for the button (forces rebuild; shows loading)
   const refreshNow = async () => {

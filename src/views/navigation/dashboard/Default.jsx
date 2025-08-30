@@ -14,9 +14,15 @@ export default function DefaultPage() {
   return (
     <Row>
       {/* KPI Row */}
-      <Col md={6} xl={4}><PortfolioValueCard /></Col>
-      <Col md={6} xl={4}><PnLCard /></Col>
-      <Col md={12} xl={4}><FearGreedCard /></Col>
+      <Col md={6} xl={4}>
+        <PortfolioValueCard />
+      </Col>
+      <Col md={6} xl={4}>
+        <PnLCard />
+      </Col>
+      <Col md={12} xl={4}>
+        <FearGreedCard />
+      </Col>
 
       {/* Top Tokens Row */}
       <Col xs={12} className="mt-3">

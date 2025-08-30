@@ -5,19 +5,12 @@ import { setResolvedTheme } from 'components/setResolvedTheme';
 import { ThemeMode } from 'config';
 
 // Optional: pass `variant="outline-secondary"` etc.
-export default function ThemeToggle({
-  size = 'sm',
-  variant = 'outline-secondary',
-  showLabels = false,
-  className = '',
-}) {
+export default function ThemeToggle({ size = 'sm', variant = 'outline-secondary', showLabels = false, className = '' }) {
   // Find current mode from <html data-theme="..."> to style active button
   const current = useMemo(() => {
     const html = document.documentElement;
     // common values we use elsewhere: 'light' | 'dark' | 'system'
-    return (html.getAttribute('data-theme-mode') ||
-            html.getAttribute('data-bs-theme') ||
-            'system').toLowerCase();
+    return (html.getAttribute('data-theme-mode') || html.getAttribute('data-bs-theme') || 'system').toLowerCase();
   }, []); // we don’t need to re-render on click; buttons still work
 
   const Btn = ({ mode, title, icon }) => {
@@ -48,8 +41,8 @@ export default function ThemeToggle({
 
   return (
     <ButtonGroup className={className} aria-label="Theme Mode">
-      <Btn mode={ThemeMode.LIGHT}  title="Light"  icon="ph ph-sun" />
-      <Btn mode={ThemeMode.DARK}   title="Dark"   icon="ph ph-moon" />
+      <Btn mode={ThemeMode.LIGHT} title="Light" icon="ph ph-sun" />
+      <Btn mode={ThemeMode.DARK} title="Dark" icon="ph ph-moon" />
       <Btn mode={ThemeMode.SYSTEM} title="System" icon="ph ph-cpu" />
     </ButtonGroup>
   );

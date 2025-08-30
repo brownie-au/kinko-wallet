@@ -20,19 +20,15 @@ const USE_ETH_PRICE_BACKFILL = false; // we use DefiLlama now
 // Visibility threshold (USD).
 // Requirement: only the Value (USD) column determines visibility.
 // Default 0.02 if not set.
-const HIDE_USD_MIN = Number(
-  import.meta.env.VITE_PORTFOLIO_HIDE_USD_MIN ??
-  import.meta.env.VITE_HIDE_USD_MIN ??
-  0.02
-);
+const HIDE_USD_MIN = Number(import.meta.env.VITE_PORTFOLIO_HIDE_USD_MIN ?? import.meta.env.VITE_HIDE_USD_MIN ?? 0.02);
 
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 function toRow(sr, wallet) {
   return {
     chain: (sr.chain || '').toLowerCase(), // 'pulse' | 'eth' | 'base'
-    wallet,                                 // wallet address
-    address: sr.address === 'native' ? null : (sr.address || sr.contract || null),
+    wallet, // wallet address
+    address: sr.address === 'native' ? null : sr.address || sr.contract || null,
     symbol: sr.symbol || '',
     name: sr.name || '',
     // pass through description for spam filter
@@ -57,9 +53,7 @@ const ALLOWLIST_SUBSTRINGS = [
 
 const DOMAIN_RE = /\b(?:[a-z0-9-]{2,}\.)+[a-z]{2,24}\b/i;
 const URL_MARKERS = ['http://', 'https://', 'www.'];
-const SPAM_PHRASES = [
-  'claim rewards', 'airdrop', 'bonus', 'free', 'mint now', 'verify', 'AICC - AI Chain Coin', 'connect wallet'
-];
+const SPAM_PHRASES = ['claim rewards', 'airdrop', 'bonus', 'free', 'mint now', 'verify', 'AICC - AI Chain Coin', 'connect wallet'];
 
 function isSpamToken(t) {
   const name = (t.name || '').toLowerCase();
@@ -72,9 +66,9 @@ function isSpamToken(t) {
     if (name.includes(ok) || symbol.includes(ok)) return false;
   }
 
-  if (URL_MARKERS.some(m => hay.includes(m))) return true;
+  if (URL_MARKERS.some((m) => hay.includes(m))) return true;
   if (DOMAIN_RE.test(hay)) return true;
-  if (SPAM_PHRASES.some(p => hay.includes(p))) return true;
+  if (SPAM_PHRASES.some((p) => hay.includes(p))) return true;
 
   return false;
 }
@@ -85,7 +79,7 @@ function rowsFromMoralis(address, chainCode, res) {
   if (!res) return out;
 
   const price = (x) => Number(x?.priceUsd ?? x?.price ?? 0);
-  const value = (amt, p) => (Number(xorZero(amt)) * Number(xorZero(p)));
+  const value = (amt, p) => Number(xorZero(amt)) * Number(xorZero(p));
   const xorZero = (v) => Number(v || 0);
 
   // native first
@@ -119,7 +113,7 @@ function rowsFromMoralis(address, chainCode, res) {
           name: t.name || t.symbol || 'Token',
           amount: amt,
           priceUsd: p,
-          valueUsd: Number(t.valueUsd ?? t.value ?? (amt * p))
+          valueUsd: Number(t.valueUsd ?? t.value ?? amt * p)
         },
         address
       )
@@ -139,9 +133,9 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
   const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
   const force = !!options.force;
 
-  const wantPulse = (only === 'all' || only === 'auto' || only === 'pulse');
-  const wantEth = (only === 'all' || only === 'auto' || only === 'eth');
-  const wantBase = (only === 'all' || only === 'auto' || only === 'base');
+  const wantPulse = only === 'all' || only === 'auto' || only === 'pulse';
+  const wantEth = only === 'all' || only === 'auto' || only === 'eth';
+  const wantBase = only === 'all' || only === 'auto' || only === 'base';
 
   const rows = [];
 
@@ -169,7 +163,7 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
         let nativePriceUsd = 0;
         try {
           nativePriceUsd = await getEthUsdPriceLlama();
-          const addrs = (discovered || []).map(t => t.address).filter(Boolean);
+          const addrs = (discovered || []).map((t) => t.address).filter(Boolean);
           priceMap = await getEthTokenPricesLlama(addrs);
         } catch (e) {
           console.warn('[PortfolioAgg] Llama price fetch failed for', addr, e?.message);
@@ -193,7 +187,9 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
 
         // 3) Native ETH row (real amount via RPC)
         let nativeAmount = 0;
-        try { nativeAmount = await getEthNativeBalance(addr); } catch { }
+        try {
+          nativeAmount = await getEthNativeBalance(addr);
+        } catch {}
         rows.push(
           toRow(
             {
@@ -223,7 +219,7 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                 decimals: Number(t.decimals ?? 18),
                 amount: amountUnits,
                 priceUsd: p,
-                valueUsd: p ? (amountUnits * p) : 0
+                valueUsd: p ? amountUnits * p : 0
               },
               addr
             )
@@ -249,7 +245,7 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
   const safeRows = rows.filter((r) => !isSpamToken(r));
 
   // Aggregate + breakdown
-  const byKey = new Map();     // key -> token aggregate
+  const byKey = new Map(); // key -> token aggregate
   const breakdown = new Map(); // key -> [{ wallet, amount, valueUsd }]
 
   for (const r of safeRows) {

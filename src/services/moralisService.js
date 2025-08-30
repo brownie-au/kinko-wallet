@@ -2,7 +2,7 @@
 // Works with Moralis v2 (deep-index.moralis.io/api/v2)
 
 // Load from .env
-const MORALIS_API_KEY  = import.meta.env.VITE_MORALIS_API_KEY;
+const MORALIS_API_KEY = import.meta.env.VITE_MORALIS_API_KEY;
 const MORALIS_API_BASE = import.meta.env.VITE_MORALIS_API_BASE || 'https://deep-index.moralis.io/api/v2';
 
 // Default chain for the Ethereum wallet page
@@ -10,7 +10,7 @@ const CHAIN_ID = 'eth';
 
 // WETH contract is a good proxy for native ETH price
 const WETH_BY_CHAIN = {
-  eth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+  eth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
   // base: '0x4200000000000000000000000000000000000006', // when we wire Base
   // add others as needed
 };
@@ -73,7 +73,7 @@ export async function getTokenBalances(address, chain = CHAIN_ID) {
 export async function getTokenMetadata(addresses = [], chain = CHAIN_ID) {
   if (!addresses.length) return {};
   const params = { chain };
-  addresses.forEach((a) => params['addresses'] = a); // URLSearchParams repeats 'addresses='
+  addresses.forEach((a) => (params['addresses'] = a)); // URLSearchParams repeats 'addresses='
 
   // Build URL manually because URLSearchParams overwrites
   const url = new URL(`${MORALIS_API_BASE}/erc20/metadata`);
@@ -130,10 +130,7 @@ async function mapWithLimit(items, limit, fn) {
  */
 export async function getPortfolioWithPrices(address, chain = CHAIN_ID) {
   // 1) balances
-  const [nativeEth, erc20] = await Promise.all([
-    getNativeBalance(address, chain),
-    getTokenBalances(address, chain)
-  ]);
+  const [nativeEth, erc20] = await Promise.all([getNativeBalance(address, chain), getTokenBalances(address, chain)]);
 
   // 2) metadata (logos)
   const addrs = erc20.map((t) => t.contractAddress).filter(Boolean);
@@ -146,22 +143,24 @@ export async function getPortfolioWithPrices(address, chain = CHAIN_ID) {
     mapWithLimit(addrs, 4, (a) => getTokenPriceUSD(a, chain))
   ]);
 
-  const tokens = erc20.map((t, idx) => {
-    const key = (t.contractAddress || '').toLowerCase();
-    const m = meta[key] || {};
-    const price = safeNumber(prices[idx], 0);
-    const value = t.balance * price;
-    return {
-      name: m.name || t.name || 'Unknown',
-      symbol: m.symbol || t.symbol || '',
-      decimals: m.decimals || t.decimals || 18,
-      amount: t.balance,
-      price,
-      value,
-      contract: t.contractAddress,
-      logo: m.logo || null
-    };
-  }).sort((a, b) => b.value - a.value);
+  const tokens = erc20
+    .map((t, idx) => {
+      const key = (t.contractAddress || '').toLowerCase();
+      const m = meta[key] || {};
+      const price = safeNumber(prices[idx], 0);
+      const value = t.balance * price;
+      return {
+        name: m.name || t.name || 'Unknown',
+        symbol: m.symbol || t.symbol || '',
+        decimals: m.decimals || t.decimals || 18,
+        amount: t.balance,
+        price,
+        value,
+        contract: t.contractAddress,
+        logo: m.logo || null
+      };
+    })
+    .sort((a, b) => b.value - a.value);
 
   const native = {
     name: chain === 'eth' ? 'Ether' : 'Native',

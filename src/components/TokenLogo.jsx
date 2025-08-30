@@ -35,7 +35,7 @@ const NATIVE_TW = {
 };
 
 function trustWalletPath(chainId, address) {
-  const slug = ({ 1: 'ethereum', 56: 'smartchain', 137: 'polygon', 10: 'optimism', 42161: 'arbitrum', 8453: 'base' })[chainId];
+  const slug = { 1: 'ethereum', 56: 'smartchain', 137: 'polygon', 10: 'optimism', 42161: 'arbitrum', 8453: 'base' }[chainId];
   if (!slug || chainId === 369 || !address) return null; // PulseChain not in TW repo
   return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${slug}/assets/${address}/logo.png`;
 }
@@ -62,7 +62,7 @@ function pulseCommunityCandidates(address) {
   if (!address) return [];
   return [
     `${PULSE_COMMUNITY}/blockchains/pulsechain/assets/${address}/logo.png`,
-    `${PULSE_COMMUNITY}/blockchains/pulsechain/assets/${address}/logo.svg`,
+    `${PULSE_COMMUNITY}/blockchains/pulsechain/assets/${address}/logo.svg`
   ];
 }
 
@@ -72,16 +72,16 @@ const KNOWN_TOKEN_LOGOS = {
     '0x6b32022693210cd2cfc466b9ac0085de8fc34ea6': `${PULSE_FLAT_CDN}/0x6b32022693210cd2cfc466b9ac0085de8fc34ea6.png`,
     '0x8854bc985fb5725f872c8856bea11b917caeb2fe': `${PULSE_FLAT_CDN}/0x8854bc985fb5725f872c8856bea11b917caeb2fe.png`,
     '0x3819f64f282bf135d62168c1e513280daf905e06': `${PULSE_FLAT_CDN}/0x3819f64f282bf135d62168c1e513280daf905e06.png`,
-    '0x9663c2d75ffd5f4017310405fce61720af45b829': `${PULSE_FLAT_CDN}/0x9663c2d75ffd5f4017310405fce61720af45b829.png`,
+    '0x9663c2d75ffd5f4017310405fce61720af45b829': `${PULSE_FLAT_CDN}/0x9663c2d75ffd5f4017310405fce61720af45b829.png`
   },
   1: {
     '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48':
-      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png'
   },
   8453: {
     '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913':
-      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913/logo.png',
-  },
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913/logo.png'
+  }
 };
 
 /* -------- DexScreener API with localStorage cache -------- */
@@ -95,10 +95,14 @@ function readDexCache(a) {
     if (!raw) return null;
     const j = JSON.parse(raw);
     return Date.now() - (j.ts || 0) < DEX_TTL ? j.url : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function writeDexCache(a, u) {
-  try { localStorage.setItem(dexKey(a), JSON.stringify({ url: u, ts: Date.now() })); } catch { }
+  try {
+    localStorage.setItem(dexKey(a), JSON.stringify({ url: u, ts: Date.now() }));
+  } catch {}
 }
 
 async function fetchDexLogo(addr, chainId) {
@@ -118,25 +122,33 @@ async function fetchDexLogo(addr, chainId) {
     const onChain = (p) => eq(p?.chainId, chainSlug);
     const hasAddr = (p) => eq(p?.baseToken?.address, addr) || eq(p?.quoteToken?.address, addr);
 
-    const pick =
-      pairs.find((p) => onChain(p) && hasAddr(p)) ||
-      pairs.find((p) => hasAddr(p)) ||
-      pairs.find((p) => onChain(p)) ||
-      pairs[0];
+    const pick = pairs.find((p) => onChain(p) && hasAddr(p)) || pairs.find((p) => hasAddr(p)) || pairs.find((p) => onChain(p)) || pairs[0];
 
     const urls = [
       pick?.info?.imageUrl,
-      pick?.baseToken?.imageUrl, pick?.baseToken?.logoUrl, pick?.baseToken?.logoURI, pick?.baseToken?.logo,
-      pick?.quoteToken?.imageUrl, pick?.quoteToken?.logoUrl, pick?.quoteToken?.logoURI, pick?.quoteToken?.logo,
+      pick?.baseToken?.imageUrl,
+      pick?.baseToken?.logoUrl,
+      pick?.baseToken?.logoURI,
+      pick?.baseToken?.logo,
+      pick?.quoteToken?.imageUrl,
+      pick?.quoteToken?.logoUrl,
+      pick?.quoteToken?.logoURI,
+      pick?.quoteToken?.logo
     ].filter(Boolean);
 
     return urls[0] || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /* ---------------- Letter badge fallback ---------------- */
 function badgeSvg(text, size) {
-  const label = String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || '•';
+  const label =
+    String(text || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 3) || '•';
   const seed = [...label].reduce((a, c) => a + c.charCodeAt(0), 0);
   const hue = seed % 360;
   const bg1 = `hsl(${hue} 70% 35%)`;
@@ -152,7 +164,7 @@ function badgeSvg(text, size) {
       <stop offset="100%" stop-color="${bg2}" />
     </linearGradient>
   </defs>
-  <circle cx="${size / 2}" cy="${size / 2}" r="${(size / 2) - 0.5}" fill="url(#g)" />
+  <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 0.5}" fill="url(#g)" />
   <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
         font-family="system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial"
         font-size="${fontSize}" font-weight="700" fill="${fg}">
@@ -205,42 +217,48 @@ function buildStaticCandidates({ chainId, address, logoURI, size }) {
 /* ---------------- Component ---------------- */
 export default function TokenLogo({
   chainId,
-  address,           // checksum if you have it; undefined/null for natives
+  address, // checksum if you have it; undefined/null for natives
   symbol = '',
   name = '',
-  logoURI,           // optional from data source
+  logoURI, // optional from data source
   size = 18,
-  className = '',
+  className = ''
 }) {
   const [dexUrl, setDexUrl] = useState(null);
   const [idx, setIdx] = useState(0);
 
-  // ✅ DexScreener API ONLY for contract tokens (addressed). 
+  // ✅ DexScreener API ONLY for contract tokens (addressed).
   // This avoids WETH icons appearing for native ETH.
   useEffect(() => {
-    if (!address) { setDexUrl(null); return; } // natives skip Dex entirely
+    if (!address) {
+      setDexUrl(null);
+      return;
+    } // natives skip Dex entirely
     let cancelled = false;
     (async () => {
       const cached = readDexCache(address);
-      if (cached) { setDexUrl(cached); return; }
+      if (cached) {
+        setDexUrl(cached);
+        return;
+      }
       const found = await fetchDexLogo(address, chainId);
-      if (!cancelled && found) { writeDexCache(address, found); setDexUrl(found); }
+      if (!cancelled && found) {
+        writeDexCache(address, found);
+        setDexUrl(found);
+      }
     })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
   }, [address, chainId]);
 
-  const fallbacks = useMemo(
-    () => buildStaticCandidates({ chainId, address, logoURI, size }),
-    [chainId, address, logoURI, size]
-  );
+  const fallbacks = useMemo(() => buildStaticCandidates({ chainId, address, logoURI, size }), [chainId, address, logoURI, size]);
 
-  const candidates = useMemo(
-    () => (dexUrl ? [dexUrl, ...fallbacks] : fallbacks),
-    [dexUrl, fallbacks]
-  );
+  const candidates = useMemo(() => (dexUrl ? [dexUrl, ...fallbacks] : fallbacks), [dexUrl, fallbacks]);
 
-  useEffect(() => { setIdx(0); }, [chainId, address, symbol, name, logoURI, dexUrl]);
+  useEffect(() => {
+    setIdx(0);
+  }, [chainId, address, symbol, name, logoURI, dexUrl]);
 
   const aria = (name || symbol || 'Token') + (address ? ` (${String(address).slice(0, 8)}…)` : '');
 

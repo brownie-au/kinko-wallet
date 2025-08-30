@@ -26,15 +26,7 @@ function getStoredWallets() {
         const list = (arr || [])
           .map((w) => ({
             name: w?.name || w?.label || w?.title || 'Wallet',
-            address:
-              w?.address ||
-              w?.addr ||
-              w?.account ||
-              w?.publicKey ||
-              w?.public_key ||
-              w?.hash ||
-              w?.id ||
-              w?.wallet,
+            address: w?.address || w?.addr || w?.account || w?.publicKey || w?.public_key || w?.hash || w?.id || w?.wallet,
             chain: w?.chain || 'eth'
           }))
           .filter((w) => w.address);
@@ -272,9 +264,7 @@ export default function PortfolioOverview() {
           {loading && <small className="text-muted">Refreshing…</small>}
         </div>
 
-        {tokenRows.length === 0 && !loading && (
-          <div className="text-muted">No tokens found for your wallets.</div>
-        )}
+        {tokenRows.length === 0 && !loading && <div className="text-muted">No tokens found for your wallets.</div>}
 
         {tokenRows.map((t, i) => (
           <TokenRow key={i} token={t} />
