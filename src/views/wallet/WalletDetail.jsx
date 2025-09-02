@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
 
 // Base still uses Moralis (for now)
-import { getPortfolioWithPrices } from '../../services/moralisService.js';
+// Base now uses Blockscout + DefiLlama via the same aggregator as View All
 // ETH: align with View All (Blockscout discovery + DefiLlama prices)
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 // PulseChain stays on Blockscout + Dexscreener
@@ -476,28 +476,46 @@ export default function WalletDetail() {
 
       return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
     }
-    // base via Moralis (balances + prices)
-    const res = await getPortfolioWithPrices(address, chainCode);
-    const nat = res?.native
-      ? {
-        ...res.native,
-        chain: chainCode,
-        priceUsd: Number(res?.native?.priceUsd ?? res?.native?.price ?? 0),
-        valueUsd: Number(res?.native?.valueUsd ?? res?.native?.value ?? 0)
-      }
-      : null;
+    // Base via aggregator to stay consistent with /portfolio
+    if (chainCode === 'base') {
+      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'base' });
+      const list = Array.isArray(tokens) ? tokens.slice() : [];
+      const natIdx = list.findIndex((t) => t.address === 'native');
+      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
 
-    const toks = Array.isArray(res?.tokens)
-      ? res.tokens.map((t) => {
-        const price = Number(t.priceUsd ?? t.price ?? 0);
-        const amt = Number(t.amount ?? 0);
-        const val = Number(t.valueUsd ?? t.value ?? amt * price);
-        return { ...t, chain: chainCode, priceUsd: price, valueUsd: val };
-      })
-      : [];
+      const nat = natRow ? {
+        name: 'Ethereum',
+        symbol: 'ETH',
+        amount: Number(natRow.amount || 0),
+        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        contract: 'native',
+        logo: natRow.logo || null,
+        chain: 'base'
+      } : null;
 
-    const totalUSD = Number(res?.totalUSD || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0));
-    return { native: nat, tokens: toks, totalUSD };
+      const toks = list.map((r) => {
+        const price = Number(r.priceUsd ?? r.price ?? 0);
+        const amount = Number(r.amount ?? 0);
+        const value = Number(r.valueUsd ?? r.value ?? amount * price);
+        return {
+          name: r.name || r.symbol || 'Token',
+          symbol: r.symbol || '',
+          amount,
+          price,
+          priceUsd: price,
+          value,
+          valueUsd: value,
+          contract: r.address || null,
+          logo: r.logo || null,
+          chain: 'base'
+        };
+      });
+
+      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
+    }
   }
 
   // --------- caching helpers ----------

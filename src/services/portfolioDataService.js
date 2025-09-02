@@ -6,7 +6,9 @@ import { walletSignature } from '../utils/walletSig';
 
 import { fetchPulsechainTokens } from './pulsechainService';
 import { fetchEthereumTokens }  from './ethereumService';
-import { getPortfolioWithPrices } from './moralisService'; // Base
+import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
+import { getBaseTokenPricesLlama, getBaseUsdPriceLlama } from './priceService';
+import { getBaseNativeBalance } from './baseRpcService';
 
 const SNAP_TTL_MS = 30 * 60_000;
 const REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
@@ -76,9 +78,30 @@ async function fetchAllChains(wallets) {
         const list = await fetchEthereumTokens(addr);
         for (const r of list) out.push(normalizeRow(r, addr));
       } else if (chain === 'base') {
-        // If your Base helper expects an array, switch to [w] here.
-        const list = await getPortfolioWithPrices(addr);
-        if (Array.isArray(list)) for (const r of list) out.push(normalizeRow(r, addr));
+        // Base via Blockscout + DefiLlama
+        try {
+          const discovered = await getBaseTokensFromBlockscout(addr);
+          const addrs = discovered.map((t) => t.address).filter(Boolean);
+          const priceMap = await getBaseTokenPricesLlama(addrs);
+
+          // native
+          let nativeAmount = 0;
+          try { nativeAmount = await getBaseNativeBalance(addr); } catch {}
+          const nativePriceUsd = await getBaseUsdPriceLlama();
+          out.push(normalizeRow({
+            chain: 'base', address: 'native', symbol: 'ETH', name: 'Ether',
+            amount: nativeAmount, priceUsd: nativePriceUsd, totalUsd: nativeAmount * nativePriceUsd
+          }, addr));
+
+          for (const t of discovered) {
+            const amountUnits = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
+            const p = priceMap.get(t.address) || 0;
+            out.push(normalizeRow({
+              chain: 'base', address: t.address, symbol: t.symbol || '', name: t.name || t.symbol || 'Token',
+              amount: amountUnits, priceUsd: p, totalUsd: p ? amountUnits * p : 0
+            }, addr));
+          }
+        } catch {}
       }
     } catch {
       // continue other wallets

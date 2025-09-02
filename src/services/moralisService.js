@@ -8,10 +8,10 @@ const MORALIS_API_BASE = import.meta.env.VITE_MORALIS_API_BASE || 'https://deep-
 // Default chain for the Ethereum wallet page
 const CHAIN_ID = 'eth';
 
-// WETH contract is a good proxy for native ETH price
+// WETH/Wrapped-native contract used to proxy the native coin price per chain
 const WETH_BY_CHAIN = {
   eth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-  // base: '0x4200000000000000000000000000000000000006', // when we wire Base
+  base: '0x4200000000000000000000000000000000000006' // WETH on Base
   // add others as needed
 };
 

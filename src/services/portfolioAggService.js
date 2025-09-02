@@ -6,7 +6,10 @@ import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainServ
 // Keep ethereumService import ONLY if you still want legacy backfill elsewhere.
 // We won't use it for prices here.
 import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
-import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
+// Base via Blockscout + DefiLlama (no Moralis)
+import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
+import { getBaseTokenPricesLlama, getBaseUsdPriceLlama } from './priceService';
+import { getBaseNativeBalance } from './baseRpcService';
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 // 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
 import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
@@ -115,7 +118,9 @@ function rowsFromMoralis(address, chainCode, res) {
       toRow(
         {
           chain: chainCode,
-          address: t.address,
+          // Moralis wrapper returns `contract` for ERC-20 address
+          // but allow `address` fallback just in case
+          address: t.contract || t.address,
           symbol: t.symbol,
           name: t.name || t.symbol || 'Token',
           amount: amt,
@@ -263,10 +268,54 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
     if (wantBase) {
       tasks.push((async () => {
         try {
-          const res = await getPortfolioWithPrices(addr, 'base'); // prices + balances
-          bucket.push(...rowsFromMoralis(addr, 'base', res));
+          // 1) Discover ERC-20s via Blockscout
+          const discovered = await getBaseTokensFromBlockscout(addr);
+
+          // 2) Prices via DefiLlama (Base namespace)
+          const addrs = discovered.map((t) => t.address).filter(Boolean);
+          const priceMap = await getBaseTokenPricesLlama(addrs);
+
+          // 3) Native ETH on Base
+          const nativePriceUsd = await getBaseUsdPriceLlama();
+          let nativeAmount = 0;
+          try { nativeAmount = await getBaseNativeBalance(addr); } catch { }
+          bucket.push(
+            toRow(
+              {
+                chain: 'base',
+                address: 'native',
+                symbol: 'ETH',
+                name: 'Ether',
+                amount: nativeAmount,
+                priceUsd: nativePriceUsd,
+                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+              },
+              addr
+            )
+          );
+
+          // 4) ERC-20 rows
+          for (const t of discovered) {
+            const amountUnits = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
+            const p = priceMap.get(t.address) || 0;
+            bucket.push(
+              toRow(
+                {
+                  chain: 'base',
+                  address: t.address,
+                  symbol: t.symbol || '',
+                  name: t.name || t.symbol || 'Token',
+                  decimals: Number(t.decimals ?? 18),
+                  amount: amountUnits,
+                  priceUsd: p,
+                  valueUsd: p ? (amountUnits * p) : 0
+                },
+                addr
+              )
+            );
+          }
         } catch (e) {
-          console.warn('[PortfolioAgg] BASE fetch failed for', addr, e?.message);
+          console.warn('[PortfolioAgg] BASE (Blockscout) fetch failed for', addr, e?.message);
         }
       })());
     }
