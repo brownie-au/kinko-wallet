@@ -32,8 +32,6 @@ import { getCachedJSON } from '../../utils/kinkoCache';
 import {
   getLastSection,
   setLastSection,
-  getGlobalNetChip,
-  setGlobalNetChip,
   getWalletNetChip,
   setWalletNetChip
 } from '../../utils/uiState';
@@ -290,25 +288,31 @@ export default function WalletDetail() {
   const [showQR, setShowQR] = useState(false);
   const [refreshBump, setRefreshBump] = useState(0); // manual refresh trigger
 
-  // Sticky chip logic: prefer global chain chip, fallback to per-group
+  // Sticky chip logic
   const groupId = useMemo(() => resolveGroupId(address), [address]);
   const initialChip = useMemo(() => {
-    const global = getGlobalNetChip();
-    if (global) return global;
+    const last = getLastSection();
     const saved = getWalletNetChip(groupId);
-    return saved || 'all';
+    return (last === 'wallets' && saved) ? saved : 'all';
   }, [groupId]);
   const [activeChain, setActiveChain] = useState(initialChip);
   useEffect(() => { setActiveChain(initialChip); }, [address, groupId, initialChip]);
 
-  // Keep chip when switching wallets; no automatic reset to "All"
+  // Default to "All" when switching wallets
+  const prevAddrRef = useRef('');
+  useEffect(() => {
+    if (!prevAddrRef.current) { prevAddrRef.current = address; return; }
+    if (prevAddrRef.current !== address) {
+      setActiveChain('all');
+      try {
+        const gid = resolveGroupId(address);
+        setWalletNetChip(gid, 'all');
+      } catch { }
+      prevAddrRef.current = address;
+    }
+  }, [address]);
 
-  const onChipChange = (code) => {
-    setActiveChain(code);
-    // persist both globally and per-group for backward compatibility
-    try { setGlobalNetChip(code); } catch { }
-    try { setWalletNetChip(groupId, code); } catch { }
-  };
+  const onChipChange = (code) => { setActiveChain(code); setWalletNetChip(groupId, code); };
 
   // Normalise any token for cache format
   const mapTokenForCache = (t, chainHint) => {
@@ -894,110 +898,3 @@ export default function WalletDetail() {
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('amount')}
-                        >
-                          Amount {sortKey === 'amount' && (sortDir === 'asc' ? '▲' : '▼')}
-                        </button>
-                      </th>
-                      <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('value')}
-                        >
-                          Value {sortKey === 'value' && (sortDir === 'asc' ? '▲' : '▼')}
-                        </button>
-                      </th>
-                      <th style={{ width: '8%' }}>CONTRACT</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {loading && <LoadingRow label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} colSpan={5} />}
-                    {!loading && err && <tr><td colSpan={5} className="text-danger py-4 text-center">{err}</td></tr>}
-                    {!loading && !err && items.length === 0 && (
-                      <tr><td colSpan={5} className="py-4 text-center">No tokens found.</td></tr>
-                    )}
-
-                    {!loading && !err && items.map((t, i) => {
-                      const price = (t.price ?? t.priceUsd ?? 0);
-                      const amount = (t.amount ?? 0);
-                      const value = (t.value ?? t.valueUsd ?? (amount * price));
-                      const c = (t.chain || activeChain);
-
-                      // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
-                      const addrForLogo = (t.contract && t.contract !== 'native') ? t.contract : null;
-
-                      return (
-                        <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
-                          <td>
-                            <div className="kw-cell">
-                              <TokenLogo
-                                chainId={chainIdOf(c)}
-                                address={addrForLogo}
-                                symbol={t.symbol}
-                                logoURI={t.logo}
-                                size={28}                 // set to 36 if you want it larger
-                                className="kw-logo"
-                              />
-                              <div className="kw-name">
-                                <div className="kw-symbol">
-                                  <strong>{t.symbol || '—'}</strong>
-                                  <span className="kw-name-inline">
-                                    {' - '}{t.name || short(t.contract)}
-                                  </span>
-                                </div>
-                                <div className="kw-sub">
-                                  {activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="text-end">{fmtPriceUSD(price)}</td>
-                          <td className="text-end">{fmtNum(amount)}</td>
-                          <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
-                          <td>
-                            <span
-                              className="badge bg-secondary"
-                              style={{ cursor: t.contract ? 'pointer' : 'default' }}
-                              title={t.contract ? 'Copy contract' : undefined}
-                              onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
-                            >
-                              {t.contract ? short(t.contract) : 'native'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* QR MODAL */}
-      <Modal show={showQR} onHide={() => setShowQR(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Wallet QR</Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="text-center">
-          <img
-            alt="QR"
-            width={240}
-            height={240}
-            style={{ imageRendering: 'pixelated' }}
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(address)}`}
-          />
-          <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{address}</div>
-          <Button className="mt-3" onClick={() => { navigator.clipboard?.writeText(address); setShowQR(false); }}>
-            Copy Address
-          </Button>
-        </Modal.Body>
-      </Modal>
-    </>
-  );
-}

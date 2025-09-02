@@ -27,6 +27,7 @@ const fmtPct = (n) =>
 function chainIdOf(chain) {
     switch (String(chain || '').toLowerCase()) {
         case 'pulse': return 369;
+        case 'bsc': return 56;
         case 'base': return 8453;
         case 'eth':
         case 'ethereum':
@@ -34,11 +35,8 @@ function chainIdOf(chain) {
     }
 }
 function chainLabel(c) {
-    return String(c || '').toLowerCase() === 'pulse'
-        ? 'Pulse'
-        : String(c || '').toLowerCase() === 'base'
-            ? 'Base'
-            : 'ETH';
+    const s = String(c || '').toLowerCase();
+    return s === 'pulse' ? 'Pulse' : s === 'bsc' ? 'BSC' : s === 'base' ? 'Base' : 'ETH';
 }
 
 /* IMPORTANT: key format must match Portfolio.jsx keyFor(tt) logic */

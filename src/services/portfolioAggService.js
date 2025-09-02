@@ -8,7 +8,7 @@ import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainServ
 import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
 // Base via Blockscout + DefiLlama (no Moralis)
 import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
-import { getBaseTokenPricesLlama, getBaseUsdPriceLlama } from './priceService';
+import { getBaseTokenPricesLlama, getBaseUsdPriceLlama, getBscTokenPricesLlama, getBscUsdPriceLlama } from './priceService';
 import { getBaseNativeBalance } from './baseRpcService';
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 // 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
@@ -17,6 +17,9 @@ import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
 import { getEthNativeBalance } from './ethRpcService';
 // DefiLlama prices (no API key)
 import { getEthTokenPricesLlama, getEthUsdPriceLlama } from './priceService';
+// BSC via NodeReal discovery + Llama prices + RPC for native
+import { getBscTokensFromNodereal, toUnitsBsc } from './bscNoderealService';
+import { getBscNativeBalance } from './bscRpcService';
 
 // ----- toggles -----
 const USE_ETH_PRICE_BACKFILL = false; // we use DefiLlama now
@@ -156,12 +159,13 @@ async function mapWithLimit(items, limit, fn) {
 }
 
 export async function buildPortfolioDetailed(wallets = [], options = {}) {
-  const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
+  const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base' | 'bsc'
   const force = !!options.force;
 
   const wantPulse = (only === 'all' || only === 'auto' || only === 'pulse');
   const wantEth = (only === 'all' || only === 'auto' || only === 'eth');
   const wantBase = (only === 'all' || only === 'auto' || only === 'base');
+  const wantBsc  = (only === 'all' || only === 'auto' || only === 'bsc');
 
   const rows = [];
 
@@ -316,6 +320,61 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           }
         } catch (e) {
           console.warn('[PortfolioAgg] BASE (Blockscout) fetch failed for', addr, e?.message);
+        }
+      })());
+    }
+
+    if (wantBsc) {
+      tasks.push((async () => {
+        try {
+          // 1) Discover via NodeReal
+          const discovered = await getBscTokensFromNodereal(addr);
+
+          // 2) Prices via DefiLlama (BSC namespace)
+          const addrs = discovered.map((t) => t.address).filter(Boolean);
+          const priceMap = await getBscTokenPricesLlama(addrs);
+
+          // 3) Native BNB
+          const nativePriceUsd = await getBscUsdPriceLlama();
+          let nativeAmount = 0;
+          try { nativeAmount = await getBscNativeBalance(addr); } catch { }
+          bucket.push(
+            toRow(
+              {
+                chain: 'bsc',
+                address: 'native',
+                symbol: 'BNB',
+                name: 'BNB',
+                amount: nativeAmount,
+                priceUsd: nativePriceUsd,
+                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+              },
+              addr
+            )
+          );
+
+          // 4) ERC-20 rows (BEP-20)
+          for (const t of discovered) {
+            const amountUnits = toUnitsBsc(t.balanceRaw, Number(t.decimals ?? 18));
+            const p = priceMap.get(t.address) || 0;
+            bucket.push(
+              toRow(
+                {
+                  chain: 'bsc',
+                  address: t.address,
+                  symbol: t.symbol || '',
+                  name: t.name || t.symbol || 'Token',
+                  decimals: Number(t.decimals ?? 18),
+                  amount: amountUnits,
+                  priceUsd: p,
+                  valueUsd: p ? (amountUnits * p) : 0
+                },
+                addr
+              )
+            );
+          }
+        } catch (e) {
+          console.warn('[PortfolioAgg] BSC (NodeReal) fetch failed for', addr, e?.message);
         }
       })());
     }

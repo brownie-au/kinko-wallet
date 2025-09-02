@@ -125,3 +125,60 @@ export async function getBaseTokenPricesLlama(addresses) {
 export async function getBaseUsdPriceLlama() {
   return getEthUsdPriceLlama();
 }
+
+/**
+ * BSC: DefiLlama uses the key prefix 'bsc:' for token contracts.
+ */
+export async function getBscTokenPricesLlama(addresses) {
+  const uniq = [...new Set(addresses.map((a) => (a || '').toLowerCase()).filter(Boolean))];
+  if (uniq.length === 0) return new Map();
+
+  const cacheKey = `kw:llama:bsc:${uniq.sort().join(',')}`;
+  const cached = lsGet(cacheKey, CACHE_MS);
+  if (cached) return new Map(cached);
+
+  const coinsParam = uniq.map((a) => `bsc:${a}`).join(',');
+  const url = `${LLAMA_BASE}/${encodeURIComponent(coinsParam)}`;
+
+  let json;
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
+    json = await res.json();
+  } catch (e) {
+    console.warn('[Price] DefiLlama BSC fetch failed', e?.message);
+    return new Map();
+  }
+
+  const out = new Map();
+  const coins = json?.coins || {};
+  for (const key of Object.keys(coins)) {
+    const [, addr] = key.split(':');
+    const price = Number(coins[key]?.price ?? 0);
+    if (addr && price > 0) out.set(addr.toLowerCase(), price);
+  }
+  lsSet(cacheKey, Array.from(out.entries()));
+  return out;
+}
+
+// BNB (BSC native) price: reuse coingecko id
+export async function getBscUsdPriceLlama() {
+  const cacheKey = 'kw:llama:bsc:native';
+  const cached = lsGet(cacheKey, CACHE_MS);
+  if (typeof cached === 'number') return cached;
+
+  const url = `${LLAMA_BASE}/${encodeURIComponent('coingecko:binancecoin')}`;
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
+    const json = await res.json();
+    const price = Number(json?.coins?.['coingecko:binancecoin']?.price ?? 0);
+    if (price > 0) {
+      lsSet(cacheKey, price);
+      return price;
+    }
+  } catch (e) {
+    console.warn('[Price] DefiLlama BSC price failed', e?.message);
+  }
+  return 0;
+}

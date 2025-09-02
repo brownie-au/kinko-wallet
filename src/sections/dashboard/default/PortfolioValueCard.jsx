@@ -57,20 +57,21 @@ function preferCanonical({ aliases, totals }) {
 function readChainTotalsCache(sig) {
   try {
     const raw = localStorage.getItem(chainTotalsKeyFor(sig));
-    if (!raw) return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
+    if (!raw) return { eth: 0, pulse: 0, bsc: 0, base: 0, updatedAt: 0 };
 
     const parsed = JSON.parse(raw);
     const totals = parsed?.totals || parsed || {};
 
     const ethUsd = preferCanonical({ aliases: ['ethereum', 'eth'], totals });
     const pulseUsd = preferCanonical({ aliases: ['pulse', 'pulsechain', 'pls'], totals });
+    const bscUsd = preferCanonical({ aliases: ['bsc'], totals });
     const baseUsd = preferCanonical({ aliases: ['base'], totals });
 
     const updatedAt = num(parsed?.updatedAt);
 
-    return { eth: ethUsd, pulse: pulseUsd, base: baseUsd, updatedAt };
+    return { eth: ethUsd, pulse: pulseUsd, bsc: bscUsd, base: baseUsd, updatedAt };
   } catch {
-    return { eth: 0, pulse: 0, base: 0, updatedAt: 0 };
+    return { eth: 0, pulse: 0, bsc: 0, base: 0, updatedAt: 0 };
   }
 }
 
@@ -116,7 +117,7 @@ export default function PortfolioValueCard() {
   const [totalUsd, setTotalUsd] = useState(0);
   const [pct24h, setPct24h] = useState(0);
 
-  const [{ eth, pulse, base }, setChainTotals] = useState({ eth: 0, pulse: 0, base: 0 });
+  const [{ eth, pulse, bsc, base }, setChainTotals] = useState({ eth: 0, pulse: 0, bsc: 0, base: 0 });
   const lastTsRef = useRef(0);
 
   const { total: aggregatedTotal, sources } = usePortfolioValue();
@@ -167,10 +168,10 @@ export default function PortfolioValueCard() {
       const next = readChainTotalsCache(walletsSig);
       const changed =
         next.updatedAt > (lastTsRef.current || 0) ||
-        next.eth !== eth || next.pulse !== pulse || next.base !== base;
+        next.eth !== eth || next.pulse !== pulse || next.bsc !== bsc || next.base !== base;
       if (changed) {
         lastTsRef.current = next.updatedAt || Date.now();
-        setChainTotals({ eth: next.eth, pulse: next.pulse, base: next.base });
+        setChainTotals({ eth: next.eth, pulse: next.pulse, bsc: next.bsc, base: next.base });
       }
     };
 
@@ -184,7 +185,7 @@ export default function PortfolioValueCard() {
     window.addEventListener('storage', onStorage);
     const id = setInterval(pullChains, 4000); // same-tab refresh
     return () => { window.removeEventListener('storage', onStorage); clearInterval(id); };
-  }, [eth, pulse, base, walletsSig]);
+  }, [eth, pulse, bsc, base, walletsSig]);
 
   // staking: HEX + eHEX aggregation with fallbacks
   const stakingUsd = useMemo(() => {
@@ -214,13 +215,14 @@ export default function PortfolioValueCard() {
     const entries = [
       ['pulse', num(pulse)],
       ['eth', num(eth)],
+      ['bsc', num(bsc)],
       ['base', num(base)],
       ['staking', num(stakingUsd)]
     ].filter(([, v]) => v > 0);
     entries.sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((acc, [, v]) => acc + v, 0) || 0;
     return entries.map(([id, usd]) => ({ id, usd, pct: total ? (usd / total) * 100 : 0 }));
-  }, [pulse, eth, base, stakingUsd]);
+  }, [pulse, eth, bsc, base, stakingUsd]);
 
   // donut (chains + staking)
     const donutData = useMemo(
@@ -237,7 +239,7 @@ export default function PortfolioValueCard() {
   // headline = max(context, rows sum), else sticky LS
   const displayTotalRaw = useMemo(() => {
     const ctx = num(aggregatedTotal);
-    const rows = num(pulse) + num(eth) + num(base) + num(stakingUsd);
+    const rows = num(pulse) + num(eth) + num(bsc) + num(base) + num(stakingUsd);
     if (ctx >= rows) return ctx;
     if (rows > 0) return rows;
     return num(totalUsd);
@@ -285,7 +287,7 @@ export default function PortfolioValueCard() {
                   <>
                     <ChainBadge chain={row.id} />
                     <span style={{ opacity: 0.9 }}>
-                      {row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : 'Base'}
+                      {row.id === 'pulse' ? 'PulseChain' : row.id === 'eth' ? 'Ethereum' : row.id === 'bsc' ? 'BSC' : 'Base'}
                     </span>
                   </>
                 )}

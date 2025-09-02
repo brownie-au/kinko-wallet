@@ -23,6 +23,17 @@ export const setWalletNetChip = (groupId, value) => {
   try { localStorage.setItem(chipKey(groupId), String(value || '')); } catch {}
 };
 
+// ---- GLOBAL chain chip (shared across All Wallets + individual wallets) ----
+const GLOBAL_CHIP_KEY = NS + 'netchip:global';
+
+export const getGlobalNetChip = () => {
+  try { return localStorage.getItem(GLOBAL_CHIP_KEY) || ''; } catch { return ''; }
+};
+
+export const setGlobalNetChip = (value) => {
+  try { localStorage.setItem(GLOBAL_CHIP_KEY, String(value || '')); } catch {}
+};
+
 // Optional helper if you ever want to wipe all saved chips
 export const clearAllNetChips = () => {
   try {

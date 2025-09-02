@@ -6,6 +6,8 @@ export const CHAIN_COLORS = {
   all:   'var(--bs-primary, #0d6efd)',
   eth:   '#2ecc71',
   pulse: '#9b59b6',
+  // BSC brand yellow
+  bsc:   '#F3BA2F',
   base:  '#3498db'
 };
 
@@ -17,11 +19,13 @@ export function normalizeChain(input) {
   // ids
   if (s === '1') return 'eth';
   if (s === '369') return 'pulse';
+  if (s === '56') return 'bsc';
   if (s === '8453') return 'base';
 
   // names/aliases
   if (s === 'all') return 'all';
   if (s.includes('pulse') || s === 'pls' || s === 'plsx') return 'pulse';
+  if (s.includes('bsc') || s.includes('binance') || s === 'bnb') return 'bsc';
   if (s.includes('base')) return 'base';
   if (s.includes('eth') || s === 'ehex') return 'eth';
 
@@ -39,7 +43,8 @@ export function ChainChip({ chain = 'eth', className = '', style }) {
     fontSize: 10,           // halfway between 8.5 and old ~12
     lineHeight: 1.2,
     fontWeight: 500,
-    color: '#fff',
+    // BSC chip uses dark text for contrast on yellow
+    color: key === 'bsc' ? '#111' : '#fff',
     background: bg,
     marginLeft: 5
   };
@@ -63,7 +68,8 @@ export function ChainBadge({ chain = 'eth', children }) {
     borderRadius: 999,
     fontSize: 12,
     lineHeight: 1,
-    color: '#fff',
+    // dark text for BSC on yellow
+    color: key === 'bsc' ? '#111' : '#fff',
     background: bg,
     boxShadow: '0 1px 0 rgba(0,0,0,.15)',
     minWidth: 56
@@ -75,7 +81,8 @@ export function ChainBadge({ chain = 'eth', children }) {
 export function ChainSelector({
   value = 'all',
   onChange,
-  options = ['all','eth','pulse','base'],
+  // Order: All, Ethereum, PulseChain, BSC, Base
+  options = ['all','eth','pulse','bsc','base'],
   size = 'sm'
 }) {
   const baseVars = {
@@ -85,13 +92,19 @@ export function ChainSelector({
     '--k-chip-font': size === 'sm' ? '0.9rem' : '1rem'
   };
 
-  const btnStyle = (active, chain) =>
-    active
-      ? {
-          ...baseVars,
-          '--k-chip-active-bg': CHAIN_COLORS[normalizeChain(chain)] || CHAIN_COLORS.all
-        }
-      : baseVars;
+  const btnStyle = (active, chain) => {
+    const key = normalizeChain(chain);
+    if (active) {
+      // Override text color for BSC active state
+      const colorOverride = key === 'bsc' ? { color: '#111' } : {};
+      return {
+        ...baseVars,
+        '--k-chip-active-bg': CHAIN_COLORS[key] || CHAIN_COLORS.all,
+        ...colorOverride
+      };
+    }
+    return baseVars;
+  };
 
   return (
     <div className="d-inline-flex align-items-center gap-2">
@@ -101,6 +114,7 @@ export function ChainSelector({
           c === 'all' ? 'All' :
           c === 'eth' ? 'Ethereum' :
           c === 'pulse' ? 'PulseChain' :
+          c === 'bsc' ? 'BSC' :
           c === 'base' ? 'Base' : c;
 
         return (
