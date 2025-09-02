@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { Card, Button } from 'react-bootstrap';
 import useTopTokens from '../../../hooks/useTopTokens';
+import { setForceGlobalChipOnce } from '../../../utils/uiState';
 import TokenLogo from '../../../components/TokenLogo';
 import { ChainBadge } from '../../../components/ChainUI';
 import { getWalletCache } from '../../../utils/walletCache';
@@ -168,6 +169,8 @@ function Tile({ t, totalUsd, lookupRows }) {
         try {
             localStorage.setItem('kw:focusToken', t?.symbol || t?.address || t?.contract || '');
             localStorage.setItem('kw:focusTokenKey', tokenKey(t));
+            // Force-select the All chain pill when landing on /portfolio
+            setForceGlobalChipOnce('all');
         } catch { }
         window.location.assign('/portfolio');
     };
@@ -235,6 +238,10 @@ export default function TopTokensRow() {
     );
 
     const goAll = () => {
+        try {
+            // Force-select the All chain pill when landing on /portfolio
+            setForceGlobalChipOnce('all');
+        } catch { }
         // keep behaviour consistent with tile click (no focus set here)
         window.location.assign('/portfolio');
     };

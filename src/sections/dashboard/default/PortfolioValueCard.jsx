@@ -261,7 +261,7 @@ export default function PortfolioValueCard() {
         {/* LEFT: numbers + per-asset rows */}
         <div style={{ minWidth: 336, flex: '1 1 336px', paddingRight: 36 }}>
           <div className="text-muted mb-1">Total Portfolio Value</div>
-          <div className="h3 mb-1">USD ${formattedTotal}</div>
+          <div className="h3 mb-1 kw-color-total">USD ${formattedTotal}</div>
           <div className={up ? 'text-success mb-3' : 'text-danger mb-3'}>
             {up ? '▲' : '▼'} {Math.abs(Number(pct24h) || 0).toFixed(2)}% (24h)
           </div>

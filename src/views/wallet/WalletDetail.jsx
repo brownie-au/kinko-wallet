@@ -285,6 +285,7 @@ export default function WalletDetail() {
   const [native, setNative] = useState(null);
   const [tokens, setTokens] = useState([]);
   const [q, setQ] = useState('');
+  const searchRef = useRef(null);
   const [sortKey, setSortKey] = useState('value');
   const [sortDir, setSortDir] = useState('desc');
   const [showQR, setShowQR] = useState(false);
@@ -299,7 +300,7 @@ export default function WalletDetail() {
     return saved || 'all';
   }, [groupId]);
   const [activeChain, setActiveChain] = useState(initialChip);
-  useEffect(() => { setActiveChain(initialChip); }, [address, groupId, initialChip]);
+  // Do not override selection on route/data changes; only initial mount rehydrates from storage.
 
   // Keep chip when switching wallets; no automatic reset to "All"
 
@@ -835,11 +836,24 @@ export default function WalletDetail() {
       {/* CONTROLS */}
       <Row className="mb-3">
         <Col md={6} className="mb-2">
-          <Form.Control
-            placeholder="Search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <div className="kw-search-wrap">
+            <Form.Control
+              placeholder="Search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              ref={searchRef}
+            />
+            {!!q && (
+              <button
+                type="button"
+                className="kw-search-clear"
+                onClick={() => { setQ(''); setTimeout(() => searchRef?.current?.focus?.(), 0); }}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </Col>
         <Col md={6} className="text-md-end">
           {/* Use span to avoid button defaults, match View All pill */}
@@ -955,7 +969,7 @@ export default function WalletDetail() {
                             </div>
                           </td>
 
-                          <td className="text-end">{fmtPriceUSD(price)}</td>
+                          <td className="text-end"><span className="kw-price">{fmtPriceUSD(price)}</span></td>
                           <td className="text-end">{fmtNum(amount)}</td>
                           <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
                           <td>

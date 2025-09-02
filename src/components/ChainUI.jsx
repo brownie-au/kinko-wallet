@@ -85,6 +85,7 @@ export function ChainSelector({
   options = ['all','eth','pulse','bsc','base'],
   size = 'sm'
 }) {
+  const safeValue = normalizeChain(value) === 'all' ? 'all' : normalizeChain(value);
   const baseVars = {
     '--k-chip-padding-y': '6px',
     '--k-chip-padding-x': '12px',
@@ -109,21 +110,22 @@ export function ChainSelector({
   return (
     <div className="d-inline-flex align-items-center gap-2">
       {options.map((c) => {
-        const active = value === c;
+        const canonical = normalizeChain(c) === 'all' ? 'all' : normalizeChain(c);
+        const active = safeValue === canonical;
         const label =
-          c === 'all' ? 'All' :
-          c === 'eth' ? 'Ethereum' :
-          c === 'pulse' ? 'PulseChain' :
-          c === 'bsc' ? 'BSC' :
-          c === 'base' ? 'Base' : c;
+          canonical === 'all' ? 'All' :
+          canonical === 'eth' ? 'Ethereum' :
+          canonical === 'pulse' ? 'PulseChain' :
+          canonical === 'bsc' ? 'BSC' :
+          canonical === 'base' ? 'Base' : canonical;
 
         return (
           <button
-            key={c}
+            key={canonical}
             type="button"
             className={`k-chain-btn badge ${active ? 'is-active' : ''}`}
-            style={btnStyle(active, c)}
-            onClick={() => onChange?.(c)}
+            style={btnStyle(active, canonical)}
+            onClick={() => onChange?.(canonical)}
           >
             {label}
           </button>

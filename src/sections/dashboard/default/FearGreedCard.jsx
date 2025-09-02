@@ -86,7 +86,7 @@ export default function FearGreedCard() {
           <div style={{ flex: '1 1 auto', minWidth: 0 }}>
             <div className="text-muted mb-1">Crypto Fear &amp; Greed</div>
             <div className="d-flex align-items-baseline gap-2">
-              <div className="h3 mb-0">{val}</div>
+              <div className="h3 mb-0 kw-color-total">{val}</div>
               <div style={{ fontWeight: 600, color: nowColor }}>{nowLabel}</div>
             </div>
             <div className="text-muted small mt-1">Updated: {updated}</div>

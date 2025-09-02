@@ -200,6 +200,21 @@ const Styles = () => (
     .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
 
+    /* Light theme override: stronger contrast on white backgrounds */
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-cell {
+      background: linear-gradient(90deg,
+        #f3f3f3 0%,
+        #ececec 25%,
+        #e0e0e0 50%,
+        #ececec 75%,
+        #f3f3f3 100%);
+      background-size: 200% 100%;
+    }
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-label {
+      color: #555555;
+      text-shadow: none;
+    }
+
     .kwp-scope{
       --kw-price: 140px;
       --kw-amount: 170px;
@@ -316,6 +331,10 @@ const Styles = () => (
       background: var(--bs-secondary-bg);
       opacity:.85; transition: opacity .15s ease, background-color .15s ease, transform .06s ease;
     }
+    /* Light theme: stronger icon contrast only */
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kw-copy-btn{
+      color: rgba(0,0,0,0.6); /* darker icon stroke */
+    }
     .kw-copy-btn:hover{ opacity:1; background: color-mix(in srgb, var(--bs-secondary-bg) 85%, #fff 15%); }
     .kw-copy-btn:active{ transform: translateY(1px); }
     [data-pc-theme='dark'] .kw-copy-btn{ background:#2b2f36; border-color:#3e4451; }
@@ -347,6 +366,8 @@ const Styles = () => (
 
 // Small copy icon (overlapping squares)
 function CopyIcon() {
+  const searchRef = useRef(null);
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect
@@ -448,7 +469,10 @@ export default function Portfolio() {
   }, []);
   // 'all' | 'eth' | 'pulse' | 'bsc' | 'base'
   const [mode, setMode] = useState(initialChip);
-  const onChipChange = (code) => { setMode(code); try { setGlobalNetChip(code); } catch { } };
+  const onChipChange = (code) => {
+    setMode(code);
+    try { setGlobalNetChip(code); } catch { }
+  };
 
   const [booting, setBooting] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -463,6 +487,7 @@ export default function Portfolio() {
   const [breakdown, setBreakdown] = useState(new Map());
   const [expanded, setExpanded] = useState(new Set());
   const [q, setQ] = useState('');
+  const searchRef = useRef(null);
 
   const memCacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
@@ -809,8 +834,7 @@ export default function Portfolio() {
                       return (
                         <div
                           key={r.key}
-                          className="d-inline-flex align-items-center px-2 py-1 rounded-pill"
-                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                          className="kw-asset-chip d-inline-flex align-items-center px-2 py-1 rounded-pill"
                           title={`${r.label}: USD ${r.usd.toLocaleString('en-AU', { maximumFractionDigits: 0 })}${denom > 0 ? ` (${pct}%)` : ''}`}
                         >
                           <span
@@ -843,7 +867,24 @@ export default function Portfolio() {
       {/* CONTROLS */}
       <Row className="mb-3">
         <Col md={6} className="mb-2">
-          <Form.Control placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="kw-search-wrap">
+            <Form.Control
+              placeholder="Search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              ref={searchRef}
+            />
+            {q && (
+              <button
+                type="button"
+                className="kw-search-clear"
+                onClick={() => { setQ(''); setTimeout(() => searchRef?.current?.focus?.(), 0); }}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </Col>
         <Col md={6} className="text-md-end">
           <button type="button" className="k-chain-btn" onClick={() => load(true)} title="Refresh">
@@ -938,7 +979,7 @@ export default function Portfolio() {
                       <div className="kwp-cols">
                         <div className="kwp-col kwp-price">
                           <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
-                          <div>{fmtPriceUSD(price)}</div>
+                          <div className="kw-price">{fmtPriceUSD(price)}</div>
                           {delta != null && (<div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>)}
                         </div>
                         <div className="kwp-col kwp-amount">
