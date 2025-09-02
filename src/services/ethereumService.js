@@ -4,7 +4,7 @@
 // SAFE pricing: native ETH (CoinPaprika primary → ethPriceService fallback) + ERC-20s (Dexscreener best-liquidity).
 // Includes spam filtering: blocklist + "no price & no metadata" + optional min USD.
 
-import { isBlockedToken } from '../data/tokenBlocklist';
+import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
 import { getEthUsdPrice as getEthUsdPriceFallback } from './ethPriceService';
 import { enrichErc20Prices } from './ethErc20PriceService';
@@ -180,6 +180,7 @@ function filterEthSpam(tokens) {
   return tokens.filter((t) => {
     if (t.address === 'native') return true;
     if (isBlocked(t.address)) return false;
+    if (isTokenBlacklisted && isTokenBlacklisted({ address: t.address, symbol: t.symbol, name: t.name })) return false;
 
     if (ETH_HIDE_MIN_USD > 0 && Number(t.usd || 0) < ETH_HIDE_MIN_USD) return false;
 

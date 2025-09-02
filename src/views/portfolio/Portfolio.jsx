@@ -18,7 +18,7 @@ import { ChainSelector, ChainBadge } from '../../components/ChainUI';
 import TokenLogo from '../../components/TokenLogo';
 
 // 🔒 reuse existing global token blocklist
-import { isBlockedToken } from '../../data/tokenBlocklist';
+import { isTokenBlacklisted } from '../../data/tokenBlocklist';
 
 // ✅ publish Top tokens for Dashboard (now top 6 to match tiles)
 import { writeTopTokensCache } from '../../services/topTokensService';
@@ -170,12 +170,8 @@ const keyFor = (t) =>
   `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 // ---- minimal junk filter ----
-const DENY = new Set(['ETHG', 'AICC']);
 function isJunkToken(t) {
-  const addr = String(t.address || t.contract || '').toLowerCase();
-  if (addr && isBlockedToken && isBlockedToken(addr)) return true;
-  const sym = String(t.symbol || '').toUpperCase().trim();
-  if (DENY.has(sym)) return true;
+  if (isTokenBlacklisted && isTokenBlacklisted(t)) return true;
   if (t.possible_spam === true || t.is_spam === true) return true;
   const price = Number(t.priceUsd ?? t.price);
   if (Number.isNaN(price) || price > 100000) return true;
@@ -456,6 +452,8 @@ export default function Portfolio() {
   const [q, setQ] = useState('');
 
   const memCacheRef = useRef(new Map());
+  const reqIdRef = useRef(0);
+  const loadingRef = useRef(false);
 
   // toast state for copy feedback
   const [toast, setToast] = useState({ show: false, text: '' });
@@ -508,12 +506,17 @@ export default function Portfolio() {
   };
 
   async function load(force = false) {
+    // If a force-refresh is requested while a load is in-flight, ignore the click
+    if (loadingRef.current && force) return;
+    const myReq = ++reqIdRef.current;
+    loadingRef.current = true;
     setError(null);
 
     const memKey = mode + '|' + walletsSig;
 
     const memHit = memCacheRef.current.get(memKey);
     if (!force && memHit && now() - memHit.updatedAt < CACHE_TTL) {
+      if (reqIdRef.current !== myReq) return;
       setTotalUsd(memHit.totalUsd);
       persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
@@ -522,11 +525,13 @@ export default function Portfolio() {
       if (mode === 'all') publishChainTotalsForWalletSig(memHit.tokens, walletsSig);
       setBooting(false);
       setRefreshing(false);
+      loadingRef.current = false;
       return;
     }
 
     const ls = readCache(mode, walletsSig);
     if (!force && ls && ls.fresh) {
+      if (reqIdRef.current !== myReq) return;
       setTotalUsd(ls.totalUsd);
       persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
@@ -556,6 +561,7 @@ export default function Portfolio() {
           writeTopTokensCache(topN);
         } catch { }
       }
+      loadingRef.current = false;
       return;
     }
 
@@ -576,6 +582,7 @@ export default function Portfolio() {
 
     try {
       const { totalUsd, tokens, breakdown } = await buildPortfolioDetailed(wallets, { only: mode, force });
+      if (reqIdRef.current !== myReq) return; // stale
       setTotalUsd(totalUsd);
       persistTotal(totalUsd);
 
@@ -587,25 +594,24 @@ export default function Portfolio() {
         return { ...t, valueUsd };
       });
 
-      // 1) Attach 24h % change for contract tokens (DexScreener)
+      // Attach 24h % change (contract + native) in parallel, then merge
       try {
-        const changeMap = await fetchChange24hFromDexScreener(tokensWithValue);
+        const [changeMap, nativeMap] = await Promise.all([
+          fetchChange24hFromDexScreener(tokensWithValue),
+          fetchNativeChange24h(tokensWithValue)
+        ]);
         tokensWithValue = tokensWithValue.map((t) => {
-          const pct = changeMap.get(changeKey(t));
-          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
-        });
-      } catch { /* non-fatal, skip if fetch fails */ }
-
-      // 2) Attach 24h % change for native coins (ETH, PLS, etc.)
-      try {
-        const nativeMap = await fetchNativeChange24h(tokensWithValue);
-        tokensWithValue = tokensWithValue.map((t) => {
-          if (t.address || t.contract) return t; // contract tokens handled above
-          const pct = nativeMap.get(nativeKey(t));
-          return (pct != null && Number.isFinite(pct)) ? { ...t, change24hPct: Number(pct) } : t;
+          // prefer contract change when available
+          const contractPct = changeMap.get(changeKey(t));
+          const nativePct = (!t.address && !t.contract) ? nativeMap.get(nativeKey(t)) : null;
+          const pct = (contractPct != null && Number.isFinite(contractPct))
+            ? Number(contractPct)
+            : (nativePct != null && Number.isFinite(nativePct)) ? Number(nativePct) : null;
+          return (pct != null) ? { ...t, change24hPct: pct } : t;
         });
       } catch { /* non-fatal */ }
 
+      if (reqIdRef.current !== myReq) return; // stale
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
       maybeExpandFromFocus(tokensWithValue);
@@ -642,8 +648,11 @@ export default function Portfolio() {
     } catch (e) {
       setError(e?.message || 'Failed to load portfolio');
     } finally {
-      setBooting(false);
-      setRefreshing(false);
+      if (reqIdRef.current === myReq) {
+        setBooting(false);
+        setRefreshing(false);
+        loadingRef.current = false;
+      }
     }
   }
 

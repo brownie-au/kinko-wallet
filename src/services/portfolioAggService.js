@@ -7,6 +7,7 @@ import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainServ
 // We won't use it for prices here.
 import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
 import { getPortfolioWithPrices } from './moralisService'; // used for Base (and future chains)
+import { isTokenBlacklisted } from '../data/tokenBlocklist';
 // 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
 import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
 // Read native ETH balance via public RPCs from .env (no API keys)
@@ -135,6 +136,20 @@ function rowsFromMoralis(address, chainCode, res) {
  * @param {{ only?: 'all'|'auto'|'pulse'|'eth'|'base', force?: boolean }} options
  * @returns {{ totalUsd:number, tokens:Array, breakdown:Map<string, Array> }}
  */
+// tiny concurrency helper (limit parallel wallet processing)
+async function mapWithLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    for (; idx < items.length;) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function buildPortfolioDetailed(wallets = [], options = {}) {
   const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base'
   const force = !!options.force;
@@ -145,108 +160,130 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
 
   const rows = [];
 
-  for (const w of wallets) {
+  // process wallets with limited concurrency
+  const perWallet = await mapWithLimit(wallets, 3, async (w) => {
     const addr = w.address;
+    const bucket = [];
 
-    // Pulse
+    const tasks = [];
+
     if (wantPulse) {
-      try {
-        const list = force ? await refreshPulsechainTokens(addr) : await fetchPulsechainTokens(addr);
-        for (const r of list) rows.push(toRow(r, addr));
-      } catch (e) {
-        console.warn('[PortfolioAgg] Pulse fetch failed for', addr, e?.message);
-      }
+      tasks.push((async () => {
+        try {
+          const list = force ? await refreshPulsechainTokens(addr) : await fetchPulsechainTokens(addr);
+          for (const r of list) bucket.push(toRow(r, addr));
+        } catch (e) {
+          console.warn('[PortfolioAgg] Pulse fetch failed for', addr, e?.message);
+        }
+      })());
     }
 
-    // ETH (Blockscout discovery + DefiLlama prices)
     if (wantEth) {
-      try {
-        // 1) Discover ALL ERC‑20s via Blockscout (no Moralis/Alchemy)
-        const discovered = await getEthTokensFromBlockscout(addr, { cacheMs: 5 * 60 * 1000 });
-
-        // 2) Prices via DefiLlama (native + ERC-20)
-        let priceMap = new Map(); // lowercased contract -> priceUsd
-        let nativePriceUsd = 0;
+      tasks.push((async () => {
         try {
-          nativePriceUsd = await getEthUsdPriceLlama();
-          const addrs = (discovered || []).map(t => t.address).filter(Boolean);
-          priceMap = await getEthTokenPricesLlama(addrs);
-        } catch (e) {
-          console.warn('[PortfolioAgg] Llama price fetch failed for', addr, e?.message);
-        }
+          // 1) Discover ALL ERC-20s via Blockscout (no Moralis/Alchemy)
+          const discovered = await getEthTokensFromBlockscout(addr, { cacheMs: 5 * 60 * 1000 });
 
-        // (optional) Legacy backfill if explicitly enabled
-        if (USE_ETH_PRICE_BACKFILL && priceMap.size === 0) {
+          // 2) Prices via DefiLlama (native + ERC-20)
+          let priceMap = new Map(); // lowercased contract -> priceUsd
+          let nativePriceUsd = 0;
           try {
-            const legacy = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
-            for (const t of Array.isArray(legacy) ? legacy : []) {
-              const k = (t.address || t.contract || '').toLowerCase();
-              if (k) priceMap.set(k, Number(t.priceUsd ?? t.price ?? 0));
-              if (t.address === 'native' && !nativePriceUsd) {
-                nativePriceUsd = Number(t.priceUsd ?? t.price ?? nativePriceUsd);
-              }
-            }
+            // fetch native + erc20 prices in parallel
+            const addrs = (discovered || []).map(t => t.address).filter(Boolean);
+            const [nPrice, pMap] = await Promise.all([
+              getEthUsdPriceLlama(),
+              getEthTokenPricesLlama(addrs)
+            ]);
+            nativePriceUsd = nPrice;
+            priceMap = pMap;
           } catch (e) {
-            console.warn('[PortfolioAgg] ETH legacy price backfill failed for', addr, e?.message);
+            console.warn('[PortfolioAgg] Llama price fetch failed for', addr, e?.message);
           }
-        }
 
-        // 3) Native ETH row (real amount via RPC)
-        let nativeAmount = 0;
-        try { nativeAmount = await getEthNativeBalance(addr); } catch { }
-        rows.push(
-          toRow(
-            {
-              chain: 'eth',
-              address: 'native',
-              symbol: 'ETH',
-              name: 'Ether',
-              amount: nativeAmount,
-              priceUsd: nativePriceUsd,
-              valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
-            },
-            addr
-          )
-        );
+          // Reliability: legacy backfill when DefiLlama failed to price
+          if (priceMap.size === 0) {
+            try {
+              const legacy = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
+              for (const t of Array.isArray(legacy) ? legacy : []) {
+                const k = (t.address || t.contract || '').toLowerCase();
+                if (k) priceMap.set(k, Number(t.priceUsd ?? t.price ?? 0));
+                if (t.address === 'native' && !nativePriceUsd) {
+                  nativePriceUsd = Number(t.priceUsd ?? t.price ?? nativePriceUsd);
+                }
+              }
+            } catch (e) {
+              console.warn('[PortfolioAgg] ETH legacy price backfill failed for', addr, e?.message);
+            }
+          }
 
-        // 4) ERC‑20 rows
-        for (const t of discovered) {
-          const amountUnits = toUnits(t.balanceRaw, Number(t.decimals ?? 18));
-          const p = priceMap.get(t.address) || 0;
-          rows.push(
+          // 3) Native ETH row (real amount via RPC)
+          let nativeAmount = 0;
+          try { nativeAmount = await getEthNativeBalance(addr); } catch { }
+          bucket.push(
             toRow(
               {
                 chain: 'eth',
-                address: t.address,
-                symbol: t.symbol || '',
-                name: t.name || t.symbol || 'Token',
-                decimals: Number(t.decimals ?? 18),
-                amount: amountUnits,
-                priceUsd: p,
-                valueUsd: p ? (amountUnits * p) : 0
+                address: 'native',
+                symbol: 'ETH',
+                name: 'Ether',
+                amount: nativeAmount,
+                priceUsd: nativePriceUsd,
+                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
               },
               addr
             )
           );
+
+          // 4) ERC-20 rows
+          for (const t of discovered) {
+            const amountUnits = toUnits(t.balanceRaw, Number(t.decimals ?? 18));
+            const p = priceMap.get(t.address) || 0;
+            bucket.push(
+              toRow(
+                {
+                  chain: 'eth',
+                  address: t.address,
+                  symbol: t.symbol || '',
+                  name: t.name || t.symbol || 'Token',
+                  decimals: Number(t.decimals ?? 18),
+                  amount: amountUnits,
+                  priceUsd: p,
+                  valueUsd: p ? (amountUnits * p) : 0
+                },
+                addr
+              )
+            );
+          }
+        } catch (e) {
+          console.warn('[PortfolioAgg] ETH (Blockscout) fetch failed for', addr, e?.message);
         }
-      } catch (e) {
-        console.warn('[PortfolioAgg] ETH (Blockscout) fetch failed for', addr, e?.message);
-      }
+      })());
     }
 
-    // Base (still via Moralis for now)
     if (wantBase) {
-      try {
-        const res = await getPortfolioWithPrices(addr, 'base'); // prices + balances
-        rows.push(...rowsFromMoralis(addr, 'base', res));
-      } catch (e) {
-        console.warn('[PortfolioAgg] BASE fetch failed for', addr, e?.message);
-      }
+      tasks.push((async () => {
+        try {
+          const res = await getPortfolioWithPrices(addr, 'base'); // prices + balances
+          bucket.push(...rowsFromMoralis(addr, 'base', res));
+        } catch (e) {
+          console.warn('[PortfolioAgg] BASE fetch failed for', addr, e?.message);
+        }
+      })());
     }
+
+    await Promise.allSettled(tasks);
+    return bucket;
+  });
+
+  // flatten per-wallet results
+  for (const list of perWallet) {
+    for (const r of list) rows.push(r);
   }
 
   // 🔒 filter out spammy tokens with web addresses / phishing phrases
-  const safeRows = rows.filter((r) => !isSpamToken(r));
+  const safeRows = rows
+    .filter((r) => !isSpamToken(r))
+    .filter((r) => !isTokenBlacklisted(r));
 
   // Aggregate + breakdown
   const byKey = new Map();     // key -> token aggregate

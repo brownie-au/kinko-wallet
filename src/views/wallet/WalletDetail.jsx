@@ -5,8 +5,8 @@ import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
 
 // Base still uses Moralis (for now)
 import { getPortfolioWithPrices } from '../../services/moralisService.js';
-// ETH now uses Ethplorer (balances) + Dexscreener (prices)
-import { fetchEthereumTokens } from '../../services/ethereumService.js';
+// ETH: align with View All (Blockscout discovery + DefiLlama prices)
+import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 // PulseChain stays on Blockscout + Dexscreener
 import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 
@@ -19,6 +19,7 @@ import TokenLogo from '../../components/TokenLogo';
 import { fmtPriceUSD } from '../../utils/priceFormat';
 
 import wallets from '../../data/wallets.js';
+import { isTokenBlacklisted } from '../../data/tokenBlocklist';
 import {
   setWalletCache,
   getWalletCache,
@@ -26,6 +27,7 @@ import {
   clearWalletPrefix,
   WALLET_CACHE_DEFAULT_TTL
 } from '../../utils/walletCache';
+import { getCachedJSON } from '../../utils/kinkoCache';
 
 import {
   getLastSection,
@@ -385,10 +387,22 @@ export default function WalletDetail() {
       name: 'Ethereum',
       symbol: 'ETH',
       amount: Number(natRow.balance || 0),
-      price: Number(natRow.price || 0),
-      priceUsd: Number(natRow.price || 0),
-      value: Number(natRow.value || 0),
-      valueUsd: Number(natRow.value || 0),
+      // price may be set as price or priceUSD in the service
+      price: Number(natRow.price || natRow.priceUsd || 0),
+      priceUsd: Number(natRow.price || natRow.priceUsd || 0),
+      // value in service is stored as `usd`; fall back to amount * price when absent
+      value: (function(){
+        const p = Number(natRow.price || natRow.priceUsd || 0);
+        const a = Number(natRow.balance || 0);
+        const v = Number(natRow.value || natRow.valueUsd || natRow.usd || 0);
+        return v > 0 ? v : (a * p);
+      })(),
+      valueUsd: (function(){
+        const p = Number(natRow.price || natRow.priceUsd || 0);
+        const a = Number(natRow.balance || 0);
+        const v = Number(natRow.value || natRow.valueUsd || natRow.usd || 0);
+        return v > 0 ? v : (a * p);
+      })(),
       contract: 'native',
       logo: natRow.iconUrl || null,
       chain: 'eth'
@@ -423,8 +437,44 @@ export default function WalletDetail() {
       return adaptPulseTokens(rows);
     }
     if (chainCode === 'eth') {
-      const rows = await fetchEthereumTokens(address);
-      return adaptEthFromList(rows);
+      // Use the same aggregator path as /portfolio for parity
+      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'eth' });
+      const list = Array.isArray(tokens) ? tokens.slice() : [];
+      const natIdx = list.findIndex((t) => t.address === 'native');
+      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
+
+      const nat = natRow ? {
+        name: 'Ethereum',
+        symbol: 'ETH',
+        amount: Number(natRow.amount || 0),
+        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        contract: 'native',
+        logo: natRow.logo || null,
+        chain: 'eth'
+      } : null;
+
+      const toks = list.map((r) => {
+        const price = Number(r.priceUsd ?? r.price ?? 0);
+        const amount = Number(r.amount ?? 0);
+        const value = Number(r.valueUsd ?? r.value ?? amount * price);
+        return {
+          name: r.name || r.symbol || 'Token',
+          symbol: r.symbol || '',
+          amount,
+          price,
+          priceUsd: price,
+          value,
+          valueUsd: value,
+          contract: r.address || null,
+          logo: r.logo || null,
+          chain: 'eth'
+        };
+      });
+
+      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
     }
     // base via Moralis (balances + prices)
     const res = await getPortfolioWithPrices(address, chainCode);
@@ -452,7 +502,9 @@ export default function WalletDetail() {
 
   // --------- caching helpers ----------
   const CHAINS_FOR_ALL = ['eth', 'base', 'pulse'];
-  const cacheKey = (chain) => `${address}:${chain}`;
+  // bump cache version to avoid stale entries from older ETH path
+  const CACHE_VER = 'v2';
+  const cacheKey = (chain) => `${address}:${chain}:${CACHE_VER}`;
 
   function tryHydrateFromCache(chain) {
     if (!address) return { hadCache: false, anyStale: false };
@@ -466,14 +518,41 @@ export default function WalletDetail() {
         if (snap && Array.isArray(snap.tokens)) {
           had = true;
           stale = stale || !!snap.stale;
-          mergedTokens = mergedTokens.concat(snap.tokens.map((t) => ({ ...t, chain: t.chain || c })));
+          const cleaned = (snap.tokens || []).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
+          mergedTokens = mergedTokens.concat(cleaned.map((t) => ({ ...t, chain: t.chain || c })));
           totalUsd += Number(snap.totalUsd || 0);
         }
       });
+      // Provider-level cache fallback (ETH + Pulse) for instant hydrate
+      if (!had) {
+        try {
+          const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+          const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+          const add = [];
+          const pushList = (arr, chainCode) => {
+            if (!Array.isArray(arr)) return;
+            arr.forEach((t) => {
+              const mapped = mapTokenForCache({
+                symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
+                priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
+                contract: t.contract || t.address, logo: t.logo || t.iconUrl
+              }, chainCode);
+              if (!isTokenBlacklisted({ address: mapped.contract, symbol: mapped.symbol, name: mapped.name })) add.push({ ...mapped, chain: chainCode });
+            });
+          };
+          pushList(Array.isArray(ethC) ? ethC : ethC?.tokens, 'eth');
+          pushList(Array.isArray(plsC) ? plsC : plsC?.tokens, 'pulse');
+          if (add.length) {
+            mergedTokens = mergedTokens.concat(add);
+            totalUsd += add.reduce((s, t) => s + (t.valueUsd || 0), 0);
+            had = true; stale = true;
+          }
+        } catch { }
+      }
       if (had) {
         setNative(null);
         setTokens(mergedTokens);
-        document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUsd)}`;
+        document.title = `Kinko Wallet - ${walletName} - ${fmtUSD(totalUsd)}`;
         setLoading(false);
       }
       return { hadCache: had, anyStale: stale };
@@ -481,21 +560,54 @@ export default function WalletDetail() {
 
     const snap = getWalletCache(cacheKey(chain), { maxAge: WALLET_CACHE_DEFAULT_TTL });
     if (snap && Array.isArray(snap.tokens)) {
+      const cleaned = (snap.tokens || []).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
       setNative(null);
-      setTokens(snap.tokens.map((t) => ({ ...t, chain: t.chain || chain })));
-      document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(Number(snap.totalUsd || 0))}`;
+      setTokens(cleaned.map((t) => ({ ...t, chain: t.chain || chain })));
+      document.title = `Kinko Wallet - ${walletName} - ${fmtUSD(Number(snap.totalUsd || 0))}`;
       setLoading(false);
-      return { hadCache: true, anyStale: !!snap.stale };
+      // if ETH cache looks suspiciously small, force a refresh in background
+      const suspectSmallEth = (chain === 'eth' && cleaned.length <= 2);
+      return { hadCache: true, anyStale: (!!snap.stale) || suspectSmallEth };
     }
+    // Provider-level single-chain fallback
+    try {
+      if (chain === 'eth') {
+        const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+        const arr = Array.isArray(ethC) ? ethC : ethC?.tokens;
+        if (Array.isArray(arr) && arr.length) {
+          const mapped = arr.map((t) => mapTokenForCache({
+            symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
+            priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
+            contract: t.contract || t.address, logo: t.logo || t.iconUrl
+          }, 'eth')).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
+          setNative(null); setTokens(mapped); setLoading(false);
+          return { hadCache: true, anyStale: true };
+        }
+      }
+      if (chain === 'pulse') {
+        const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+        const arr = Array.isArray(plsC) ? plsC : plsC?.tokens;
+        if (Array.isArray(arr) && arr.length) {
+          const mapped = arr.map((t) => mapTokenForCache({
+            symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
+            priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
+            contract: t.contract || t.address, logo: t.logo || t.iconUrl
+          }, 'pulse')).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
+          setNative(null); setTokens(mapped); setLoading(false);
+          return { hadCache: true, anyStale: true };
+        }
+      }
+    } catch { }
     return { hadCache: false, anyStale: false };
   }
 
   function writeCache(chain, result) {
     const { tokens: tok, native: nat } = result || { tokens: [], native: null };
-    const cachedTokens = [
+    const cachedTokensRaw = [
       ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' }, chain)] : []),
       ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : []),
     ];
+    const cachedTokens = cachedTokensRaw.filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
     const cachedTotal = Number.isFinite(result?.totalUSD)
       ? Number(result.totalUSD)
       : cachedTokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
@@ -530,10 +642,14 @@ export default function WalletDetail() {
 
             const natRows = ok.map((r) => r.native).filter(Boolean);
             const tokRows = ok.flatMap((r) => r.tokens || []);
+            const cleaned = tokRows.filter((t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name }));
             const totalUSD = ok.reduce((s, r) => s + (Number(r.totalUSD) || 0), 0);
-            result = { native: null, tokens: [...natRows, ...tokRows], totalUSD };
+            result = { native: null, tokens: [...natRows, ...cleaned], totalUSD };
           } else {
             result = await fetchOneChain(activeChain);
+            // apply blacklist before caching & showing
+            const cleanedTok = (result.tokens || []).filter((t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name }));
+            result = { ...result, tokens: cleanedTok };
             writeCache(activeChain, result);
           }
 
@@ -541,7 +657,7 @@ export default function WalletDetail() {
             const { tokens: tok, native: nat, totalUSD } = result || { tokens: [], native: null, totalUSD: 0 };
             setNative(nat ? { ...nat } : null);
             setTokens(Array.isArray(tok) ? tok : []);
-            document.title = `Kinko Wallet – ${walletName} – ${fmtUSD(totalUSD)}`;
+            document.title = `Kinko Wallet - ${walletName} - ${fmtUSD(totalUSD)}`;
           }
         }
       } catch (e) {

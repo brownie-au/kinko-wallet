@@ -174,17 +174,27 @@ async function fetchTokenMetaFromBlockscout(addr) {
     return { price: 0, iconUrl: null };
   }
 }
+// limited parallel fill to reduce latency without hammering
 async function fillMissingFromBlockscout(tokens) {
   const needs = tokens.filter(t => (!t.price || t.price === 0) && t.address);
-  for (const t of needs) {
-    const meta = await fetchTokenMetaFromBlockscout(t.address);
-    if (meta.price > 0 || meta.iconUrl) {
-      t.price = meta.price || t.price;
-      t.priceSource = meta.price > 0 ? 'blockscout' : t.priceSource;
-      t.iconUrl = t.iconUrl || meta.iconUrl;
-      t.value = t.balance * (t.price || 0);
+  const limit = 6;
+  let i = 0;
+  const workers = new Array(Math.min(limit, needs.length)).fill(0).map(async () => {
+    for (; i < needs.length;) {
+      const idx = i++;
+      const t = needs[idx];
+      try {
+        const meta = await fetchTokenMetaFromBlockscout(t.address);
+        if (meta.price > 0 || meta.iconUrl) {
+          t.price = meta.price || t.price;
+          t.priceSource = meta.price > 0 ? 'blockscout' : t.priceSource;
+          t.iconUrl = t.iconUrl || meta.iconUrl;
+          t.value = t.balance * (t.price || 0);
+        }
+      } catch { /* ignore */ }
     }
-  }
+  });
+  await Promise.all(workers);
   return tokens;
 }
 
