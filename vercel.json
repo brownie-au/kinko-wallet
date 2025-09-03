@@ -4,5 +4,8 @@
     "api/**/*.js": {
       "runtime": "nodejs20.x"
     }
-  }
+  },
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
