@@ -1,4 +1,6 @@
-// /api/ping.js  — Vercel serverless function (Node.js)
-export default async function handler(req, res) {
-    res.status(200).json({ ok: true, method: req.method, path: req.url });
-}
+// Minimal health check for Vercel Functions
+module.exports = (req, res) => {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('pong');
+};
