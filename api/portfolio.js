@@ -53,7 +53,7 @@ async function kvGet(key) {
     try { return JSON.parse(j.result); } catch { return null; }
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
     cors(res);
     if (req.method === "OPTIONS") { res.statusCode = 204; res.end(); return; }
 
@@ -90,4 +90,4 @@ module.exports = async (req, res) => {
     } catch (e) {
         return send(res, 500, { error: e.message || "server error" });
     }
-};
+}
