@@ -62,8 +62,8 @@ export default async function handler(req, res) {
             let raw = "";
             for await (const chunk of req) raw += chunk;
             const body = raw ? JSON.parse(raw) : {};
+            // Accept empty wallet arrays to allow generating an ID first
             const wallets = Array.isArray(body.wallets) ? body.wallets : [];
-            if (!wallets.length) return send(res, 400, { error: "wallets required" });
 
             let id = body.id;
             if (id && !ID_RE.test(id)) return send(res, 400, { error: "invalid id" });

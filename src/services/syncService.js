@@ -19,7 +19,17 @@ const API_BASE = resolveApiBase();
 // helpers
 const j = async (r) => {
   if (!r) throw new Error('No response');
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const txt = await r.text();
+      if (txt) {
+        try { const j = JSON.parse(txt); if (j && j.error) msg += `: ${j.error}`; else msg += `: ${txt}`; }
+        catch { msg += `: ${txt}`; }
+      }
+    } catch {}
+    throw new Error(msg);
+  }
   return r.json();
 };
 const v1Url = (id) => `${API_BASE}/v1/portfolio/${encodeURIComponent(String(id).trim().toUpperCase())}`;
