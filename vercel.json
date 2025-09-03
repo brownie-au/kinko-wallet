@@ -8,7 +8,7 @@
       "runtime": "nodejs20.x"
     }
   },
-  "installCommand": "npm ci",
-  "buildCommand": "npm run build",
+  "installCommand": "yarn install --immutable",
+  "buildCommand": "yarn build",
   "outputDirectory": "dist"
 }
