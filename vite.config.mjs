@@ -21,7 +21,15 @@ export default defineConfig(({ mode }) => {
     server: {
       open: true,
       port: PORT,
-      host: true
+      host: true,
+      proxy: {
+        // Allow local dev to call same-origin "/api" and forward to a real API host
+        '/api': {
+          target: env.VITE_PROXY_API_TARGET || 'https://www.kinkowallet.com',
+          changeOrigin: true,
+          secure: true
+        }
+      }
     },
     preview: {
       open: true,

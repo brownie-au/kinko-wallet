@@ -1,5 +1,5 @@
 // api/v1/portfolio/[id].js
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   const URL   = process.env.KV_REST_API_URL;
   const TOKEN = process.env.KV_REST_API_TOKEN;
   if (!URL || !TOKEN) return res.status(500).json({ error: 'Missing Upstash env vars' });
@@ -41,4 +41,4 @@ module.exports = async (req, res) => {
     console.error('[/api/v1/portfolio/:id]', e);
     return res.status(500).json({ error: e?.message || 'server_error' });
   }
-};
+}

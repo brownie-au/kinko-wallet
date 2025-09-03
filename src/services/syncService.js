@@ -1,55 +1,70 @@
 // src/services/syncService.js
-// REMOTE-ONLY sync. No localStorage, no mirroring, no fallbacks.
+// Remote Portfolio sync helpers used by UI modals.
+// Primary API: POST/GET /api/portfolio
+// Fallback API (legacy): PUT/GET /api/v1/portfolio/:id
 
-// Resolve the Sync API base URL in a robust way:
-// - Prefer VITE_SYNC_API_BASE when provided
-// - If it looks like a placeholder (contains '<' or '>') or is empty,
-//   fall back to same-origin '/api' which matches the serverless route folder
-//   (api/v1/portfolio/[id].js) used in production deployments.
 function resolveApiBase() {
   const raw = (import.meta?.env?.VITE_SYNC_API_BASE || '').trim();
-
-  // Treat placeholders or empty values as unset
   const isPlaceholder = /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
-
   let base = raw;
   if (!base || isPlaceholder) {
-    // Same-origin fallback – works when the app and API are hosted together
-    // (e.g., Vercel: https://your-domain/api)
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      base = `${window.location.origin}/api`;
-    } else {
-      base = '/api';
-    }
+    if (typeof window !== 'undefined' && window.location?.origin) base = `${window.location.origin}/api`;
+    else base = '/api';
   }
-
-  // Allow relative '/api' or absolute URLs; normalize by removing trailing slashes
   return String(base).replace(/\/+$/, '');
 }
 
 const API_BASE = resolveApiBase();
 
-// --- small helpers ---
-const j = (r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)));
-const url = (id) => `${API_BASE}/v1/portfolio/${encodeURIComponent(String(id).trim().toUpperCase())}`;
+// helpers
+const j = async (r) => {
+  if (!r) throw new Error('No response');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+};
+const v1Url = (id) => `${API_BASE}/v1/portfolio/${encodeURIComponent(String(id).trim().toUpperCase())}`;
 
 // --- public API ---
 export async function loadById(id) {
   if (!id) throw new Error('Missing Portfolio ID');
-  const data = await fetch(url(id), { headers: { Accept: 'application/json' } }).then(j);
-  const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
-  return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
+  const q = `${API_BASE}/portfolio?id=${encodeURIComponent(String(id).trim().toUpperCase())}`;
+  try {
+    const data = await fetch(q, { headers: { Accept: 'application/json' } }).then(j);
+    const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+    return { wallets, source: 'remote', meta: {} };
+  } catch (e) {
+    // Fallback to legacy v1 route if 404/405
+    if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+      const data = await fetch(v1Url(id), { headers: { Accept: 'application/json' } }).then(j);
+      const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+      return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
+    }
+    throw e;
+  }
 }
 
 export async function saveById(id, wallets) {
   if (!id) throw new Error('Missing Portfolio ID');
-  const body = { wallets: Array.isArray(wallets) ? wallets : [] };
-  const data = await fetch(url(id), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(body)
-  }).then(j);
-  return { ok: true, source: 'remote', meta: data };
+  const body = { id: String(id).trim().toUpperCase(), wallets: Array.isArray(wallets) ? wallets : [] };
+  try {
+    const data = await fetch(`${API_BASE}/portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body)
+    }).then(j);
+    return { ok: true, source: 'remote', meta: data };
+  } catch (e) {
+    // Fallback to legacy v1 route if 404/405
+    if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+      const data = await fetch(v1Url(id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ wallets: Array.isArray(wallets) ? wallets : [] })
+      }).then(j);
+      return { ok: true, source: 'remote', meta: data };
+    }
+    throw e;
+  }
 }
 
 // optional generator
@@ -58,6 +73,18 @@ export function generatePortfolioId(len = 8) {
   let out = '';
   for (let i = 0; i < len; i++) out += chars[(Math.random() * chars.length) | 0];
   return out;
+}
+
+// local id helpers (used by chip/modal)
+const ID_KEY = 'kinko:sync:id';
+export function getSyncId() {
+  try { return localStorage.getItem(ID_KEY) || ''; } catch { return ''; }
+}
+export function setSyncId(id) {
+  try { if (id) localStorage.setItem(ID_KEY, String(id).toUpperCase()); } catch {}
+}
+export function clearSyncId() {
+  try { localStorage.removeItem(ID_KEY); } catch {}
 }
 
 // legacy aliases (kept so other files import without errors)
