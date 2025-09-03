@@ -1,6 +1,7 @@
 // src/components/kw-EHexStakingHeader.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, Button, Badge } from 'react-bootstrap';
+import YieldUnitToggle from './YieldUnitToggle.jsx';
 import '../styles/kw-hex-staking-header.css'; // reuse same styles
 
 // ---------- utils ----------
@@ -85,6 +86,7 @@ export default function KwEHexStakingHeader({
     showUsdUnderTitle = true
 }) {
     const [cadence, setCadence] = useState('day'); // 'day' | 'week' | 'month' | 'year'
+    const [showUsd, setShowUsd] = useState(false); // default native token (eHEX)
     const hexDay = useHexDay();
 
     const cadenceHex = useMemo(() => {
@@ -127,6 +129,14 @@ export default function KwEHexStakingHeader({
         );
     }, [showUsdUnderTitle, totalUsd, totalHex, hexPriceUsd]);
 
+    const yieldValueNode = useMemo(() => {
+        const valHex = cadenceHex || 0;
+        const valUsd = (hexPriceUsd > 0 ? valHex * hexPriceUsd : 0);
+        return showUsd
+            ? `USD ${nfc(valUsd).replace(/US\$|USD/g, '').trim()}`
+            : `${nf(valHex, { maximumFractionDigits: 0 })} eHEX`;
+    }, [cadenceHex, hexPriceUsd, showUsd]);
+
     return (
         <div className={`kw-hex-stake-header ${sticky ? 'kw-sticky' : ''}`}>
             <Card className="kw-card">
@@ -164,11 +174,14 @@ export default function KwEHexStakingHeader({
                     <Metric label="Average Stake Length" value={`${nf(avgStakeYears, { maximumFractionDigits: 1 })} yrs`} />
 
                     {/* Yield metric with cadence chips */}
-                    <Metric
+                    <Metric 
                         label={`Yield (${labelForCadence(cadence)})`}
-                        value={`${nf(cadenceHex, { maximumFractionDigits: 0 })} eHEX`}
+                        value={yieldValueNode}
                         accent
                     >
+                        <div className="kw-yield-toggle-wrap">
+                            <YieldUnitToggle checked={showUsd} onChange={setShowUsd} title="Show USD value" />
+                        </div>
                         <div className="kw-cadence-chips" role="tablist" aria-label="Yield cadence">
                             <Chip active={cadence === 'day'} onClick={() => setCadence('day')}>D</Chip>
                             <Chip active={cadence === 'week'} onClick={() => setCadence('week')}>W</Chip>

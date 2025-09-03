@@ -15,7 +15,7 @@ import { fetchNativeChange24h, tokenKey as nativeKey } from '../../services/chan
 
 // shared chain UI (chips + small chain badge)
 import { ChainSelector, ChainBadge } from '../../components/ChainUI';
-import { getGlobalNetChip, setGlobalNetChip, setLastSection } from '../../utils/uiState';
+import { getGlobalNetChip, setGlobalNetChip, setLastSection, consumeForceGlobalChipOnce } from '../../utils/uiState';
 import TokenLogo from '../../components/TokenLogo';
 
 // 🔒 reuse existing global token blocklist
@@ -464,6 +464,10 @@ export default function Portfolio() {
   // Sticky chain filter sourced from global UI state
   useEffect(() => { setLastSection('portfolio'); }, []);
   const initialChip = useMemo(() => {
+    // One-time override from Dashboard (Top Tokens tiles or View All)
+    // If present and fresh, use it for initial chip without changing sticky state.
+    const forced = consumeForceGlobalChipOnce();
+    if (forced) return forced;
     const saved = getGlobalNetChip();
     return saved || 'all';
   }, []);

@@ -187,6 +187,32 @@
     font-weight: 700;
 }
 
+/* Inline value row for yield: value on left, tiny toggle on the right */
+.kw-yield-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kw-yield-toggle {
+    appearance: none;
+    border: 1px solid var(--kw-chip-neutral-br);
+    background: var(--kw-chip-neutral-bg);
+    color: var(--kw-chip-neutral-fg);
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.kw-yield-toggle:hover { filter: brightness(0.98); }
+.kw-yield-toggle.active {
+    background: var(--bs-info);
+    border-color: var(--bs-info);
+    color: #fff;
+}
+
 .kw-metric.accent {
     outline: 1px solid rgba(100, 108, 255, 0.3);
     padding-bottom: 36px;
@@ -199,6 +225,13 @@
     bottom: 8px;
     display: flex;
     gap: 6px;
+}
+
+/* New: USD pill bottom-left inside the yield metric tile */
+.kw-yield-toggle-wrap {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
 }
 
 .kw-chip-btn {
