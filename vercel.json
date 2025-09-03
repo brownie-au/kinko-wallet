@@ -4,8 +4,5 @@
     "api/**/*.js": {
       "runtime": "nodejs20.x"
     }
-  },
-  "buildCommand": "yarn build",
-  "outputDirectory": "dist"
+  }
 }
-
