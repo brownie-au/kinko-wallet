@@ -1,10 +1,33 @@
 // src/services/syncService.js
 // REMOTE-ONLY sync. No localStorage, no mirroring, no fallbacks.
 
-const API_BASE = (import.meta.env.VITE_SYNC_API_BASE || '').replace(/\/+$/, '');
-if (!API_BASE) {
-  throw new Error('VITE_SYNC_API_BASE is not set. Remote-only mode cannot run.');
+// Resolve the Sync API base URL in a robust way:
+// - Prefer VITE_SYNC_API_BASE when provided
+// - If it looks like a placeholder (contains '<' or '>') or is empty,
+//   fall back to same-origin '/api' which matches the serverless route folder
+//   (api/v1/portfolio/[id].js) used in production deployments.
+function resolveApiBase() {
+  const raw = (import.meta?.env?.VITE_SYNC_API_BASE || '').trim();
+
+  // Treat placeholders or empty values as unset
+  const isPlaceholder = /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
+
+  let base = raw;
+  if (!base || isPlaceholder) {
+    // Same-origin fallback – works when the app and API are hosted together
+    // (e.g., Vercel: https://your-domain/api)
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      base = `${window.location.origin}/api`;
+    } else {
+      base = '/api';
+    }
+  }
+
+  // Allow relative '/api' or absolute URLs; normalize by removing trailing slashes
+  return String(base).replace(/\/+$/, '');
 }
+
+const API_BASE = resolveApiBase();
 
 // --- small helpers ---
 const j = (r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)));
