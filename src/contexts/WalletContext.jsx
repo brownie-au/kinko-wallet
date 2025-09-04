@@ -5,25 +5,20 @@ const WalletContext = createContext();
 export const useWallets = () => useContext(WalletContext);
 
 export const WalletProvider = ({ children }) => {
-  // ---- wallets (memory only, same as before) ----
-  const [wallets, setWallets] = useState([]); // [{ address, name }]
-  const mountedRef = useRef(false);
-
-  // Persist to localStorage and hydrate from it so all pages/modals share a single source of truth
-  useEffect(() => {
-    // Hydrate on mount
+  // ---- wallets (persisted) ----
+  // Hydrate synchronously from localStorage to avoid an initial "[]" write that can wipe data
+  const [wallets, setWallets] = useState(() => {
     try {
       const raw = localStorage.getItem('wallets');
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setWallets(arr);
-      }
-    } catch {}
-    mountedRef.current = true;
-  }, []);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }); // [{ address, name }]
 
+  // Persist whenever wallets changes
   useEffect(() => {
-    if (!mountedRef.current) return;
     try { localStorage.setItem('wallets', JSON.stringify(wallets || [])); } catch {}
   }, [wallets]);
 

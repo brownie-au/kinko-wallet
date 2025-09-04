@@ -64,11 +64,10 @@ export default function DrawerContent() {
         { id: 'wallet-view-all', title: 'View All', type: 'item', url: '/portfolio' },
         ...list.map((w, i) => ({
           id: `wallet-${i}-${(w.address || '').slice(-4)}`,
-          title: `${w?.name || 'Unnamed'} - 0x...${(w?.address || '').slice(-4)}`,
+          title: `0x...${(w?.address || '').slice(-4)} - ${w?.name || 'Unnamed'}`,
           type: 'item',
           url: `/wallet/${w.address}`
-        })),
-        { id: 'wallet-manage', title: 'Manage Wallets', type: 'item', url: '/wallets/manage' }
+        }))
       ];
       walletPortfolio.children = walletChildren;
     }
