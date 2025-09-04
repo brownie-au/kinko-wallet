@@ -8,6 +8,11 @@
       "runtime": "nodejs20.x"
     }
   },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
   "buildCommand": "yarn build",
   "outputDirectory": "dist"
 }
