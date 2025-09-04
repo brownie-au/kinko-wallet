@@ -1,0 +1,123 @@
+1: // src/services/syncService.js
+2: // Remote Portfolio sync helpers used by UI modals.
+3: // Primary API: POST/GET /api/portfolio
+4: // Fallback API (legacy): PUT/GET /api/v1/portfolio/:id
+5: 
+6: function resolveApiBase() {
+7:   const raw = (import.meta?.env?.VITE_SYNC_API_BASE || '').trim();
+8:   const isPlaceholder = /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
+9:   let base = raw;
+10:   if (!base || isPlaceholder) {
+11:     if (typeof window !== 'undefined' && window.location?.origin) base = `${window.location.origin}/api`;
+12:     else base = '/api';
+13:   }
+14:   return String(base).replace(/\/+$/, '');
+15: }
+16: 
+17: const API_BASE = resolveApiBase();
+18: 
+19: // normalize remote responses which may come in several shapes depending on
+20: // the deployed API (unwrapped vs Upstash wrapper).
+21: function extractWallets(data) {
+22:   try {
+23:     // Preferred shape
+24:     if (Array.isArray(data?.wallets)) return data.wallets;
+25: 
+26:     // Upstash KV REST wrapper variants
+27:     const raw = data?.value ?? data?.result;
+28:     if (raw != null) {
+29:       const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+30:       if (Array.isArray(obj?.wallets)) return obj.wallets;
+31:     }
+32: 
+33:     // Some endpoints may put the JSON into `data.data`
+34:     if (data?.data) return extractWallets(data.data);
+35:   } catch {}
+36:   return [];
+37: }
+38: 
+39: // helpers
+40: const j = async (r) => {
+41:   if (!r) throw new Error('No response');
+42:   if (!r.ok) {
+43:     let msg = `HTTP ${r.status}`;
+44:     try {
+45:       const txt = await r.text();
+46:       if (txt) {
+47:         try { const j = JSON.parse(txt); if (j && j.error) msg += `: ${j.error}`; else msg += `: ${txt}`; }
+48:         catch { msg += `: ${txt}`; }
+49:       }
+50:     } catch {}
+51:     throw new Error(msg);
+52:   }
+53:   return r.json();
+54: };
+55: const v1Url = (id) => `${API_BASE}/v1/portfolio/${encodeURIComponent(String(id).trim().toUpperCase())}`;
+56: 
+57: // --- public API ---
+58: export async function loadById(id) {
+59:   if (!id) throw new Error('Missing Portfolio ID');
+60:   const q = `${API_BASE}/portfolio?id=${encodeURIComponent(String(id).trim().toUpperCase())}`;
+61:   try {
+62:     const data = await fetch(q, { headers: { Accept: 'application/json' } }).then(j);
+63:     const wallets = extractWallets(data);
+64:     return { wallets, source: 'remote', meta: {} };
+65:   } catch (e) {
+66:     // Fallback to legacy v1 route if 404/405
+67:     if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+68:       const data = await fetch(v1Url(id), { headers: { Accept: 'application/json' } }).then(j);
+69:       const wallets = extractWallets(data);
+70:       return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
+71:     }
+72:     throw e;
+73:   }
+74: }
+75: 
+76: export async function saveById(id, wallets) {
+77:   if (!id) throw new Error('Missing Portfolio ID');
+78:   const body = { id: String(id).trim().toUpperCase(), wallets: Array.isArray(wallets) ? wallets : [] };
+79:   try {
+80:     const data = await fetch(`${API_BASE}/portfolio`, {
+81:       method: 'POST',
+82:       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+83:       body: JSON.stringify(body)
+84:     }).then(j);
+85:     return { ok: true, source: 'remote', meta: data };
+86:   } catch (e) {
+87:     // Fallback to legacy v1 route if 404/405
+88:     if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+89:       const data = await fetch(v1Url(id), {
+90:         method: 'PUT',
+91:         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+92:         body: JSON.stringify({ wallets: Array.isArray(wallets) ? wallets : [] })
+93:       }).then(j);
+94:       return { ok: true, source: 'remote', meta: data };
+95:     }
+96:     throw e;
+97:   }
+98: }
+99: 
+100: // optional generator
+101: export function generatePortfolioId(len = 8) {
+102:   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+103:   let out = '';
+104:   for (let i = 0; i < len; i++) out += chars[(Math.random() * chars.length) | 0];
+105:   return out;
+106: }
+107: 
+108: // local id helpers (used by chip/modal)
+109: const ID_KEY = 'kinko:sync:id';
+110: export function getSyncId() {
+111:   try { return localStorage.getItem(ID_KEY) || ''; } catch { return ''; }
+112: }
+113: export function setSyncId(id) {
+114:   try { if (id) localStorage.setItem(ID_KEY, String(id).toUpperCase()); } catch {}
+115: }
+116: export function clearSyncId() {
+117:   try { localStorage.removeItem(ID_KEY); } catch {}
+118: }
+119: 
+120: // legacy aliases (kept so other files import without errors)
+121: export const loadPortfolio   = loadById;
+122: export const savePortfolio   = saveById;
+123: export const createPortfolio = saveById;

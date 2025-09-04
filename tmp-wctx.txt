@@ -1,0 +1,96 @@
+1: import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+2: import { buildPortfolioDetailed } from '../services/portfolioAggService';
+3: 
+4: const WalletContext = createContext();
+5: export const useWallets = () => useContext(WalletContext);
+6: 
+7: export const WalletProvider = ({ children }) => {
+8:   // ---- wallets (memory only, same as before) ----
+9:   const [wallets, setWallets] = useState([]); // [{ address, name }]
+10:   const mountedRef = useRef(false);
+11: 
+12:   // Persist to localStorage and hydrate from it so all pages/modals share a single source of truth
+13:   useEffect(() => {
+14:     // Hydrate on mount
+15:     try {
+16:       const raw = localStorage.getItem('wallets');
+17:       if (raw) {
+18:         const arr = JSON.parse(raw);
+19:         if (Array.isArray(arr)) setWallets(arr);
+20:       }
+21:     } catch {}
+22:     mountedRef.current = true;
+23:   }, []);
+24: 
+25:   useEffect(() => {
+26:     if (!mountedRef.current) return;
+27:     try { localStorage.setItem('wallets', JSON.stringify(wallets || [])); } catch {}
+28:   }, [wallets]);
+29: 
+30:   const addWallet = (address, name) => {
+31:     const addr = String(address || '').trim();
+32:     if (!addr) return;
+33:     setWallets((prev) =>
+34:       prev.find((w) => w.address === addr) ? prev : [...prev, { address: addr, name }]
+35:     );
+36:   };
+37: 
+38:   const deleteWallet = (address) =>
+39:     setWallets((prev) => prev.filter((w) => w.address !== address));
+40: 
+41:   const replaceWallets = (arr) => setWallets(Array.isArray(arr) ? arr : []);
+42: 
+43:   // ---- portfolio aggregate (NEW) ----
+44:   const [portfolio, setPortfolio] = useState({
+45:     totalUsd: 0,
+46:     changePct24h: 0,
+47:     tokens: [],
+48:     breakdown: []
+49:   });
+50:   const [portfolioLoading, setPortfolioLoading] = useState(false);
+51:   const [portfolioError, setPortfolioError] = useState('');
+52: 
+53:   const refreshPortfolio = useCallback(async (opts = {}) => {
+54:     try {
+55:       setPortfolioLoading(true);
+56:       setPortfolioError('');
+57:       // buildPortfolioDetailed expects list of wallets; we pass your objects array
+58:       const result = await buildPortfolioDetailed(wallets, opts);
+59:       // Ensure shape
+60:       const safe = {
+61:         totalUsd: Number(result?.totalUsd || 0),
+62:         changePct24h: Number(result?.changePct24h || 0),
+63:         tokens: result?.tokens || [],
+64:         breakdown: result?.breakdown || []
+65:       };
+66:       setPortfolio(safe);
+67:     } catch (e) {
+68:       setPortfolioError(e?.message || String(e));
+69:       setPortfolio((p) => ({ ...p, totalUsd: 0 }));
+70:     } finally {
+71:       setPortfolioLoading(false);
+72:     }
+73:   }, [wallets]);
+74: 
+75:   // Recompute when wallet list changes
+76:   useEffect(() => {
+77:     if (!wallets || wallets.length === 0) {
+78:       setPortfolio({ totalUsd: 0, changePct24h: 0, tokens: [], breakdown: [] });
+79:       return;
+80:     }
+81:     refreshPortfolio({ only: 'summary' }); // non-breaking option; ignored if not used
+82:   }, [wallets, refreshPortfolio]);
+83: 
+84:   const value = {
+85:     wallets,
+86:     addWallet,
+87:     deleteWallet,
+88:     replaceWallets,
+89:     portfolio,
+90:     portfolioLoading,
+91:     portfolioError,
+92:     refreshPortfolio
+93:   };
+94: 
+95:   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+96: };

@@ -16,6 +16,26 @@ function resolveApiBase() {
 
 const API_BASE = resolveApiBase();
 
+// normalize remote responses which may come in several shapes depending on
+// the deployed API (unwrapped vs Upstash wrapper).
+function extractWallets(data) {
+  try {
+    // Preferred shape
+    if (Array.isArray(data?.wallets)) return data.wallets;
+
+    // Upstash KV REST wrapper variants
+    const raw = data?.value ?? data?.result;
+    if (raw != null) {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(obj?.wallets)) return obj.wallets;
+    }
+
+    // Some endpoints may put the JSON into `data.data`
+    if (data?.data) return extractWallets(data.data);
+  } catch {}
+  return [];
+}
+
 // helpers
 const j = async (r) => {
   if (!r) throw new Error('No response');
@@ -40,13 +60,13 @@ export async function loadById(id) {
   const q = `${API_BASE}/portfolio?id=${encodeURIComponent(String(id).trim().toUpperCase())}`;
   try {
     const data = await fetch(q, { headers: { Accept: 'application/json' } }).then(j);
-    const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+    const wallets = extractWallets(data);
     return { wallets, source: 'remote', meta: {} };
   } catch (e) {
     // Fallback to legacy v1 route if 404/405
     if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
       const data = await fetch(v1Url(id), { headers: { Accept: 'application/json' } }).then(j);
-      const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+      const wallets = extractWallets(data);
       return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
     }
     throw e;

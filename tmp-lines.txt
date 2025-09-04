@@ -1,0 +1,103 @@
+1: // src/services/syncService.js
+2: // Remote Portfolio sync helpers used by UI modals.
+3: // Primary API: POST/GET /api/portfolio
+4: // Fallback API (legacy): PUT/GET /api/v1/portfolio/:id
+5: 
+6: function resolveApiBase() {
+7:   const raw = (import.meta?.env?.VITE_SYNC_API_BASE || '').trim();
+8:   const isPlaceholder = /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
+9:   let base = raw;
+10:   if (!base || isPlaceholder) {
+11:     if (typeof window !== 'undefined' && window.location?.origin) base = `${window.location.origin}/api`;
+12:     else base = '/api';
+13:   }
+14:   return String(base).replace(/\/+$/, '');
+15: }
+16: 
+17: const API_BASE = resolveApiBase();
+18: 
+19: // helpers
+20: const j = async (r) => {
+21:   if (!r) throw new Error('No response');
+22:   if (!r.ok) {
+23:     let msg = `HTTP ${r.status}`;
+24:     try {
+25:       const txt = await r.text();
+26:       if (txt) {
+27:         try { const j = JSON.parse(txt); if (j && j.error) msg += `: ${j.error}`; else msg += `: ${txt}`; }
+28:         catch { msg += `: ${txt}`; }
+29:       }
+30:     } catch {}
+31:     throw new Error(msg);
+32:   }
+33:   return r.json();
+34: };
+35: const v1Url = (id) => `${API_BASE}/v1/portfolio/${encodeURIComponent(String(id).trim().toUpperCase())}`;
+36: 
+37: // --- public API ---
+38: export async function loadById(id) {
+39:   if (!id) throw new Error('Missing Portfolio ID');
+40:   const q = `${API_BASE}/portfolio?id=${encodeURIComponent(String(id).trim().toUpperCase())}`;
+41:   try {
+42:     const data = await fetch(q, { headers: { Accept: 'application/json' } }).then(j);
+43:     const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+44:     return { wallets, source: 'remote', meta: {} };
+45:   } catch (e) {
+46:     // Fallback to legacy v1 route if 404/405
+47:     if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+48:       const data = await fetch(v1Url(id), { headers: { Accept: 'application/json' } }).then(j);
+49:       const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+50:       return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
+51:     }
+52:     throw e;
+53:   }
+54: }
+55: 
+56: export async function saveById(id, wallets) {
+57:   if (!id) throw new Error('Missing Portfolio ID');
+58:   const body = { id: String(id).trim().toUpperCase(), wallets: Array.isArray(wallets) ? wallets : [] };
+59:   try {
+60:     const data = await fetch(`${API_BASE}/portfolio`, {
+61:       method: 'POST',
+62:       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+63:       body: JSON.stringify(body)
+64:     }).then(j);
+65:     return { ok: true, source: 'remote', meta: data };
+66:   } catch (e) {
+67:     // Fallback to legacy v1 route if 404/405
+68:     if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
+69:       const data = await fetch(v1Url(id), {
+70:         method: 'PUT',
+71:         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+72:         body: JSON.stringify({ wallets: Array.isArray(wallets) ? wallets : [] })
+73:       }).then(j);
+74:       return { ok: true, source: 'remote', meta: data };
+75:     }
+76:     throw e;
+77:   }
+78: }
+79: 
+80: // optional generator
+81: export function generatePortfolioId(len = 8) {
+82:   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+83:   let out = '';
+84:   for (let i = 0; i < len; i++) out += chars[(Math.random() * chars.length) | 0];
+85:   return out;
+86: }
+87: 
+88: // local id helpers (used by chip/modal)
+89: const ID_KEY = 'kinko:sync:id';
+90: export function getSyncId() {
+91:   try { return localStorage.getItem(ID_KEY) || ''; } catch { return ''; }
+92: }
+93: export function setSyncId(id) {
+94:   try { if (id) localStorage.setItem(ID_KEY, String(id).toUpperCase()); } catch {}
+95: }
+96: export function clearSyncId() {
+97:   try { localStorage.removeItem(ID_KEY); } catch {}
+98: }
+99: 
+100: // legacy aliases (kept so other files import without errors)
+101: export const loadPortfolio   = loadById;
+102: export const savePortfolio   = saveById;
+103: export const createPortfolio = saveById;

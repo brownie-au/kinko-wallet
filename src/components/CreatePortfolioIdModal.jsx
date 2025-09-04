@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
 import { createPortfolio, generatePortfolioId } from '../services/syncService.js';
-import { loadWallets as loadLocalWallets } from '../utils/walletStorage.js';
+import { useWallets } from '../contexts/WalletContext.jsx';
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
+  const { wallets } = useWallets();
   const [id, setId] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -15,9 +16,6 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
     try {
       setBusy(true); setMsg(''); setErr('');
       const useId = id || generatePortfolioId();
-      // Use the same wallet source as Manage Wallets (localStorage),
-      // ensuring we save the list the user actually sees/edits.
-      const wallets = loadLocalWallets();
       await createPortfolio(useId, wallets);
       setId(useId);
       setMsg(id ? 'Updated remote Portfolio.' : 'Created remote Portfolio.');
@@ -35,6 +33,7 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
       <Modal.Header closeButton><Modal.Title>Create / Update Portfolio ID</Modal.Title></Modal.Header>
       <Modal.Body>
         <p className="mb-2">This writes your current wallets straight to the remote store.</p>
+        <div className="text-muted small mb-2">Wallets saved: {wallets?.length || 0}</div>
         <Form.Group className="mb-3">
           <Form.Label>Portfolio ID</Form.Label>
           <Form.Control

@@ -13,7 +13,7 @@ import {
   Modal
 } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { loadWallets, saveWallets } from '../../utils/walletStorage';
+import { useWallets } from '../../contexts/WalletContext.jsx';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
 
@@ -31,7 +31,8 @@ const ACTION_BTN_STYLE = {
 };
 
 const WalletManage = () => {
-  const [wallets, setWallets] = useState([]);
+  const { wallets, addWallet: addWalletCtx, deleteWallet: deleteWalletCtx, replaceWallets } = useWallets();
+  const [_, setWalletsStateTick] = useState(0); // force re-render after edits if needed
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -46,13 +47,7 @@ const WalletManage = () => {
 
   const navigate = useNavigate();
 
-  // Load/save
-  useEffect(() => {
-    setWallets(loadWallets());
-  }, []);
-  useEffect(() => {
-    saveWallets(wallets);
-  }, [wallets]);
+  // Wallets come from context, which persists to localStorage for durability.
 
   // Add
   const addWallet = (e) => {
@@ -66,19 +61,17 @@ const WalletManage = () => {
       return;
     }
 
-    setWallets([...wallets, { address: address.trim(), name }]);
+    addWalletCtx(address.trim(), name);
     setAddress('');
     setName('');
     setError('');
-    window.location.reload(); // MVP refresh for sidebar
   };
 
   // Delete (confirmed)
   const deleteWallet = (idx) => {
-    const next = wallets.filter((_, i) => i !== idx);
-    setWallets(next);
+    const toDelete = wallets[idx]?.address;
+    if (toDelete) deleteWalletCtx(toDelete);
     setConfirmIdx(null);
-    window.location.reload(); // keep sidebar in sync for now
   };
 
   // Edit
@@ -90,9 +83,10 @@ const WalletManage = () => {
   const saveEdit = (idx) => {
     const trimmed = (tempName || '').trim();
     const next = wallets.map((w, i) => (i === idx ? { ...w, name: trimmed } : w));
-    setWallets(next);
+    replaceWallets(next);
     setEditingIndex(null);
     setTempName('');
+    setWalletsStateTick((x) => x + 1);
   };
 
   const cancelEdit = () => {

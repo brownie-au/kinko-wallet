@@ -1,0 +1,93 @@
+1: // api/portfolio.js
+2: // Short Portfolio ID backend for Kinko Wallet
+3: //
+4: // POST /api/portfolio   { wallets:[{address,name?}], id? } -> { id }
+5: // GET  /api/portfolio?id=XXXXXXXX                         -> { wallets:[...] }
+6: 
+7: const ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // safe chars, no 0/O/1/I
+8: const ID_RE = /^[A-HJ-NP-Z2-9]{6,8}$/;
+9: 
+10: function genId(len = 8) {
+11:     const arr = new Uint32Array(len);
+12:     (globalThis.crypto || require("crypto").webcrypto).getRandomValues(arr);
+13:     return Array.from(arr, x => ABC[x % ABC.length]).join("");
+14: }
+15: 
+16: function cors(res) {
+17:     res.setHeader("Access-Control-Allow-Origin", "*");
+18:     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+19:     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+20: }
+21: 
+22: function send(res, status, data) {
+23:     res.statusCode = status;
+24:     res.setHeader("Content-Type", "application/json; charset=utf-8");
+25:     res.end(JSON.stringify(data));
+26: }
+27: 
+28: function kvCreds() {
+29:     const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+30:     const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+31:     if (!url || !token) throw new Error("KV credentials missing");
+32:     return { url, token };
+33: }
+34: 
+35: async function kvSet(key, value, ttlSec = 60 * 60 * 24 * 365) {
+36:     const { url, token } = kvCreds();
+37:     const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+38:         method: "POST",
+39:         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+40:         body: JSON.stringify({ value: JSON.stringify(value), px: ttlSec * 1000 }),
+41:     });
+42:     if (!r.ok) throw new Error(`KV set failed: ${r.status}`);
+43: }
+44: 
+45: async function kvGet(key) {
+46:     const { url, token } = kvCreds();
+47:     const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+48:         headers: { Authorization: `Bearer ${token}` },
+49:     });
+50:     if (!r.ok) throw new Error(`KV get failed: ${r.status}`);
+51:     const j = await r.json();
+52:     if (!j || j.result == null) return null;
+53:     try { return JSON.parse(j.result); } catch { return null; }
+54: }
+55: 
+56: export default async function handler(req, res) {
+57:     cors(res);
+58:     if (req.method === "OPTIONS") { res.statusCode = 204; res.end(); return; }
+59: 
+60:     try {
+61:         if (req.method === "POST") {
+62:             let raw = "";
+63:             for await (const chunk of req) raw += chunk;
+64:             const body = raw ? JSON.parse(raw) : {};
+65:             // Accept empty wallet arrays to allow generating an ID first
+66:             const wallets = Array.isArray(body.wallets) ? body.wallets : [];
+67: 
+68:             let id = body.id;
+69:             if (id && !ID_RE.test(id)) return send(res, 400, { error: "invalid id" });
+70:             if (!id) id = genId();
+71: 
+72:             const clean = wallets
+73:                 .filter(w => w && typeof w.address === "string" && w.address.trim())
+74:                 .map(w => ({ address: w.address.trim(), name: (w.name || "").trim() || undefined }));
+75: 
+76:             await kvSet(`kw:pf:${id}`, { wallets: clean });
+77:             return send(res, 200, { id });
+78:         }
+79: 
+80:         if (req.method === "GET") {
+81:             const { id } = req.query || {};
+82:             if (!id || !ID_RE.test(id)) return send(res, 400, { error: "invalid id" });
+83:             const data = await kvGet(`kw:pf:${id}`);
+84:             if (!data) return send(res, 404, { error: "not found" });
+85:             return send(res, 200, data);
+86:         }
+87: 
+88:         res.setHeader("Allow", "GET, POST, OPTIONS");
+89:         return send(res, 405, { error: "method not allowed" });
+90:     } catch (e) {
+91:         return send(res, 500, { error: e.message || "server error" });
+92:     }
+93: }
