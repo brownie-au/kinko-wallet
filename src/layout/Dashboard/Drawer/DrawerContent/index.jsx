@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SimpleBarScroll from 'components/third-party/SimpleBar';
 import navigation from 'menu-items/navigation';
+import { useWallets } from 'contexts/WalletContext';
 
 // ---------- utils ----------
 const normalizePath = (p = '') => {
@@ -18,6 +19,8 @@ export default function DrawerContent() {
   const isActive = (url) => url && isExact(url, pathname);
 
   // ---------- build menu, promote Manage Wallets ----------
+  const { wallets } = useWallets();
+
   const topItems = useMemo(() => {
     const src = Array.isArray(navigation?.children) ? navigation.children : [];
     const cloned = src.map((it) => ({
@@ -53,6 +56,22 @@ export default function DrawerContent() {
 
     const dashboard = cloned.find((it) => it?.id === 'dashboard');
     const walletPortfolio = cloned.find((it) => it?.id === 'wallet-portfolio');
+
+    // Dynamically rebuild Wallet Portfolio children from current wallets
+    if (walletPortfolio) {
+      const list = Array.isArray(wallets) ? wallets : [];
+      const walletChildren = [
+        { id: 'wallet-view-all', title: 'View All', type: 'item', url: '/portfolio' },
+        ...list.map((w, i) => ({
+          id: `wallet-${i}-${(w.address || '').slice(-4)}`,
+          title: `${w?.name || 'Unnamed'} - 0x...${(w?.address || '').slice(-4)}`,
+          type: 'item',
+          url: `/wallet/${w.address}`
+        })),
+        { id: 'wallet-manage', title: 'Manage Wallets', type: 'item', url: '/wallets/manage' }
+      ];
+      walletPortfolio.children = walletChildren;
+    }
     const rest = cloned.filter((it) => it?.id !== 'dashboard' && it?.id !== 'wallet-portfolio');
 
     const ordered = [];
@@ -61,7 +80,7 @@ export default function DrawerContent() {
     if (promoted) ordered.push(promoted);
     ordered.push(...rest);
     return ordered;
-  }, [pathname]);
+  }, [pathname, wallets]);
 
   // ---------- route helpers ----------
   const isWalletDetailRoute = pathname.startsWith('/wallet/'); // individual wallet pages ONLY

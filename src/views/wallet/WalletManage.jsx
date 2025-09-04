@@ -1,5 +1,5 @@
 // src/views/wallet/WalletManage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Button,
@@ -35,6 +35,55 @@ const WalletManage = () => {
   const [_, setWalletsStateTick] = useState(0); // force re-render after edits if needed
   const [dragIndex, setDragIndex] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const dragGhostRef = useRef(null);
+
+  const destroyDragGhost = () => {
+    try {
+      const el = dragGhostRef.current;
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    } catch {}
+    dragGhostRef.current = null;
+  };
+
+  const createDragGhost = (wallet) => {
+    destroyDragGhost();
+    const ghost = document.createElement('div');
+    ghost.setAttribute('role', 'presentation');
+    ghost.style.position = 'absolute';
+    ghost.style.top = '-9999px';
+    ghost.style.left = '-9999px';
+    ghost.style.zIndex = '2147483647';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.padding = '8px 10px';
+    ghost.style.borderRadius = '8px';
+    ghost.style.border = '1px solid rgba(255,255,255,0.18)';
+    ghost.style.background = 'rgba(26, 28, 34, 0.96)';
+    ghost.style.color = '#fff';
+    ghost.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)';
+    ghost.style.font = '500 13px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+    ghost.style.display = 'flex';
+    ghost.style.alignItems = 'center';
+    ghost.style.gap = '10px';
+
+    const icon = document.createElement('div');
+    icon.textContent = '☰';
+    icon.style.opacity = '0.8';
+    icon.style.fontSize = '14px';
+
+    const text = document.createElement('div');
+    const name = wallet?.name || 'Unnamed';
+    const addr = wallet?.address || '';
+    text.innerHTML = `
+      <div style="font-weight:700; font-family:monospace; white-space:nowrap;">${addr}</div>
+      <div style="opacity:.85; font-size:12px;">${name}</div>
+    `;
+
+    ghost.appendChild(icon);
+    ghost.appendChild(text);
+    document.body.appendChild(ghost);
+    dragGhostRef.current = ghost;
+    return ghost;
+  };
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -97,6 +146,12 @@ const WalletManage = () => {
     e.dataTransfer.effectAllowed = 'move';
     setDragIndex(idx);
     setIsDragging(true);
+    // custom drag image containing address + name for better feedback
+    try {
+      const ghost = createDragGhost(wallets[idx]);
+      // offset a bit so the mouse pointer doesn't cover text
+      e.dataTransfer.setDragImage(ghost, 12, 12);
+    } catch {}
   };
   const onDragOver = (idx) => (e) => {
     e.preventDefault();
@@ -108,13 +163,14 @@ const WalletManage = () => {
     try { const d = Number(e.dataTransfer.getData('text/plain')); if (!Number.isNaN(d)) from = d; } catch {}
     setDragIndex(null);
     setIsDragging(false);
+    destroyDragGhost();
     if (from == null || from === idx) return;
     const next = wallets.slice();
     const [m] = next.splice(from, 1);
     next.splice(idx, 0, m);
     replaceWallets(next);
   };
-  const onDragEnd = () => { setDragIndex(null); setIsDragging(false); };
+  const onDragEnd = () => { setDragIndex(null); setIsDragging(false); destroyDragGhost(); };
 
   const cancelEdit = () => {
     setEditingIndex(null);
