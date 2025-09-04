@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { loadPortfolio } from '../services/syncService.js';
+import { saveWallets as saveLocalWallets } from '../utils/walletStorage.js';
 import { useWallets } from '../contexts/WalletContext.jsx';
 
 export default function PortfolioIdModal({ show, onHide }) {
@@ -13,8 +14,13 @@ export default function PortfolioIdModal({ show, onHide }) {
     try {
       setBusy(true); setErr('');
       const { wallets } = await loadPortfolio(id.trim().toUpperCase());
+      // Update both context and localStorage so Manage Wallets reflects
+      // the loaded remote portfolio immediately.
       replaceWallets(wallets);
+      try { saveLocalWallets(wallets); } catch {}
       onHide?.();
+      // Keep UI consistent with Manage Wallets page behavior
+      try { window.location.reload(); } catch {}
     } catch (e) {
       setErr(e?.message || 'Remote load failed.');
     } finally {

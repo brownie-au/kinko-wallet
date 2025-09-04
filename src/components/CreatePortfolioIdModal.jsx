@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
 import { createPortfolio, generatePortfolioId } from '../services/syncService.js';
-import { useWallets } from '../contexts/WalletContext.jsx';
+import { loadWallets as loadLocalWallets } from '../utils/walletStorage.js';
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
-  const { wallets } = useWallets();
   const [id, setId] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -16,6 +15,9 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
     try {
       setBusy(true); setMsg(''); setErr('');
       const useId = id || generatePortfolioId();
+      // Use the same wallet source as Manage Wallets (localStorage),
+      // ensuring we save the list the user actually sees/edits.
+      const wallets = loadLocalWallets();
       await createPortfolio(useId, wallets);
       setId(useId);
       setMsg(id ? 'Updated remote Portfolio.' : 'Created remote Portfolio.');
