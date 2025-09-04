@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { loadPortfolio } from '../services/syncService.js';
 import { useWallets } from '../contexts/WalletContext.jsx';
-import { useWallets } from '../contexts/WalletContext.jsx';
 
 export default function PortfolioIdModal({ show, onHide }) {
   const { replaceWallets } = useWallets();
