@@ -3,15 +3,15 @@
 // Includes: wallet token rows, aggregated portfolio, HEX (Pulse/Eth) + eHEX staking caches.
 
 import { getWalletCache } from '../utils/walletCache';
-import wallets from '../data/wallets.js';
+import { getManagedWalletAddresses } from './snapshotService';
 import { loadPortfolioSnapshot } from './portfolioDataService';
 import { readHexStakesCache } from './kw-hexPulseService';
 import { readEhexStakesCache } from './kw-ehexStakingService';
 
 export function buildTokenRowsFromWallets() {
   const rows = [];
-  for (const w of wallets || []) {
-    const addr = (w?.address || w)?.toLowerCase?.() || '';
+  const addrs = getManagedWalletAddresses();
+  for (const addr of addrs) {
     if (!addr) continue;
     const wc = getWalletCache(addr, { maxAge: Number.MAX_SAFE_INTEGER }) || {};
     const tokens = wc?.tokens || wc?.portfolioTokens || wc?.assets || [];
@@ -55,7 +55,9 @@ export function aggregatePortfolioFromRows(rows) {
 
 export function readHexStakeCaches(addresses) {
   try {
-    const addrList = (addresses || wallets || []).map((w) => (typeof w === 'string' ? w : w?.address)).filter(Boolean);
+    const addrList = (addresses && addresses.length)
+      ? addresses
+      : getManagedWalletAddresses();
     const pulse = readHexStakesCache(addrList, { chain: 'pulse' }) || null;
     const eth = readHexStakesCache(addrList, { chain: 'ethereum' }) || null;
     return { pulse, eth };
@@ -85,7 +87,8 @@ const LS_LAST_SNAPSHOT = 'kw:ai:lastSnapshot:v1';
 export async function buildFullAiSnapshotAsync() {
   try {
     // Prefer the consolidated snapshot service (fetches across chains and caches)
-    const { snapshot, status } = await loadPortfolioSnapshot(wallets);
+    const addrs = getManagedWalletAddresses().map((a) => ({ address: a, chain: 'eth' }));
+    const { snapshot, status } = await loadPortfolioSnapshot(addrs);
     const rows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
     const portfolio = aggregatePortfolioFromRows(
       rows.map((r) => ({

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Row, Col, Card } from 'react-bootstrap';
 
-import wallets from '../data/wallets.js';
+import { getManagedWalletAddresses } from '../services/snapshotService';
 import { getWalletCache } from '../utils/walletCache';
 
 // read staking totals from global context (cache-first via provider)
@@ -36,7 +36,7 @@ function getStickyTotal() {
 // fallback: sum whatever the app already cached for each wallet
 function getCachedPortfolioUsd() {
   try {
-    const list = Array.isArray(wallets) ? wallets : [];
+    const list = getManagedWalletAddresses().map((a) => ({ address: a }));
     let total = 0;
 
     for (const w of list) {

@@ -7,7 +7,7 @@ import { setForceGlobalChipOnce } from '../../../utils/uiState';
 import TokenLogo from '../../../components/TokenLogo';
 import { ChainBadge } from '../../../components/ChainUI';
 import { getWalletCache } from '../../../utils/walletCache';
-import wallets from '../../../data/wallets.js';
+import { getManagedWalletAddresses } from '../../../services/snapshotService';
 
 /* ---------- formatters ---------- */
 const fmtUsd = (n) =>
@@ -52,8 +52,8 @@ const tokenKey = (t) =>
 function useWalletTokenLookup() {
     return useMemo(() => {
         const bag = [];
-        for (const w of (wallets || [])) {
-            const addr = (w?.address || w)?.toLowerCase?.() || '';
+        const addrs = getManagedWalletAddresses();
+        for (const addr of addrs) {
             if (!addr) continue;
             const wc = getWalletCache(addr, { maxAge: Number.MAX_SAFE_INTEGER }) || {};
             const tokens = wc?.tokens || wc?.portfolioTokens || wc?.assets || [];

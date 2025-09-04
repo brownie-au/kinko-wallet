@@ -1,7 +1,7 @@
 // src/services/topTokensService.js
 /* eslint-disable import/no-relative-parent-imports */
 import { getWalletCache } from '../utils/walletCache';
-import wallets from '../data/wallets.js';
+import { getManagedWalletAddresses } from './snapshotService';
 
 const LS_KEY = 'kw:lastTopTokens';
 const LS_AT = 'kw:lastTopTokensAt';
@@ -24,8 +24,8 @@ export function writeTopTokensCache(list) {
 export function synthesizeTopFromWalletCache(limit = 5) {
     const bag = new Map();
 
-    for (const w of (wallets || [])) {
-        const owner = (w?.address || w)?.toLowerCase?.() || '';
+    const addrs = getManagedWalletAddresses();
+    for (const owner of addrs) {
         if (!owner) continue;
 
         const wc = getWalletCache(owner, { maxAge: Number.MAX_SAFE_INTEGER }) || {};

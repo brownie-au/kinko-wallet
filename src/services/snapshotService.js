@@ -5,7 +5,6 @@
 import { fetchEthereumTokens } from './ethereumService';
 import { fetchPulsechainTokens } from './pulsechainService';
 import { getPortfolioWithPrices } from './moralisService';
-import walletsData from '../data/wallets.js';
 
 import {
   setWalletCache,
@@ -210,7 +209,7 @@ function uniqLower(arr) {
 }
 
 export function getManagedWalletAddresses() {
-  // 1) from localStorage 'wallets'
+  // from localStorage 'wallets' only (no mock fallback)
   let fromLocal = [];
   try {
     const raw = localStorage.getItem('wallets');
@@ -219,12 +218,7 @@ export function getManagedWalletAddresses() {
       if (Array.isArray(parsed)) fromLocal = parsed.map((w) => w?.address || w?.addr || '');
     }
   } catch {}
-  // 2) from data file
-  const fromData = Array.isArray(walletsData)
-    ? walletsData.map((w) => w?.address || w?.addr || '')
-    : [];
-
-  return uniqLower([...fromLocal, ...fromData]);
+  return uniqLower(fromLocal);
 }
 
 // Prefetch everything (fire-and-forget)

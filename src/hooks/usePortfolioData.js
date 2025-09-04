@@ -8,7 +8,6 @@ import {
 } from '../services/portfolioDataService';
 
 import { useWallets } from '../contexts/WalletContext';
-import walletsStatic from '../data/wallets.js';
 
 /** Resolve the wallet list (override -> context -> localStorage -> static) */
 function resolveWallets(ctx, override) {
@@ -22,7 +21,7 @@ function resolveWallets(ctx, override) {
     if (Array.isArray(fromLS) && fromLS.length) return fromLS;
   } catch {}
 
-  return walletsStatic;
+  return [];
 }
 
 /**

@@ -3,7 +3,7 @@ import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
 import { loadPortfolio } from '../services/syncService.js';
 import { useWallets } from '../contexts/WalletContext.jsx';
 
-export default function PortfolioIdModal({ show, onHide }) {
+export default function PortfolioIdModal({ show, onHide, onSuccess }) {
   const { replaceWallets } = useWallets();
   const [id, setId] = useState('');
   const [err, setErr] = useState('');
@@ -15,6 +15,7 @@ export default function PortfolioIdModal({ show, onHide }) {
       const { wallets } = await loadPortfolio(id.trim().toUpperCase());
       replaceWallets(wallets);
       onHide?.();
+      onSuccess?.();
     } catch (e) {
       setErr(e?.message || 'Remote load failed.');
     } finally {

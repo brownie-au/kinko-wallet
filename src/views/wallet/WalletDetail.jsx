@@ -18,7 +18,6 @@ import TokenLogo from '../../components/TokenLogo';
 // ✅ smart low‑price formatter (shared)
 import { fmtPriceUSD } from '../../utils/priceFormat';
 
-import wallets from '../../data/wallets.js';
 import { isTokenBlacklisted } from '../../data/tokenBlocklist';
 import {
   setWalletCache,
@@ -90,9 +89,6 @@ function findByAddrLoose(arr, addrLower) {
 }
 
 function findAnyWalletRecord(addressLower) {
-  let rec = findByAddrLoose(wallets, addressLower);
-  if (rec) return rec;
-
   try {
     const keys = ['wallets', 'kinko:wallets', 'kinko_wallets', 'portfolio:wallets'];
     for (const k of keys) {

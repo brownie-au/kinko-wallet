@@ -9,7 +9,6 @@ import {
   EHEX_STAKING_SOURCE
 } from '../../../contexts/PortfolioValueContext.jsx';
 import { useWallets } from '../../../contexts/WalletContext.jsx';
-import walletsStatic from '../../../data/wallets.js';
 
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
@@ -107,7 +106,7 @@ export default function PortfolioValueCard() {
   try { ctx = useWallets(); } catch { ctx = undefined; }
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
   const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
-  const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
+  const wallets = (fromCtx.length ? fromCtx : fromLS);
   const walletsSig = (wallets || [])
     .map((w) => (w.address || '').toLowerCase())
     .filter(Boolean)

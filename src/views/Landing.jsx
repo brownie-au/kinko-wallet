@@ -1,6 +1,6 @@
 // src/views/Landing.jsx
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PortfolioIdModal from '../components/PortfolioIdModal.jsx';
 import DisclaimerModal from '../components/DisclaimerModal.jsx';
 import Logo from 'assets/images/logo-white.svg';
@@ -9,6 +9,7 @@ import 'assets/scss/landing.scss';
 export default function LandingPage() {
   const [showUsePid, setShowUsePid] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="landing-page">
@@ -79,7 +80,11 @@ export default function LandingPage() {
         <div className="lp-hero-divider" />
       </header>
 
-      <PortfolioIdModal show={showUsePid} onHide={() => setShowUsePid(false)} />
+      <PortfolioIdModal
+        show={showUsePid}
+        onHide={() => setShowUsePid(false)}
+        onSuccess={() => navigate('/wallets/manage')}
+      />
       <DisclaimerModal
         show={showDisclaimer}
         onHide={() => setShowDisclaimer(false)}

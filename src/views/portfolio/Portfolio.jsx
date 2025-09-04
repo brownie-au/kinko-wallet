@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Form } from 'react-bootstrap';
 import { getPortfolioTotalUsd, /* read cache */ setPortfolioTotalUsd } from '../../utils/portfolioTotal';
 import { useWallets } from '../../contexts/WalletContext';
-import walletsStatic from '../../data/wallets.js';
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 
 // NEW: 24h change service (batch via DexScreener for contract tokens)
@@ -454,7 +453,7 @@ export default function Portfolio() {
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
 
   const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
-  const wallets = (fromCtx.length ? fromCtx : (fromLS.length ? fromLS : walletsStatic));
+  const wallets = (fromCtx.length ? fromCtx : fromLS);
   const walletsSig = walletsSigOf(wallets);
 
   useEffect(() => {
