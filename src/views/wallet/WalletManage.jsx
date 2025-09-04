@@ -33,6 +33,8 @@ const ACTION_BTN_STYLE = {
 const WalletManage = () => {
   const { wallets, addWallet: addWalletCtx, deleteWallet: deleteWalletCtx, replaceWallets } = useWallets();
   const [_, setWalletsStateTick] = useState(0); // force re-render after edits if needed
+  const [dragIndex, setDragIndex] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [address, setAddress] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -88,6 +90,31 @@ const WalletManage = () => {
     setTempName('');
     setWalletsStateTick((x) => x + 1);
   };
+
+  // ---- drag & drop reordering ----
+  const onDragStart = (idx) => (e) => {
+    try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+    e.dataTransfer.effectAllowed = 'move';
+    setDragIndex(idx);
+    setIsDragging(true);
+  };
+  const onDragOver = (idx) => (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  const onDrop = (idx) => (e) => {
+    e.preventDefault();
+    let from = dragIndex;
+    try { const d = Number(e.dataTransfer.getData('text/plain')); if (!Number.isNaN(d)) from = d; } catch {}
+    setDragIndex(null);
+    setIsDragging(false);
+    if (from == null || from === idx) return;
+    const next = wallets.slice();
+    const [m] = next.splice(from, 1);
+    next.splice(idx, 0, m);
+    replaceWallets(next);
+  };
+  const onDragEnd = () => { setDragIndex(null); setIsDragging(false); };
 
   const cancelEdit = () => {
     setEditingIndex(null);
@@ -183,11 +210,38 @@ const WalletManage = () => {
                 <ListGroup.Item
                   key={`${w.address}-${idx}`}
                   className="d-flex justify-content-between align-items-center"
+                  onDragOver={onDragOver(idx)}
+                  onDrop={onDrop(idx)}
+                  onDragEnd={onDragEnd}
                 >
                   <div className="flex-grow-1 me-3" style={{ minWidth: 0 }}>
                     <div className="text-truncate">
+                      <span
+                        role="button"
+                        aria-label="Drag to reorder"
+                        title="Drag to reorder"
+                        draggable
+                        onDragStart={onDragStart(idx)}
+                        onDragEnd={onDragEnd}
+                        className="me-2 text-muted"
+                        style={{
+                          cursor: isDragging ? 'grabbing' : 'grab',
+                          userSelect: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 22,
+                          height: 22,
+                          borderRadius: 6,
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          background: 'rgba(255,255,255,0.04)'
+                        }}
+                      >
+                        {/* standard 3-line hamburger */}
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>☰</span>
+                      </span>
                       <strong>{w.address}</strong>
-                      {' – '}
+                      {' - '}
                       {!isEditing ? (
                         <span>{w.name || 'Unnamed'}</span>
                       ) : (
