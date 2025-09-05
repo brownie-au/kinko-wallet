@@ -2,7 +2,7 @@
 import './styles/chain-ui.css';
 
 // React / Router
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 
 // project-imports
@@ -29,6 +29,46 @@ import KwNoGap from './components/kw-NoGap';
 
 // NEW: runtime gap canceller (measures & offsets any residual gap)
 import KwGapCancel from './components/kw-GapCancel';
+
+// Rate-limit handling: axios backoff + toast
+import axios from 'axios';
+import { installAxiosBackoff } from './utils/axiosBackoff';
+import { onRateLimit, showRateLimitNotice, hideRateLimitNotice } from './utils/rateLimitNotifier';
+
+// Install global axios backoff once at module load
+installAxiosBackoff(axios);
+
+function RateLimitToast() {
+  const [state, setState] = useState({ show: false, text: '' });
+  useEffect(() => onRateLimit((show, text) => setState({ show, text })), []);
+  return (
+    <div
+      className={`kw-toast rl ${state.show ? 'show' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      style={{ position: 'fixed', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 1090 }}
+    >
+      <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />
+      {state.text || 'Temporarily rate-limited, retrying…'}
+      <style>{`
+        .kw-toast.rl{opacity:0; transition: opacity .25s, transform .25s; padding:.5rem .75rem; background: rgba(0,0,0,.8); color:#fff; border-radius:8px; font-size: .9rem; display:flex; align-items:center}
+        .kw-toast.rl.show{opacity:1}
+      `}</style>
+    </div>
+  );
+}
+
+// Expose a tiny demo hook in dev to preview the toast
+if (import.meta?.env?.DEV) {
+  // eslint-disable-next-line no-underscore-dangle
+  window.__kinko = Object.assign(window.__kinko || {}, {
+    simulateRateLimitNotice(ms = 2500) {
+      showRateLimitNotice('Temporarily rate-limited, retrying…');
+      setTimeout(() => hideRateLimitNotice(), Math.max(500, Number(ms) || 2500));
+    }
+  });
+}
 
 // ==============================|| APP - THEME, ROUTER, LOCAL ||============================== //
 
@@ -90,6 +130,7 @@ function App() {
           <KwNoGap />
           <KwGapCancel />
           <RouterProvider router={router} />
+          <RateLimitToast />
         </PortfolioValueProvider>
       </WalletProvider>
     </Locales>
