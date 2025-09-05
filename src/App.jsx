@@ -59,16 +59,14 @@ function RateLimitToast() {
   );
 }
 
-// Expose a tiny demo hook in dev to preview the toast
-if (import.meta?.env?.DEV) {
-  // eslint-disable-next-line no-underscore-dangle
-  window.__kinko = Object.assign(window.__kinko || {}, {
-    simulateRateLimitNotice(ms = 2500) {
-      showRateLimitNotice('Temporarily rate-limited, retrying…');
-      setTimeout(() => hideRateLimitNotice(), Math.max(500, Number(ms) || 2500));
-    }
-  });
-}
+// Expose a tiny demo hook to preview the toast (available in all builds)
+// eslint-disable-next-line no-underscore-dangle
+window.__kinko = Object.assign(window.__kinko || {}, {
+  simulateRateLimitNotice(ms = 2500) {
+    showRateLimitNotice('Temporarily rate-limited, retrying…');
+    setTimeout(() => hideRateLimitNotice(), Math.max(500, Number(ms) || 2500));
+  }
+});
 
 // ==============================|| APP - THEME, ROUTER, LOCAL ||============================== //
 

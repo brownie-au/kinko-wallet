@@ -525,13 +525,22 @@ export default function Portfolio() {
       const wantKey = (localStorage.getItem('kw:focusTokenKey') || '').trim();
       if (!want && !wantKey) return;
 
-      const match = (list || []).find((tt) =>
-        (wantKey && keyFor(tt).toLowerCase() === wantKey.toLowerCase()) ||
-        (want && (
-          (tt.symbol || '').toLowerCase() === want.toLowerCase() ||
-          ((tt.address || tt.contract || '').toLowerCase() === want.toLowerCase())
-        ))
-      );
+      let match = null;
+
+      // 1) If a composite key is provided, require an exact match (chain+address+symbol)
+      if (wantKey) {
+        const keyLc = wantKey.toLowerCase();
+        match = (list || []).find((tt) => keyFor(tt).toLowerCase() === keyLc) || null;
+      }
+
+      // 2) Fallback only when no key match found: allow symbol OR address match
+      if (!match && want) {
+        const wantLc = want.toLowerCase();
+        match = (list || []).find((tt) => (
+          (tt.symbol || '').toLowerCase() === wantLc ||
+          ((tt.address || tt.contract || '').toLowerCase() === wantLc)
+        )) || null;
+      }
 
       if (match) {
         const k = keyFor(match);
@@ -540,9 +549,11 @@ export default function Portfolio() {
           n.add(k);
           return n;
         });
-        localStorage.removeItem('kw:focusToken');
-        localStorage.removeItem('kw:focusTokenKey');
       }
+
+      // Always clear the hints once processed
+      localStorage.removeItem('kw:focusToken');
+      localStorage.removeItem('kw:focusTokenKey');
     } catch { /* noop */ }
   };
 
