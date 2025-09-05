@@ -210,6 +210,26 @@ export function readEhexStakesCache() {
     return { byAddr, updatedAt };
 }
 
+/** Clear all known local caches related to eHEX stakes (including legacy keys). */
+export function clearEhexStakesCaches() {
+    try { localStorage.removeItem(LS_KEY_EHEX_STAKES); } catch { }
+    try { localStorage.removeItem(LS_KEY_EHEX_UPDATED); } catch { }
+    // yield snapshot used by the eHEX UI
+    try { localStorage.removeItem('kw:ehex:yieldSnap:v1'); } catch { }
+    // sweep a handful of legacy/probe keys used by old builds
+    const legacy = [
+        'kw:staking:ehex:cache:v1',
+        'kw:staking:ehex:cache',
+        'kw:ehex:stakes:cache',
+        'kw:stakes:ehex',
+        'kw:staking:eth:ehex',
+        'kw:staking:ehex:eth'
+    ];
+    for (const k of legacy) {
+        try { localStorage.removeItem(k); } catch { }
+    }
+}
+
 /**
  * Refresh eHEX stakes for the given wallets and persist to cache.
  * Accepts flexible args: ({ wallets, onProgress }), (wallets, onProgress), etc.

@@ -16,6 +16,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useWallets } from '../../contexts/WalletContext.jsx';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
+import { clearSyncId } from '../../services/syncService.js';
+import { clearEhexStakesCaches } from '../../services/kw-ehexStakingService.js';
+import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
 
 const SOFT = {
   success: { backgroundColor: 'rgba(25,135,84,0.12)', borderColor: 'rgba(25,135,84,0.35)', color: '#1e7e55' },
@@ -95,8 +98,10 @@ const WalletManage = () => {
 
   const [showCreateId, setShowCreateId] = useState(false);
   const [showUseId, setShowUseId] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
 
   const navigate = useNavigate();
+  const { removeSource } = usePortfolioValue();
 
   // Wallets come from context, which persists to localStorage for durability.
 
@@ -211,6 +216,14 @@ const WalletManage = () => {
           onClick={() => setShowCreateId(true)}
         >
           Create / Update Portfolio ID
+        </Button>
+        <Button
+          variant="outline-danger"
+          className="rounded-pill"
+          onClick={() => setShowLogout(true)}
+          title="Log out of this device"
+        >
+          Logout
         </Button>
       </div>
 
@@ -380,6 +393,66 @@ const WalletManage = () => {
           </Button>
           <Button variant="danger" onClick={() => deleteWallet(confirmIdx)}>
             Delete
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Logout confirmation */}
+      <Modal
+        show={showLogout}
+        onHide={() => setShowLogout(false)}
+        centered
+        backdrop="static"
+        keyboard
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Log out?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you want to view these tokens again or on another device. Are you sure you want to log out?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowLogout(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              try { replaceWallets([]); } catch {}
+              try { localStorage.removeItem('wallets'); } catch {}
+              try { clearSyncId(); } catch {}
+              try { clearEhexStakesCaches(); } catch {}
+              // Clear staking summary fallbacks used by the dashboard tile
+              try { localStorage.removeItem('kw:staking:hex:summary'); } catch {}
+              try { localStorage.removeItem('kw:staking:ehex:summary'); } catch {}
+              // Clear persisted context cache for portfolio sources entirely
+              try { localStorage.removeItem('kw:portfolioValueSources:v1'); } catch {}
+              // Clear Dashboard Top Tokens + sticky totals
+              try { localStorage.removeItem('kw:lastTopTokens'); } catch {}
+              try { localStorage.removeItem('kw:lastTopTokensAt'); } catch {}
+              try { localStorage.removeItem('kw:lastTotalUsd'); } catch {}
+              try { localStorage.removeItem('kw:lastChangePct24h'); } catch {}
+              try { localStorage.removeItem('kw:lastTotalUpdatedAt'); } catch {}
+              // Remove all per-wallet chain totals (legacy and namespaced)
+              try {
+                const prefix = 'kw:chainTotalsUsd:v1';
+                const toRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (k && (k === prefix || k.startsWith(prefix + ':'))) toRemove.push(k);
+                }
+                toRemove.forEach((k) => localStorage.removeItem(k));
+              } catch {}
+              // Nudge any listeners in the same tab to refresh
+              try { window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTopTokens', newValue: '[]' })); } catch {}
+              try { window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTotalUsd', newValue: '0' })); } catch {}
+              try { removeSource && removeSource(HEX_STAKING_SOURCE); } catch {}
+              try { removeSource && removeSource(EHEX_STAKING_SOURCE); } catch {}
+              setShowLogout(false);
+              navigate('/', { replace: true });
+            }}
+          >
+            Logout
           </Button>
         </Modal.Footer>
       </Modal>

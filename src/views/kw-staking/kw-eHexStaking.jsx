@@ -601,6 +601,14 @@ export default function KwEhexStaking({ config }) {
     /* ---------------- Background revalidation (no blanking) ---------------- */
     const refreshNow = useCallback(async () => {
         if (!ethAddresses.length) {
+            // No wallets → hard reset UI and totals, do not paint stale cache
+            setRows([]);
+            setRowsEnded([]);
+            setCurrentDay(null);
+            setPayoutPerTShareDailyHex(null);
+            setYieldMap({});
+            setYieldMapEnded({});
+            setUpdatedAt(null);
             setLoading(false);
             return;
         }
