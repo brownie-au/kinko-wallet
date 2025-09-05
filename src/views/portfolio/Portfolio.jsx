@@ -549,11 +549,15 @@ export default function Portfolio() {
           n.add(k);
           return n;
         });
+        // Clear hints once we successfully expanded
+        try {
+          localStorage.removeItem('kw:focusToken');
+          localStorage.removeItem('kw:focusTokenKey');
+        } catch { /* ignore */ }
+        return;
       }
 
-      // Always clear the hints once processed
-      localStorage.removeItem('kw:focusToken');
-      localStorage.removeItem('kw:focusTokenKey');
+      // If no match yet, keep the hints so the next tokens update can try again
     } catch { /* noop */ }
   };
 
