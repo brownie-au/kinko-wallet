@@ -7,6 +7,23 @@
 const LLAMA_BASE = 'https://coins.llama.fi/prices/current';
 const CACHE_MS = 60 * 1000; // 1 minute cache
 
+// Simple in-flight dedupe by URL to avoid concurrent duplicate requests
+const inflight = new Map(); // url -> Promise<any>
+async function fetchJsonDedup(url) {
+  if (inflight.has(url)) return inflight.get(url);
+  const p = (async () => {
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } finally {
+      inflight.delete(url);
+    }
+  })();
+  inflight.set(url, p);
+  return p;
+}
+
 const lsGet = (k, maxAgeMs) => {
     try {
         const raw = localStorage.getItem(k);
@@ -40,9 +57,7 @@ export async function getEthTokenPricesLlama(addresses) {
 
     let json;
     try {
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-        json = await res.json();
+        json = await fetchJsonDedup(url);
     } catch (e) {
         console.warn('[Price] DefiLlama fetch failed', e?.message);
         return new Map();
@@ -72,9 +87,7 @@ export async function getEthUsdPriceLlama() {
 
     const url = `${LLAMA_BASE}/${encodeURIComponent('coingecko:ethereum')}`;
     try {
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchJsonDedup(url);
         const price = Number(json?.coins?.['coingecko:ethereum']?.price ?? 0);
         if (price > 0) {
             lsSet(cacheKey, price);
@@ -102,9 +115,7 @@ export async function getBaseTokenPricesLlama(addresses) {
 
   let json;
   try {
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-    json = await res.json();
+    json = await fetchJsonDedup(url);
   } catch (e) {
     console.warn('[Price] DefiLlama Base fetch failed', e?.message);
     return new Map();
@@ -169,9 +180,7 @@ export async function getBscUsdPriceLlama() {
 
   const url = `${LLAMA_BASE}/${encodeURIComponent('coingecko:binancecoin')}`;
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-    const json = await res.json();
+    const json = await fetchJsonDedup(url);
     const price = Number(json?.coins?.['coingecko:binancecoin']?.price ?? 0);
     if (price > 0) {
       lsSet(cacheKey, price);
@@ -199,9 +208,7 @@ export async function getPolygonTokenPricesLlama(addresses) {
 
   let json;
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-    json = await res.json();
+    json = await fetchJsonDedup(url);
   } catch (e) {
     console.warn('[Price] DefiLlama Polygon fetch failed', e?.message);
     return new Map();
@@ -227,9 +234,7 @@ export async function getPolygonUsdPriceLlama() {
   // MATIC id remains coingecko:matic-network for Polygon PoS native
   const url = `${LLAMA_BASE}/${encodeURIComponent('coingecko:matic-network')}`;
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Llama HTTP ${res.status}`);
-    const json = await res.json();
+    const json = await fetchJsonDedup(url);
     const price = Number(json?.coins?.['coingecko:matic-network']?.price ?? 0);
     if (price > 0) {
       lsSet(cacheKey, price);

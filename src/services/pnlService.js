@@ -16,7 +16,7 @@ function isoDateOnly(d = new Date()) {
 }
 
 function load() {
-  const data = getCachedJSON(KEY) || { points: [] };
+  const data = getCachedJSON(KEY)?.data || { points: [] };
   if (!Array.isArray(data.points)) data.points = [];
   return data;
 }

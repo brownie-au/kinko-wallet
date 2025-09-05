@@ -621,8 +621,8 @@ export default function WalletDetail() {
       // Provider-level cache fallback (ETH + Pulse) for instant hydrate
       if (!had) {
         try {
-          const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
-          const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+          const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
+          const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
           const add = [];
           const pushList = (arr, chainCode) => {
             if (!Array.isArray(arr)) return;
@@ -667,7 +667,7 @@ export default function WalletDetail() {
     // Provider-level single-chain fallback
     try {
       if (chain === 'eth') {
-        const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+        const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
         const arr = Array.isArray(ethC) ? ethC : ethC?.tokens;
         if (Array.isArray(arr) && arr.length) {
           const mapped = arr.map((t) => mapTokenForCache({
@@ -680,7 +680,7 @@ export default function WalletDetail() {
         }
       }
       if (chain === 'pulse') {
-        const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000);
+        const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
         const arr = Array.isArray(plsC) ? plsC : plsC?.tokens;
         if (Array.isArray(arr) && arr.length) {
           const mapped = arr.map((t) => mapTokenForCache({

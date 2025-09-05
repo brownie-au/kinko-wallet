@@ -9,6 +9,7 @@ import { getWalletCache, setWalletCache } from './walletCache';
  */
 export async function cacheGet(key) {
   try {
+    // Reads with default TTL (walletCache enforces TTL on read)
     return getWalletCache(key) ?? null;
   } catch {
     return null;
@@ -20,8 +21,8 @@ export async function cacheGet(key) {
  */
 export async function cacheSet(key, value, ttlMs) {
   try {
-    // walletCache supports an options bag with { maxAge }
-    setWalletCache(key, value, { maxAge: Number(ttlMs) || undefined });
+    // walletCache enforces TTL on read; write does not accept TTL
+    setWalletCache(key, value);
   } catch {
     /* ignore */
   }

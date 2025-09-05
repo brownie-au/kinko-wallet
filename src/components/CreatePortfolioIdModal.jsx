@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
-import { createPortfolio, generatePortfolioId } from '../services/syncService.js';
+import { createPortfolio, generatePortfolioId, getSyncId, setSyncId } from '../services/syncService.js';
 import { useWallets } from '../contexts/WalletContext.jsx';
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
@@ -9,16 +9,34 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [locked, setLocked] = useState(false);
 
-  useEffect(() => { if (show) { setMsg(''); setErr(''); } }, [show]);
+  // On open, read any stored Portfolio ID and lock the field if present
+  useEffect(() => {
+    if (show) {
+      setMsg('');
+      setErr('');
+      try {
+        const existing = getSyncId();
+        setId(existing || '');
+        setLocked(!!existing);
+      } catch {
+        setLocked(false);
+      }
+    }
+  }, [show]);
 
   const onCreateOrUpdate = async () => {
     try {
       setBusy(true); setMsg(''); setErr('');
-      const useId = id || generatePortfolioId();
+      // Use existing stored ID if present; else generate once
+      const existing = getSyncId();
+      const useId = (existing || id || generatePortfolioId()).toUpperCase();
       await createPortfolio(useId, wallets);
       setId(useId);
-      setMsg(id ? 'Updated remote Portfolio.' : 'Created remote Portfolio.');
+      try { setSyncId(useId); } catch {}
+      setLocked(true);
+      setMsg(existing || id ? 'Updated remote Portfolio.' : 'Created remote Portfolio.');
     } catch (e) {
       setErr(e?.message || 'Remote save failed.');
     } finally {
@@ -38,9 +56,10 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
           <Form.Label>Portfolio ID</Form.Label>
           <Form.Control
             value={id}
-            onChange={(e) => setId(e.target.value.toUpperCase())}
-            placeholder="Leave blank to generate"
-            disabled={busy}
+            onChange={(e) => (!locked) && setId(e.target.value.toUpperCase())}
+            placeholder={locked ? 'Locked on this device' : 'Leave blank to generate'}
+            disabled={busy || locked}
+            readOnly={locked}
           />
           <div className="mt-2 d-flex gap-2">
             <Button variant="secondary" onClick={copy} disabled={!id || busy}>Copy</Button>
@@ -52,9 +71,10 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
       <Modal.Footer>
         <Button variant="outline-secondary" onClick={onHide} disabled={busy}>Close</Button>
         <Button variant="primary" onClick={onCreateOrUpdate} disabled={busy}>
-          {busy ? (<><Spinner size="sm" className="me-2" />Working…</>) : (id ? 'Update Remote' : 'Create Remote')}
+          {busy ? (<><Spinner size="sm" className="me-2" />Working.</>) : ((id || locked) ? 'Update Remote' : 'Create Remote')}
         </Button>
       </Modal.Footer>
     </Modal>
   );
 }
+

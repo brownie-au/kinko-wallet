@@ -21,6 +21,8 @@ const normalizeChip = (v) => {
     if (s === 'eth' || s === 'ethereum' || s === '1') return 'eth';
     if (s === 'pulse' || s === 'pulsechain' || s === 'pls' || s === 'plsx' || s === '369') return 'pulse';
     if (s === 'bsc' || s === 'bnb' || s === '56' || s.includes('binance')) return 'bsc';
+    // Add Polygon support (aliases + chainId)
+    if (s === 'polygon' || s === 'matic' || s === 'pol' || s === '137') return 'polygon';
     if (s === 'base' || s === '8453') return 'base';
     return '';
   } catch {

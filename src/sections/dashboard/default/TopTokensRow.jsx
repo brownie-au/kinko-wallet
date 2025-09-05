@@ -41,11 +41,17 @@ function chainLabel(c) {
     return s === 'pulse' ? 'Pulse' : s === 'bsc' ? 'BSC' : s === 'polygon' ? 'Polygon' : s === 'base' ? 'Base' : 'ETH';
 }
 
-/* IMPORTANT: key format must match Portfolio.jsx keyFor(tt) logic */
-const tokenKey = (t) =>
-    `${String(t?.chain || '').toLowerCase()}:${(t?.address || t?.contract || (String(t?.symbol).toUpperCase() === 'PLS' ? 'native' : '') || '').toLowerCase()
-    }:${(t?.symbol || '').toUpperCase()
-    }`;
+/* IMPORTANT: key format must match Portfolio.jsx keyFor(tt) logic
+   Portfolio uses: `${t.chain}:${t.address || 'native'}:${t.symbol}` (symbol uppercased)
+   Here, ensure that when no address/contract is present (i.e., native coins like ETH/PLS/BNB/MATIC/Base ETH),
+   we explicitly use 'native' so the composite key matches exactly and focuses the right token. */
+const tokenKey = (t) => {
+    const chain = String(t?.chain || '').toLowerCase();
+    const rawAddr = String(t?.address || t?.contract || '').trim();
+    const addr = rawAddr ? rawAddr.toLowerCase() : 'native';
+    const symbol = (t?.symbol || '').toUpperCase();
+    return `${chain}:${addr}:${symbol}`;
+};
 
 /* ---------- wallet-cache lookup ---------- */
 // Build a per‑token bag from wallet caches (same source as the table).

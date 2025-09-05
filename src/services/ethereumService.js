@@ -195,8 +195,9 @@ function filterEthSpam(tokens) {
 // ---------- ETH price (Paprika primary → fallback) ----------
 async function getEthUsdFromPaprika() {
   const cacheKey = 'price:eth:usd:paprika';
-  const cached = getCachedJSON(cacheKey, PRICE_CACHE_TTL_MS);
-  if (cached) return Number(cached);
+  const cachedObj = getCachedJSON(cacheKey, PRICE_CACHE_TTL_MS);
+  const cached = cachedObj?.data;
+  if (Number.isFinite(Number(cached)) && Number(cached) > 0) return Number(cached);
 
   try {
     const { data } = await axios.get(`${PAPRIKA_BASE}/tickers/${PAPRIKA_ETH_ID}`, { timeout: 8000 });
@@ -456,7 +457,7 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
 
   // Cached path — normalise old shapes {tokens: []} → []
   if (!force) {
-    const cachedRaw = getCachedJSON(key, CACHE_TTL_MS);
+    const cachedRaw = getCachedJSON(key, CACHE_TTL_MS)?.data;
     const cachedArr = Array.isArray(cachedRaw)
       ? cachedRaw
       : Array.isArray(cachedRaw?.tokens)

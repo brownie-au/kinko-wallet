@@ -21,9 +21,29 @@ export async function fetchChange24hFromDexScreener(tokens) {
     const out = new Map();
     if (addrList.length === 0) return out;
 
+    // tiny cache: per-address-set for 60s
+    const uniq = [...new Set(addrList)].sort();
+    const cacheKey = `kw:ds:chg24:${uniq.join(',')}`;
+    const ttlMs = 60 * 1000;
+    try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+            const { ts, data } = JSON.parse(raw);
+            if (Date.now() - (ts || 0) < ttlMs && data && typeof data === 'object') {
+                for (const t of withAddr) {
+                    const addr = (t.address || t.contract).toLowerCase();
+                    const v = data[addr];
+                    if (Number.isFinite(v)) out.set(tokenKey(t), v);
+                }
+                if (out.size > 0) return out;
+            }
+        }
+    } catch { /* ignore */ }
+
     const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, (i + 1) * n));
 
     // DexScreener: https://api.dexscreener.com/latest/dex/tokens/0x...,0x...
+    const cacheObj = {};
     for (const group of chunk(addrList, 30)) {
         try {
             const url = `https://api.dexscreener.com/latest/dex/tokens/${group.join(',')}`;
@@ -47,11 +67,16 @@ export async function fetchChange24hFromDexScreener(tokens) {
                 const addr = (t.address || t.contract).toLowerCase();
                 const k = tokenKey(t);
                 const hit = byAddr.get(addr);
-                if (hit && Number.isFinite(hit.h24)) out.set(k, hit.h24);
+                if (hit && Number.isFinite(hit.h24)) {
+                    out.set(k, hit.h24);
+                    cacheObj[addr] = hit.h24;
+                }
             }
         } catch {
             // ignore batch errors, continue
         }
     }
+    // save cache
+    try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: cacheObj })); } catch { }
     return out;
 }
