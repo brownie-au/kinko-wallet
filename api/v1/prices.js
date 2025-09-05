@@ -33,6 +33,10 @@ function llamaPrefix(chain) {
       return 'bsc';
     case 'base':
       return 'base';
+    case 'polygon':
+    case 'matic':
+    case 'pol':
+      return 'polygon';
     default:
       return null; // pulse and others unsupported by Llama here
   }
@@ -340,4 +344,3 @@ module.exports = async (req, res) => {
     }
   }
 };
-

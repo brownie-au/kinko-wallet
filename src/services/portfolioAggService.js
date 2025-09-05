@@ -8,8 +8,10 @@ import { fetchPulsechainTokens, refreshPulsechainTokens } from './pulsechainServ
 import { fetchEthereumTokens, refreshEthereumTokens } from './ethereumService';
 // Base via Blockscout + DefiLlama (no Moralis)
 import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
-import { getBaseTokenPricesLlama, getBaseUsdPriceLlama, getBscTokenPricesLlama, getBscUsdPriceLlama } from './priceService';
+import { getPolygonTokensFromBlockscout, toUnits as toUnitsPolygon } from './polygonBlockscoutService';
+import { getBaseTokenPricesLlama, getBaseUsdPriceLlama, getBscTokenPricesLlama, getBscUsdPriceLlama, getPolygonTokenPricesLlama, getPolygonUsdPriceLlama } from './priceService';
 import { getBaseNativeBalance } from './baseRpcService';
+import { getPolygonNativeBalance } from './polygonRpcService';
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 // 🚫 Moralis/Alchemy-free ETH discovery via Blockscout
 import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
@@ -159,13 +161,14 @@ async function mapWithLimit(items, limit, fn) {
 }
 
 export async function buildPortfolioDetailed(wallets = [], options = {}) {
-  const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base' | 'bsc'
+  const only = (options.only || 'all').toLowerCase(); // 'all' | 'auto' | 'pulse' | 'eth' | 'base' | 'bsc' | 'polygon'
   const force = !!options.force;
 
   const wantPulse = (only === 'all' || only === 'auto' || only === 'pulse');
   const wantEth = (only === 'all' || only === 'auto' || only === 'eth');
   const wantBase = (only === 'all' || only === 'auto' || only === 'base');
   const wantBsc  = (only === 'all' || only === 'auto' || only === 'bsc');
+  const wantPolygon  = (only === 'all' || only === 'auto' || only === 'polygon');
 
   const rows = [];
 
@@ -320,6 +323,61 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           }
         } catch (e) {
           console.warn('[PortfolioAgg] BASE (Blockscout) fetch failed for', addr, e?.message);
+        }
+      })());
+    }
+
+    if (wantPolygon) {
+      tasks.push((async () => {
+        try {
+          // 1) Discover ERC-20s via Blockscout (Polygon)
+          const discovered = await getPolygonTokensFromBlockscout(addr);
+
+          // 2) Prices via DefiLlama (Polygon namespace)
+          const addrs = discovered.map((t) => t.address).filter(Boolean);
+          const priceMap = await getPolygonTokenPricesLlama(addrs);
+
+          // 3) Native MATIC (Polygon PoS)
+          const nativePriceUsd = await getPolygonUsdPriceLlama();
+          let nativeAmount = 0;
+          try { nativeAmount = await getPolygonNativeBalance(addr); } catch { }
+          bucket.push(
+            toRow(
+              {
+                chain: 'polygon',
+                address: 'native',
+                symbol: 'MATIC',
+                name: 'Polygon',
+                amount: nativeAmount,
+                priceUsd: nativePriceUsd,
+                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+              },
+              addr
+            )
+          );
+
+          // 4) ERC-20 rows
+          for (const t of discovered) {
+            const amountUnits = toUnitsPolygon(t.balanceRaw, Number(t.decimals ?? 18));
+            const p = priceMap.get(t.address) || 0;
+            bucket.push(
+              toRow(
+                {
+                  chain: 'polygon',
+                  address: t.address,
+                  symbol: t.symbol || '',
+                  name: t.name || t.symbol || 'Token',
+                  decimals: Number(t.decimals ?? 18),
+                  amount: amountUnits,
+                  priceUsd: p,
+                  valueUsd: p ? (amountUnits * p) : 0
+                },
+                addr
+              )
+            );
+          }
+        } catch (e) {
+          console.warn('[PortfolioAgg] POLYGON (Blockscout) fetch failed for', addr, e?.message);
         }
       })());
     }

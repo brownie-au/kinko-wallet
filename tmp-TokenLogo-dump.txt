@@ -329,19 +329,6 @@ export default function TokenLogo({
   const [cgUrl, setCgUrl] = useState(null);
   const [dexUrl, setDexUrl] = useState(null);
   const [listUrl, setListUrl] = useState(null);
-  
-  // CoinGecko primary (addressed tokens only)
-  useEffect(() => {
-    if (!address) { setCgUrl(null); return; }
-    let cancelled = false;
-    (async () => {
-      const cached = readCgCache(chainId, address);
-      if (cached) { setCgUrl(cached); return; }
-      const url = await resolveCoinGeckoLogo(chainId, address);
-      if (!cancelled && url) { writeCgCache(chainId, address, url); setCgUrl(url); }
-    })();
-    return () => { cancelled = true; };
-  }, [chainId, address]);
   const [idx, setIdx] = useState(0);
 
   // ✅ DexScreener API ONLY for contract tokens (addressed). 
@@ -384,13 +371,12 @@ export default function TokenLogo({
       const arr = fallbacks.slice();
       if (listUrl) arr.unshift(listUrl);
       if (dexUrl) arr.unshift(dexUrl);
-      if (cgUrl) arr.unshift(cgUrl); // Prefer CoinGecko first
       return arr;
     },
-    [cgUrl, dexUrl, listUrl, fallbacks]
+    [dexUrl, listUrl, fallbacks]
   );
 
-  useEffect(() => { setIdx(0); }, [chainId, address, symbol, name, logoURI, cgUrl, dexUrl, listUrl]);
+  useEffect(() => { setIdx(0); }, [chainId, address, symbol, name, logoURI, dexUrl]);
 
   const aria = (name || symbol || 'Token') + (address ? ` (${String(address).slice(0, 8)}…)` : '');
 

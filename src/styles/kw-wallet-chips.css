@@ -12,10 +12,10 @@
     --chip-bg: var(--bs-secondary-bg);
     --chip-fg: var(--k-chip-fg, var(--bs-body-color));
     --chip-br: var(--bs-border-color);
-    --chip-active-bg: var(--kw-chain-active-bg, #7c3aed);
+    --chip-active-bg: var(--kw-chain-active-bg, #cc08c6);
     /* purple theme */
     --chip-active-fg: var(--kw-chain-active-fg, #ffffff);
-    --chip-active-br: var(--kw-chain-active-br, rgba(124, 58, 237, 0.35));
+    --chip-active-br: var(--kw-chain-active-br, rgba(204, 8, 198, 0.35));
 
     appearance: none;
     border: 1px solid var(--chip-br);
@@ -47,11 +47,11 @@
     background: var(--chip-active-bg);
     color: var(--chip-active-fg);
     border-color: var(--chip-active-br);
-    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.18) inset, 0 0 0 1px rgba(255, 255, 255, 0.08);
+    box-shadow: 0 2px 10px rgba(204, 8, 198, 0.18) inset, 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .kw-chip.is-active:hover {
-    box-shadow: 0 3px 18px rgba(124, 58, 237, 0.22) inset, 0 0 0 1px rgba(255, 255, 255, 0.10);
+    box-shadow: 0 3px 18px rgba(204, 8, 198, 0.22) inset, 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
 /* "All" chip can be slightly ghosted when inactive for clarity */

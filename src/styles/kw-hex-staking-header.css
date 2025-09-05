@@ -8,10 +8,10 @@
     --kw-gap: 16px;
 
     /* Active chain pill (purple) */
-    --kw-chain-active-bg: #7c3aed;
-    --kw-chain-active-br: rgba(124, 58, 237, 0.35);
+    --kw-chain-active-bg: #cc08c6;
+    --kw-chain-active-br: rgba(204, 8, 198, 0.35);
     --kw-chain-active-fg: #ffffff;
-    --kw-chain-active-shadow: 0 2px 10px rgba(124, 58, 237, 0.20) inset,
+    --kw-chain-active-shadow: 0 2px 10px rgba(204, 8, 198, 0.20) inset,
         0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 
     /* Updated timestamp colours (defaults; overridden per theme below) */

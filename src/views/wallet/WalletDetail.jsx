@@ -64,6 +64,7 @@ const chainIdOf = (chain) => {
   switch (String(chain || '').toLowerCase()) {
     case 'pulse': return 369;
     case 'bsc': return 56;
+    case 'polygon': return 137;
     case 'base': return 8453;
     case 'eth':
     case 'ethereum':
@@ -117,6 +118,7 @@ function normalizeChain(x) {
   const s = (x ?? '').toString().toLowerCase();
   if (s.includes('pulse') || s === '369') return 'pulse';
   if (s.includes('bsc') || s.includes('binance') || s === '56') return 'bsc';
+  if (s.includes('polygon') || s === '137' || s === 'matic' || s === 'pol') return 'polygon';
   if (s.includes('base') || s === '8453') return 'base';
   return 'eth';
 }
@@ -551,10 +553,50 @@ export default function WalletDetail() {
 
       return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
     }
+    // Polygon via aggregator
+    if (chainCode === 'polygon') {
+      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'polygon' });
+      const list = Array.isArray(tokens) ? tokens.slice() : [];
+      const natIdx = list.findIndex((t) => t.address === 'native');
+      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
+
+      const nat = natRow ? {
+        name: 'Polygon',
+        symbol: 'MATIC',
+        amount: Number(natRow.amount || 0),
+        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
+        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
+        contract: 'native',
+        logo: natRow.logo || null,
+        chain: 'polygon'
+      } : null;
+
+      const toks = list.map((r) => {
+        const price = Number(r.priceUsd ?? r.price ?? 0);
+        const amount = Number(r.amount ?? 0);
+        const value = Number(r.valueUsd ?? r.value ?? amount * price);
+        return {
+          name: r.name || r.symbol || 'Token',
+          symbol: r.symbol || '',
+          amount,
+          price,
+          priceUsd: price,
+          value,
+          valueUsd: value,
+          contract: r.address || null,
+          logo: r.logo || null,
+          chain: 'polygon'
+        };
+      });
+
+      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
+    }
   }
 
   // --------- caching helpers ----------
-  const CHAINS_FOR_ALL = ['eth', 'pulse', 'bsc', 'base'];
+  const CHAINS_FOR_ALL = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
   // bump cache version to avoid stale entries from older ETH path
   const CACHE_VER = 'v2';
   const cacheKey = (chain) => `${address}:${chain}:${CACHE_VER}`;
@@ -776,7 +818,7 @@ export default function WalletDetail() {
 
   const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => { });
 
-  const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'bsc' ? 'BSC' : c === 'base' ? 'Base' : 'ETH');
+  const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'bsc' ? 'BSC' : c === 'polygon' ? 'Polygon' : c === 'base' ? 'Base' : 'ETH');
 
   // Manual refresh: clear caches for this wallet and refetch
   const onRefresh = () => {

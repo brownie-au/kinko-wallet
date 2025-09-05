@@ -4,10 +4,11 @@ import PropTypes from 'prop-types';
 
 // Brand base colours (hex for reliable HSL math)
 const CHAIN_COLOURS = {
-    pulse: '#8E44AD', // Pulsechain purple
+    pulse: '#cc08c6', // Pulsechain purple (updated)
     eth: '#16C784',   // ETH green
     bsc: '#F3BA2F',   // BSC yellow
     base: '#0A5BFF',  // Base blue
+    polygon: '#7b3fe4', // Polygon purple
     staking: '#F5A200', // orange/yellow for staking & mining
     other: '#7a8899'
 };
@@ -46,6 +47,9 @@ const labelFromId = (id) => {
         case 'eth': return 'Ethereum';
         case 'base': return 'Base';
         case 'bsc': return 'BSC';
+        case 'polygon':
+        case 'matic':
+        case 'pol': return 'Polygon';
         default: return (id || 'Other').toUpperCase();
     }
 };

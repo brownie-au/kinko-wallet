@@ -51,31 +51,33 @@ function readChainTotalsCache(sig) {
       if (!raw) continue;
       const { totals = {}, updatedAt = 0 } = JSON.parse(raw);
       return {
-        eth: +totals.eth || 0,
-        pulse: +totals.pulse || 0,
+        eth: +totals.eth || +totals.ethereum || 0,
+        pulse: +totals.pulse || +totals.pulsechain || +totals.pls || 0,
         bsc: +totals.bsc || 0,
+        polygon: +totals.polygon || +totals.matic || +totals.pol || 0,
         base: +totals.base || 0,
         updatedAt: +updatedAt || 0
       };
     }
-    return { eth: 0, pulse: 0, bsc: 0, base: 0, updatedAt: 0 };
+    return { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0, updatedAt: 0 };
   } catch {
-    return { eth: 0, pulse: 0, bsc: 0, base: 0, updatedAt: 0 };
+    return { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0, updatedAt: 0 };
   }
 }
 
 // Legacy single-key writer (kept for compatibility in case something else imports it)
 function publishChainTotalsFromTokens(list = []) {
   try {
-    const totals = { eth: 0, pulse: 0, bsc: 0, base: 0 };
+    const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of list) {
       const chain = String(t?.chain || '').toLowerCase();
       const id =
         chain.startsWith('eth') ? 'eth'
           : chain.startsWith('base') ? 'base'
             : chain.startsWith('bsc') ? 'bsc'
-            : (chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')) ? 'pulse'
-              : null;
+              : (chain.startsWith('polygon') || chain === 'matic' || chain === 'pol') ? 'polygon'
+                : (chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')) ? 'pulse'
+                  : null;
       if (!id) continue;
       const price = Number(t.priceUsd ?? t.price ?? 0);
       const amount = Number(t.amount ?? 0);
@@ -96,7 +98,7 @@ function publishChainTotalsForWalletSig(list = [], sig) {
     if (!sig) return;
 
     // EXACTLY match chip logic
-    const totals = { eth: 0, pulse: 0, bsc: 0, base: 0 };
+    const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of list) {
       if (isJunkToken(t)) continue;                          // ← filter junk/spam
       const chain = String(t?.chain || '').toLowerCase();
@@ -107,6 +109,7 @@ function publishChainTotalsForWalletSig(list = [], sig) {
       if (chain.startsWith('eth')) totals.eth += val;
       else if (chain === 'pulse' || chain.startsWith('pls')) totals.pulse += val;
       else if (chain.startsWith('bsc')) totals.bsc += val;
+      else if (chain.startsWith('polygon') || chain === 'matic' || chain === 'pol') totals.polygon += val;
       else if (chain.startsWith('base')) totals.base += val;
     }
 
@@ -120,6 +123,9 @@ function publishChainTotalsForWalletSig(list = [], sig) {
         pulsechain: totals.pulse,
         pls: totals.pulse,
         bsc: totals.bsc,
+        polygon: totals.polygon,
+        matic: totals.polygon,
+        pol: totals.polygon,
         base: totals.base
       }
     };
@@ -435,6 +441,7 @@ function chainIdOf(chain) {
   switch (String(chain || '').toLowerCase()) {
     case 'pulse': return 369;   // PulseChain
     case 'bsc': return 56;      // BSC
+    case 'polygon': return 137; // Polygon
     case 'base': return 8453;   // Base
     case 'eth':
     case 'ethereum':
@@ -470,7 +477,7 @@ export default function Portfolio() {
     const saved = getGlobalNetChip();
     return saved || 'all';
   }, []);
-  // 'all' | 'eth' | 'pulse' | 'bsc' | 'base'
+  // 'all' | 'eth' | 'pulse' | 'bsc' | 'polygon' | 'base'
   const [mode, setMode] = useState(initialChip);
   const onChipChange = (code) => {
     setMode(code);
@@ -728,7 +735,7 @@ export default function Portfolio() {
 
   // ====== per-chain totals from current tokens ======
   const chainTotalsFromTokens = useMemo(() => {
-    const totals = { pulse: 0, eth: 0, bsc: 0, base: 0 };
+    const totals = { pulse: 0, eth: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of tokens) {
       if (isJunkToken(t)) continue;
       const chain = String(t.chain || '').toLowerCase();
@@ -738,6 +745,7 @@ export default function Portfolio() {
       if (chain.startsWith('eth')) totals.eth += val;
       else if (chain === 'pulse' || chain.startsWith('pls')) totals.pulse += val;
       else if (chain.startsWith('bsc')) totals.bsc += val;
+      else if (chain.startsWith('polygon') || chain === 'matic' || chain === 'pol') totals.polygon += val;
       else if (chain.startsWith('base')) totals.base += val;
     }
     return totals;
@@ -748,32 +756,34 @@ export default function Portfolio() {
   const effectiveTotals = useMemo(() => {
     // If fresh build hasn't populated tokens yet, fall back to cached totals so chips render instantly.
     const computed = chainTotalsFromTokens;
-    const hasAny = (computed.eth + computed.pulse + computed.bsc + computed.base) > 0;
-    return hasAny ? computed : { eth: cached.eth, pulse: cached.pulse, bsc: cached.bsc, base: cached.base };
-  }, [chainTotalsFromTokens, cached.eth, cached.pulse, cached.bsc, cached.base]);
+    const hasAny = (computed.eth + computed.pulse + computed.bsc + computed.polygon + computed.base) > 0;
+    return hasAny ? computed : { eth: cached.eth, pulse: cached.pulse, bsc: cached.bsc, polygon: cached.polygon, base: cached.base };
+  }, [chainTotalsFromTokens, cached.eth, cached.pulse, cached.bsc, cached.polygon, cached.base]);
 
   // ====== header total reflects current mode ======
   const headerTotalUsd = useMemo(() => {
     if (mode === 'eth') return effectiveTotals.eth || 0;
     if (mode === 'pulse') return effectiveTotals.pulse || 0;
     if (mode === 'bsc') return effectiveTotals.bsc || 0;
+    if (mode === 'polygon') return effectiveTotals.polygon || 0;
     if (mode === 'base') return effectiveTotals.base || 0;
     // all
-    return (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.bsc + effectiveTotals.base) || Number(totalUsd) || 0;
+    return (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.bsc + effectiveTotals.polygon + effectiveTotals.base) || Number(totalUsd) || 0;
   }, [mode, effectiveTotals, totalUsd]);
 
   // ====== chips: All shows all; others show only the selected chain ======
   const assetChips = useMemo(() => {
     const possible = [
       { key: 'eth', label: 'Ethereum', usd: norm(effectiveTotals.eth), color: '#10b981' },
-      { key: 'pulse', label: 'PulseChain', usd: norm(effectiveTotals.pulse), color: '#7c3aed' },
+      { key: 'pulse', label: 'PulseChain', usd: norm(effectiveTotals.pulse), color: '#cc08c6' },
       { key: 'bsc', label: 'BSC', usd: norm(effectiveTotals.bsc), color: '#F3BA2F' },
+      { key: 'polygon', label: 'Polygon', usd: norm(effectiveTotals.polygon), color: '#7b3fe4' },
       { key: 'base', label: 'Base', usd: norm(effectiveTotals.base), color: '#3b82f6' }
     ];
 
     const filtered = mode === 'all'
       ? possible // show all chips in All
-      : possible.filter(r => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : mode === 'bsc' ? 'bsc' : 'base'));
+      : possible.filter(r => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : mode === 'bsc' ? 'bsc' : mode === 'polygon' ? 'polygon' : 'base'));
 
     // Keep Base visible even if 0.00; other non-selected chains are hidden by the filter above.
     filtered.sort((a, b) => b.usd - a.usd);
@@ -846,7 +856,7 @@ export default function Portfolio() {
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-1" style={{ fontSize: 12 }}>
                     {assetChips.map((r) => {
                       const denom = (mode === 'all')
-                        ? (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.bsc + effectiveTotals.base)
+                        ? (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.bsc + effectiveTotals.polygon + effectiveTotals.base)
                         : headerTotalUsd;
                       const pct = denom > 0 ? Math.round((r.usd / denom) * 1000) / 10 : 0;
                       return (
@@ -921,7 +931,9 @@ export default function Portfolio() {
                 ? 'PulseChain - PRC-20 tokens'
                 : mode === 'bsc'
                   ? 'BSC - BEP-20 tokens'
-                  : `${mode === 'base' ? 'Base' : 'Ethereum'} - ERC-20 tokens`}
+                  : mode === 'polygon'
+                    ? 'Polygon - ERC-20 tokens'
+                    : `${mode === 'base' ? 'Base' : 'Ethereum'} - ERC-20 tokens`}
           </small>
         </Col>
       </Row>
@@ -951,7 +963,8 @@ export default function Portfolio() {
                 const deltaCls = delta == null ? '' : delta >= 0 ? 'up' : 'down';
                 const deltaTxt = delta == null ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
 
-                const label = (t.chain === 'pulse') ? 'Pulse' : (t.chain === 'bsc') ? 'BSC' : (t.chain === 'base') ? 'Base' : 'ETH';
+                // Show shorter ticker for Polygon on View All: POL
+                const label = (t.chain === 'pulse') ? 'Pulse' : (t.chain === 'bsc') ? 'BSC' : (t.chain === 'polygon') ? 'POL' : (t.chain === 'base') ? 'Base' : 'ETH';
                 const logoChainId = chainIdOf(t.chain);
                 const logoAddr = (t.address || t.contract || '') || null;
 

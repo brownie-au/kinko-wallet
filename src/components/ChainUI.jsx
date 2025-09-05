@@ -5,10 +5,11 @@ import React from 'react';
 export const CHAIN_COLORS = {
   all:   'var(--bs-primary, #0d6efd)',
   eth:   '#2ecc71',
-  pulse: '#9b59b6',
+  pulse: '#cc08c6',
   // BSC brand yellow
   bsc:   '#F3BA2F',
-  base:  '#3498db'
+  base:  '#3498db',
+  polygon: '#7b3fe4'
 };
 
 // --- helpers ---
@@ -20,6 +21,7 @@ export function normalizeChain(input) {
   if (s === '1') return 'eth';
   if (s === '369') return 'pulse';
   if (s === '56') return 'bsc';
+  if (s === '137') return 'polygon';
   if (s === '8453') return 'base';
 
   // names/aliases
@@ -27,6 +29,7 @@ export function normalizeChain(input) {
   if (s.includes('pulse') || s === 'pls' || s === 'plsx') return 'pulse';
   if (s.includes('bsc') || s.includes('binance') || s === 'bnb') return 'bsc';
   if (s.includes('base')) return 'base';
+  if (s.includes('polygon') || s === 'pol' || s === 'matic') return 'polygon';
   if (s.includes('eth') || s === 'ehex') return 'eth';
 
   return 'eth';
@@ -82,7 +85,7 @@ export function ChainSelector({
   value = 'all',
   onChange,
   // Order: All, Ethereum, PulseChain, BSC, Base
-  options = ['all','eth','pulse','bsc','base'],
+  options = ['all','eth','pulse','bsc','polygon','base'],
   size = 'sm'
 }) {
   const safeValue = normalizeChain(value) === 'all' ? 'all' : normalizeChain(value);
@@ -117,6 +120,7 @@ export function ChainSelector({
           canonical === 'eth' ? 'Ethereum' :
           canonical === 'pulse' ? 'PulseChain' :
           canonical === 'bsc' ? 'BSC' :
+          canonical === 'polygon' ? 'Polygon' :
           canonical === 'base' ? 'Base' : canonical;
 
         return (
