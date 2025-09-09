@@ -409,7 +409,7 @@ const WalletManage = () => {
           <Modal.Title>Log out?</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you want to view these tokens again or on another device. Are you sure you want to log out?
+          Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you wish to view these tokens again or on another device. Are you sure you want to log out?
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowLogout(false)}>
