@@ -31,7 +31,7 @@ const DEMO_ITEMS = [
     { id: 'plsx', symbol: 'PLSX', price: 0.000035, change24h: -1.1 },
     { id: 'inc', symbol: 'INC', price: 2.12, change24h: 0.7 },
     { id: 'ehex', symbol: 'eHEX', price: 0.01148, change24h: -0.2 },
-    { id: 'phex', symbol: 'pHEX', price: 0.0009, change24h: 0.4 }
+    { id: 'phex', symbol: 'HEX', price: 0.0009, change24h: 0.4 }
 ];
 
 const fmtUsd = (n) => {
