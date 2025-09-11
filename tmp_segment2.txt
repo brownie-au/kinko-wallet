@@ -1,0 +1,1 @@
+                <th style={{ width: '10%' }} className="text-end">Fee</th>                <th style={{ width: '8%' }}>Link</th>              </tr>

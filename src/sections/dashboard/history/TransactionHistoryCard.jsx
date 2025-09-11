@@ -5,9 +5,25 @@ import { Card, Row, Col, Form, Button } from 'react-bootstrap';
 
 import { useWallets } from '../../../contexts/WalletContext.jsx';
 import useTxHistory from '../../../hooks/useTxHistory.js';
-import { ChainSelector } from '../../../components/ChainUI';
+import { ChainSelector, ChainBadge } from '../../../components/ChainUI';
+import TokenLogo from '../../../components/TokenLogo';
+import DataClient from '../../../data/dataClient';
+import { startOrchestrator } from '../../../data/orchestrator';
 
 const CHAINS = ['all', 'eth', 'pulse', 'bsc', 'polygon', 'base'];
+
+// helper to translate chain code -> numeric chainId for TokenLogo
+const chainIdOf = (chain) => {
+  switch (String(chain || '').toLowerCase()) {
+    case 'pulse': return 369;
+    case 'bsc': return 56;
+    case 'polygon': return 137;
+    case 'base': return 8453;
+    case 'eth':
+    case 'ethereum':
+    default: return 1;
+  }
+};
 
 function fmtDate(val) {
   try {
@@ -62,14 +78,14 @@ export default function TransactionHistoryCard() {
   const [days, setDays] = useState(30);
   const [page, setPage] = useState(1);
   // data comes from centralized client/cache layer
-  const { rows: mergedRows, loading, error } = useTxHistory({ wallets, chain, days, page });
+  const { rows: mergedRows, loading, error, refreshNow } = useTxHistory({ wallets, chain, days, page });
   const [rows, setRows] = useState([]);
   const [walletFilter, setWalletFilter] = useState('all');
   const abortRef = useRef({ dead: false });
 
   const chainsParam = useMemo(() => (chain === 'all' ? ['eth','pulse','bsc','polygon','base'] : [chain]), [chain]);
 
-  useEffect(() => { setRows(mergedRows || []); }, [mergedRows]);
+  useEffect(() => { try { startOrchestrator(); } catch {} setRows(mergedRows || []); }, [mergedRows]);
 
   const filtered = useMemo(() => {
     const s = (q || '').trim().toLowerCase();
@@ -82,6 +98,89 @@ export default function TransactionHistoryCard() {
       (r.to || '').toLowerCase().includes(s)
     );
   }, [rows, q, walletFilter]);
+
+  // ---------- USD pricing (native via DataClient.getPrice; ERC-20 via Dexscreener) ----------
+  const [usdByKey, setUsdByKey] = useState(new Map()); // key: `${chain}:${addrOrNative}` -> priceUSD
+  useEffect(() => {
+    let dead = false;
+    const run = async () => {
+      try {
+        // collect requirements from current filtered set
+        const wantChains = new Set();
+        const wantContractsByChain = new Map();
+        for (const r of filtered) {
+          const c = String(r.chain || '').toLowerCase();
+          wantChains.add(c);
+          const addr = r.token?.address;
+          if (r.kind === 'erc20' && addr) {
+            const set = wantContractsByChain.get(c) || new Set();
+            set.add(addr.toLowerCase());
+            wantContractsByChain.set(c, set);
+          }
+        }
+
+        const next = new Map(usdByKey);
+
+        // native prices per chain
+        await Promise.all(Array.from(wantChains).map(async (c) => {
+          try {
+            const p = await DataClient.getPrice(c);
+            const usd = Number(p?.usd || 0);
+            if (usd > 0) next.set(`${c}:native`, usd);
+          } catch {}
+        }));
+
+        // ERC-20 prices via Dexscreener batch
+        for (const [c, addrs] of wantContractsByChain.entries()) {
+          const list = Array.from(addrs);
+          for (let i = 0; i < list.length; i += 25) {
+            const batch = list.slice(i, i + 25);
+            try {
+              const url = `https://api.dexscreener.com/latest/dex/tokens/${batch.join(',')}`;
+              const r = await fetch(url);
+              if (!r.ok) continue;
+              const j = await r.json();
+              const pairs = Array.isArray(j?.pairs) ? j.pairs : [];
+              // choose highest liquidity per token
+              const byAddr = new Map();
+              for (const p of pairs) {
+                const addr = (p?.baseToken?.address || '').toLowerCase();
+                const liq = Number(p?.liquidity?.usd || 0);
+                const prev = byAddr.get(addr);
+                if (!prev || liq > prev.liq) byAddr.set(addr, { liq, usd: Number(p?.priceUsd || 0) });
+              }
+              for (const a of batch) {
+                const info = byAddr.get(a.toLowerCase());
+                const usd = Number(info?.usd || 0);
+                if (usd > 0) next.set(`${c}:${a.toLowerCase()}`, usd);
+              }
+            } catch {}
+          }
+        }
+
+        if (!dead) setUsdByKey(next);
+      } catch {}
+    };
+    if (filtered.length) run();
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.map(r => `${r.chain}|${r.kind}|${r.token?.address||'native'}`).join(',')]);
+
+  // ---- address helpers: copy + wallet names ----
+  const nameByAddr = useMemo(() => {
+    const m = new Map();
+    try {
+      for (const w of wallets || []) {
+        const a = (w.address || '').toLowerCase();
+        if (a) m.set(a, (w.name || '').trim());
+      }
+    } catch {}
+    return m;
+  }, [wallets]);
+
+  const copyToClipboard = (text) => {
+    try { navigator.clipboard.writeText(text); } catch {}
+  };
 
   // Summary by day (count of txs)
   const summary = useMemo(() => {
@@ -113,6 +212,7 @@ export default function TransactionHistoryCard() {
               <option value={180}>180 days</option>
             </Form.Select>
             <ChainSelector value={chain} onChange={(v) => { setPage(1); setChain(v); }} />
+            <Button size="sm" variant="outline-secondary" onClick={refreshNow} disabled={loading}>Refresh</Button>
           </div>
         </div>
       </Card.Header>
@@ -160,10 +260,10 @@ export default function TransactionHistoryCard() {
                 const type = r.type || (r.kind === 'erc20' ? 'erc20' : 'native');
                 return (
                   <tr key={`${r.hash}-${i}`}>
-                    <td>{fmtDate(r.date || r.timeStamp)}<div className="text-muted" style={{ fontSize: 12 }}>{r.chain}</div></td>
+                    <td>{fmtDate(r.date || r.timeStamp)}<div className="mt-1"><ChainBadge chain={r.chain} /></div></td>
                     <td><span className="badge bg-secondary text-uppercase">{String(type).toUpperCase()}</span></td>
-                    <td>{r.token?.symbol || (type === 'native' ? 'NATIVE' : '')}</td>
-                    <td className="text-end">{r.amount != null ? r.amount : ''}</td>
+                    <td><div className="d-flex align-items-center gap-2"><TokenLogo chainId={chainIdOf(r.chain)} address={r.token?.address} size={20} /> <span>{r.token?.symbol || (type === 'native' ? 'NATIVE' : '')}</span></div></td>
+                    <td className="text-end">{r.amount != null ? r.amount : ''}{(() => { try { const c = r.kind === 'erc20' && r.token?.address ? `${String(r.chain).toLowerCase()}:${String(r.token.address).toLowerCase()}` : `${String(r.chain).toLowerCase()}:native`; const p = usdByKey.get(c) || 0; const val = (Number(r.amount)||0) * Number(p||0); return val ? <div className="text-muted small">{toUsd(val)}</div> : null; } catch { return null; } })()}</td>
                     <td>
                       <div style={{ fontFamily: 'monospace' }}>{shortAddr(r.from)} → {shortAddr(r.to)}</div>
                     </td>
@@ -171,7 +271,7 @@ export default function TransactionHistoryCard() {
                       {type === 'native' ? feeNative(r.chain, r.fee || r.feeWei) : ''}
                     </td>
                     <td>
-                      <a href={r.link || r.explorer} target="_blank" rel="noreferrer">View ↗</a>
+                      <a href={r.link || r.explorer} target="_blank" rel="noreferrer">View 🔗↗</a>
                     </td>
                   </tr>
                 );

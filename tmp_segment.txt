@@ -1,0 +1,1 @@
+                <th style={{ width: '10%' }}>Type</th>                <th style={{ width: '18%' }}>Token</th>                <th style={{ width: '12%' }} className="text-end">Amount</th>                <th style={{ width: '24%' }}>From → To</th>                <th style={{ width: '10%' }} className="text-end">Fee</th>

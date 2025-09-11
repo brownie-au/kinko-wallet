@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DataClient from '../data/dataClient';
+import { startOrchestrator } from '../data/orchestrator';
 
 const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
 
@@ -14,6 +15,7 @@ export default function useTxHistory({ wallets = [], chain = 'all', days = 30, p
   const [error, setError] = useState('');
   const [rows, setRows] = useState([]);
   const bcRef = useRef(null);
+  const refreshingRef = useRef(false);
 
   // Read caches and merge
   const readOnce = async () => {
@@ -38,6 +40,16 @@ export default function useTxHistory({ wallets = [], chain = 'all', days = 30, p
       });
       filtered.sort((a, b) => (b.timeStamp || Date.parse(b.date) / 1000 || 0) - (a.timeStamp || Date.parse(a.date) / 1000 || 0));
       setRows(page === 1 ? filtered : (prev) => prev.concat(filtered));
+
+      // If nothing in cache yet, kick a background refresh and re-read when done
+      if (!refreshingRef.current && filtered.length === 0 && addrs.length) {
+        refreshingRef.current = true;
+        try {
+          await refreshNow();
+        } finally {
+          refreshingRef.current = false;
+        }
+      }
     } catch (e) {
       setError(e?.message || 'Failed to load history');
     } finally {
@@ -45,7 +57,12 @@ export default function useTxHistory({ wallets = [], chain = 'all', days = 30, p
     }
   };
 
-  useEffect(() => { readOnce(); /* eslint-disable-next-line */ }, [addrs.join(','), chains.join(','), days, page]);
+  useEffect(() => {
+    // Ensure orchestrator is alive (idempotent)
+    try { startOrchestrator(); } catch {}
+    readOnce();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addrs.join(','), chains.join(','), days, page]);
 
   // Listen for cache updates from orchestrator; re-read on relevant keys
   useEffect(() => {
@@ -67,6 +84,31 @@ export default function useTxHistory({ wallets = [], chain = 'all', days = 30, p
     return () => { try { bc?.removeEventListener('message', onMsg); } catch {} };
   }, [addrs.join(','), chains.join(','), chain]);
 
-  return { rows, loading, error };
-}
+  // Manual refresh trigger (force network)
+  const refreshNow = async () => {
+    setLoading(true); setError('');
+    try {
+      // Pre-key check (best-effort dev aid)
+      const missing = [];
+      const expect = ['eth','pulse','bsc','polygon','base'];
+      try {
+        for (const c of (chain === 'all' ? expect : chains)) {
+          const k = localStorage.getItem(`kw:explorerKey:${c}`) || import.meta.env[`VITE_${c.toUpperCase()}SCAN_KEY`] || import.meta.env[`VITE_${c.toUpperCase()}ERSCAN_KEY`];
+          if (!k) missing.push(c);
+        }
+        if (missing.length) console.warn('[TxHistory] Missing explorer API keys for:', missing.join(', '));
+      } catch {}
 
+      const jobs = [];
+      for (const c of chains) for (const a of addrs) jobs.push(DataClient.refreshTxs(c, a, 'all', { force: true }));
+      await Promise.allSettled(jobs);
+      await readOnce();
+    } catch (e) {
+      setError(e?.message || 'Failed to refresh history');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { rows, loading, error, refreshNow };
+}

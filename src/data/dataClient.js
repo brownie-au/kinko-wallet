@@ -241,22 +241,127 @@ async function fetchPriceLive(chain) {
   return { usd: 0 };
 }
 
+function getExplorerKey(chain) {
+  const c = normChain(chain);
+  try {
+    const fromLS = localStorage.getItem(`kw:explorerKey:${c}`);
+    if (fromLS) return fromLS;
+  } catch {}
+  const map = {
+    eth: import.meta.env.VITE_ETHERSCAN_KEY,
+    bsc: import.meta.env.VITE_BSCSCAN_KEY,
+    polygon: import.meta.env.VITE_POLYGONSCAN_KEY,
+    base: import.meta.env.VITE_BASESCAN_KEY,
+    pulse: import.meta.env.VITE_PULSESCAN_KEY
+  };
+  return map[c] || '';
+}
+
+function explorerBase(chain) {
+  const c = normChain(chain);
+  switch (c) {
+    case 'eth': return 'https://etherscan.io';
+    case 'bsc': return 'https://bscscan.com';
+    case 'polygon': return 'https://polygonscan.com';
+    case 'base': return 'https://basescan.org';
+    case 'pulse': return 'https://otter.pulsechain.com';
+    default: return '';
+  }
+}
+
+async function fetchTxViaExplorer(chain, address) {
+  const c = normChain(chain);
+  const addr = String(address || '');
+  const key = getExplorerKey(c);
+  const bases = {
+    eth: 'https://api.etherscan.io/api',
+    bsc: 'https://api.bscscan.com/api',
+    polygon: 'https://api.polygonscan.com/api',
+    base: 'https://api.basescan.org/api',
+    pulse: 'https://api.scan.pulsechain.com/api'
+  };
+  const base = bases[c];
+  if (!base) throw new Error(`No explorer base for ${c}`);
+
+  const mk = (action) => `${base}?module=account&action=${action}&address=${addr}&page=1&offset=50&sort=desc${key ? `&apikey=${encodeURIComponent(key)}` : ''}`;
+  const host = explorerBase(c);
+
+  const items = [];
+
+  // native tx
+  try {
+    const r = await fetch(mk('txlist'));
+    const j = await r.json();
+    const list = Array.isArray(j?.result) ? j.result : [];
+    for (const t of list) {
+      items.push({
+        chain: c,
+        kind: 'native',
+        hash: t.hash,
+        timeStamp: Number(t.timeStamp || 0),
+        from: t.from,
+        to: t.to,
+        amount: Number(t.value || 0) / 1e18,
+        feeWei: (() => { try { return String((BigInt(t.gasUsed||0) * BigInt(t.gasPrice||0))); } catch { return '0'; } })(),
+        explorer: host ? `${host}/tx/${t.hash}` : undefined
+      });
+    }
+  } catch {}
+
+  // ERC-20 transfers
+  try {
+    const r = await fetch(mk('tokentx'));
+    const j = await r.json();
+    const list = Array.isArray(j?.result) ? j.result : [];
+    for (const t of list) {
+      const dec = Number(t.tokenDecimal || 18);
+      const amt = Number(t.value || 0) / (10 ** (Number.isFinite(dec) ? dec : 18));
+      items.push({
+        chain: c,
+        kind: 'erc20',
+        hash: t.hash,
+        timeStamp: Number(t.timeStamp || 0),
+        from: t.from,
+        to: t.to,
+        amount: amt,
+        token: { symbol: t.tokenSymbol || '', address: t.contractAddress },
+        explorer: host ? `${host}/tx/${t.hash}` : undefined
+      });
+    }
+  } catch {}
+
+  // Desc sort
+  items.sort((a,b) => (b.timeStamp||0) - (a.timeStamp||0));
+  return { items };
+}
+
 async function fetchTxLive(chain, address, type) {
   const params = new URLSearchParams();
   params.set('chain', normChain(chain));
   params.set('address', String(address || ''));
   if (type) params.set('type', String(type));
-  const r = await fetch(`/api/tx?${params.toString()}`);
-  if (!r.ok) throw new Error(`tx ${chain} ${r.status}`);
-  const j = await r.json();
-  const items = Array.isArray(j.items) ? j.items.slice() : [];
-  items.forEach((it) => {
-    if (it && !it.timeStamp && it.date) {
-      const ts = Date.parse(it.date);
-      if (!Number.isNaN(ts)) it.timeStamp = Math.floor(ts / 1000);
+  // Try app backend first
+  try {
+    const r = await fetch(`/api/tx?${params.toString()}`);
+    if (!r.ok) throw new Error(`tx ${chain} ${r.status}`);
+    const j = await r.json();
+    const items = Array.isArray(j.items) ? j.items.slice() : [];
+    items.forEach((it) => {
+      if (it && !it.timeStamp && it.date) {
+        const ts = Date.parse(it.date);
+        if (!Number.isNaN(ts)) it.timeStamp = Math.floor(ts / 1000);
+      }
+    });
+    return { items };
+  } catch (e) {
+    // Fallback: direct explorer call (requires key; some allow no-key but rate-limited)
+    try {
+      return await fetchTxViaExplorer(chain, address);
+    } catch (e2) {
+      // surface original error
+      throw e;
     }
-  });
-  return { items };
+  }
 }
 
 export const DataClient = {
