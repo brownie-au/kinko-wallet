@@ -8,7 +8,7 @@ import { startOrchestrator } from '../data/orchestrator';
 
 const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
 
-export default function useTxHistory({ wallets = [], chain = 'all', days = 30, page = 1 }) {
+export default function useTxHistory({ wallets = [], chain = 'all', days = 30, page = 1, options = {} }) {
   const addrs = useMemo(() => (Array.isArray(wallets) ? wallets : []).map((w) => (w.address || '').toLowerCase()).filter(Boolean), [wallets]);
   const chains = useMemo(() => (chain === 'all' ? CHAINS : [chain]), [chain]);
   const [loading, setLoading] = useState(false);
@@ -41,8 +41,8 @@ export default function useTxHistory({ wallets = [], chain = 'all', days = 30, p
       filtered.sort((a, b) => (b.timeStamp || Date.parse(b.date) / 1000 || 0) - (a.timeStamp || Date.parse(a.date) / 1000 || 0));
       setRows(page === 1 ? filtered : (prev) => prev.concat(filtered));
 
-      // If nothing in cache yet, kick a background refresh and re-read when done
-      if (!refreshingRef.current && filtered.length === 0 && addrs.length) {
+      // If nothing in cache yet, optionally kick a background refresh and re-read when done
+      if (!options?.disableAutoBootstrap && !refreshingRef.current && filtered.length === 0 && addrs.length) {
         refreshingRef.current = true;
         try {
           await refreshNow();
