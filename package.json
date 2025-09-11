@@ -47,6 +47,7 @@
     "apexcharts": "^4.5.0",
     "axios": "^1.7.9",
     "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.13.1",
     "bootstrap-switch-button-react": "1.2.0",
     "chance": "1.1.12",
     "chart.js": "^4.5.0",

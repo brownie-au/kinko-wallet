@@ -1,3 +1,4 @@
+// src/sections/dashboard/history/TransactionHistoryCard.jsx
 /* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Form, Button } from 'react-bootstrap';
@@ -73,21 +74,32 @@ export default function TransactionHistoryCard() {
 
   const [chain, setChain] = useState('all');
   const [q, setQ] = useState('');
-  const [days, setDays] = useState(180);
-  const [page, setPage] = useState(1);
+  // Fixed window: 180 days
+  const days = 180;
 
   // Keep hook for compatibility, but disable auto network bootstrapping.
-  useTxHistory({ wallets, chain, days, page, options: { disableAutoBootstrap: true } });
+  useTxHistory({ wallets, chain, days, options: { disableAutoBootstrap: true } });
+
   const [rows, setRows] = useState([]);
   const [walletFilter, setWalletFilter] = useState('all');
-  const [loading, setLoading] = useState(false);
+  const [cacheLoading, setCacheLoading] = useState(true);
+  const [netLoading, setNetLoading] = useState(false);
   const [error, setError] = useState('');
   const [fromCache, setFromCache] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState(0);
   const [syncWarn, setSyncWarn] = useState('');
   const deltaRef = useRef(false);
   const pollRef = useRef(null);
+  const activeKeyRef = useRef('');
   const [deltaBump, setDeltaBump] = useState(0);
+
+  // --- NEW: ticking clock for live "Last sync" ---
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  // ------------------------------------------------
 
   useEffect(() => { try { startOrchestrator(); } catch { } }, []);
 
@@ -104,6 +116,7 @@ export default function TransactionHistoryCard() {
     let dead = false;
     const run = async () => {
       setError('');
+      setCacheLoading(true);
       try {
         const parts = [];
         for (const c of effectiveChains) {
@@ -123,7 +136,24 @@ export default function TransactionHistoryCard() {
         let merged = [];
         let latest = 0;
         for (const p of chunks) {
-          merged = mergeRows(merged, p.rows, { windowDays: days });
+          if ((merged.length + (p.rows?.length || 0)) > 2000 && typeof Worker !== 'undefined') {
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              const rowsMerged = await new Promise((resolve) => {
+                const w = new Worker(new URL('../../../workers/txMerge.worker.js', import.meta.url), { type: 'module' });
+                w.onmessage = (ev) => { try { w.terminate(); } catch { } resolve(ev.data?.rows || []); };
+                w.postMessage({ existing: merged, incoming: p.rows || [], windowDays: days });
+              });
+              merged = rowsMerged;
+            } catch {
+              merged = mergeRows(merged, p.rows, { windowDays: days });
+            }
+          } else if ((merged.length + (p.rows?.length || 0)) > 2000 && typeof requestIdleCallback === 'function') {
+            // eslint-disable-next-line no-await-in-loop
+            merged = await new Promise((resolve) => requestIdleCallback(() => resolve(mergeRows(merged, p.rows, { windowDays: days })), { timeout: 60 }));
+          } else {
+            merged = mergeRows(merged, p.rows, { windowDays: days });
+          }
           const t = Number(p?.meta?.updatedAt || 0);
           if (t > latest) latest = t;
         }
@@ -134,23 +164,24 @@ export default function TransactionHistoryCard() {
         }
       } catch (e) {
         if (!dead) setError(e?.message || 'Failed to load cache');
-      }
+      } finally { if (!dead) setCacheLoading(false); }
     };
     run();
     return () => { dead = true; };
   }, [effectiveChains.join(','), walletsByFilter.map((w) => (w.address || '').toLowerCase()).join(','), days]);
 
-  // Delta fetching: head-only page fetch for each (chain,wallet), then merge into cache
+  // Delta fetching
   useEffect(() => {
     let dead = false;
     const runDelta = async () => {
       if (dead) return;
       if (deltaRef.current) return;
       deltaRef.current = true;
-      setLoading(true);
+      setNetLoading(true);
       setSyncWarn('');
       try {
-        // unique pairs
+        const startKey = `${effectiveChains.join(',')}|${walletsByFilter.map((w) => (w.address || '').toLowerCase()).join(',')}|${days}`;
+        activeKeyRef.current = startKey;
         const uniq = new Set();
         const pairs = [];
         for (const c of effectiveChains) {
@@ -188,7 +219,7 @@ export default function TransactionHistoryCard() {
         const backoff = async (fn, retries = 3) => {
           let i = 0; let last;
           const waits = [300, 700, 1500];
-          for (;;) {
+          for (; ;) {
             try { return await fn(); } catch (e) {
               last = e;
               if (i >= retries) throw last;
@@ -232,11 +263,11 @@ export default function TransactionHistoryCard() {
                 from: t.from,
                 to: t.to,
                 amount: Number(t.value || 0) / 1e18,
-                feeWei: (() => { try { return String((BigInt(t.gasUsed||0) * BigInt(t.gasPrice||0))); } catch { return '0'; } })(),
+                feeWei: (() => { try { return String((BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0))); } catch { return '0'; } })(),
                 explorer: host ? `${host}/tx/${t.hash}` : undefined
               });
             }
-          } catch {}
+          } catch { }
           // erc20
           try {
             const j = await backoff(() => fetchJson(mk('tokentx')));
@@ -258,8 +289,8 @@ export default function TransactionHistoryCard() {
                 explorer: host ? `${host}/tx/${t.hash}` : undefined
               });
             }
-          } catch {}
-          const minTs = Math.floor(Date.now() / 1000) - Number(days || 180) * 24 * 60 * 60;
+          } catch { }
+          const minTs = Math.floor(Date.now() / 1000) - Number(days) * 24 * 60 * 60;
           const fresh = all.filter((it) => (Number(it.timeStamp || 0) > Number(sinceTs || 0)) && (Number(it.timeStamp || 0) >= minTs));
           const merged = mergeRows(snap, fresh, { windowDays: days });
           const lastSeenTimestamp = merged.length ? Number(merged[0].timeStamp || 0) : Number(sinceTs || 0);
@@ -285,11 +316,28 @@ export default function TransactionHistoryCard() {
         let mergedAll = [];
         let latest = 0;
         for (const p of parts) {
-          mergedAll = mergeRows(mergedAll, p.rows, { windowDays: days });
+          if ((mergedAll.length + (p.rows?.length || 0)) > 2000 && typeof Worker !== 'undefined') {
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              const rowsMerged = await new Promise((resolve) => {
+                const w = new Worker(new URL('../../../workers/txMerge.worker.js', import.meta.url), { type: 'module' });
+                w.onmessage = (ev) => { try { w.terminate(); } catch { } resolve(ev.data?.rows || []); };
+                w.postMessage({ existing: mergedAll, incoming: p.rows || [], windowDays: days });
+              });
+              mergedAll = rowsMerged;
+            } catch {
+              mergedAll = mergeRows(mergedAll, p.rows, { windowDays: days });
+            }
+          } else if ((mergedAll.length + (p.rows?.length || 0)) > 2000 && typeof requestIdleCallback === 'function') {
+            // eslint-disable-next-line no-await-in-loop
+            mergedAll = await new Promise((resolve) => requestIdleCallback(() => resolve(mergeRows(mergedAll, p.rows, { windowDays: days })), { timeout: 60 }));
+          } else {
+            mergedAll = mergeRows(mergedAll, p.rows, { windowDays: days });
+          }
           const t = Number(p?.meta?.updatedAt || 0);
           if (t > latest) latest = t;
         }
-        if (!dead) {
+        if (!dead && activeKeyRef.current === startKey) {
           setRows(mergedAll);
           setFromCache(false);
           setLastSyncAt(latest || Date.now());
@@ -297,7 +345,7 @@ export default function TransactionHistoryCard() {
       } catch (e) {
         if (!dead) { setError(e?.message || 'Sync failed'); setSyncWarn('Sync error; showing cached data'); }
       } finally {
-        if (!dead) setLoading(false);
+        if (!dead) setNetLoading(false);
         deltaRef.current = false;
       }
     };
@@ -306,7 +354,10 @@ export default function TransactionHistoryCard() {
     runDelta();
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(runDelta, 10 * 60 * 1000);
-    return () => { dead = true; if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      dead = true;
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [effectiveChains.join(','), walletsByFilter.map((w) => (w.address || '').toLowerCase()).join(','), days, deltaBump]);
 
   // Debounce search to avoid extra price fetches
@@ -337,32 +388,53 @@ export default function TransactionHistoryCard() {
   }, [rows, dq, walletFilter]);
 
   const [usdByKey, setUsdByKey] = useState(new Map());
+  const [debouncedTokenKeys, setDebouncedTokenKeys] = useState([]);
+  useEffect(() => {
+    const keys = (() => {
+      const wantMap = new Map(); // chain -> Set(tokenAddrLower|'native')
+      for (const r of rows) {
+        const c = String(r.chain || '').toLowerCase();
+        const set = wantMap.get(c) || new Set();
+        if (r.kind === 'erc20' && r.token?.address) set.add(String(r.token.address).toLowerCase());
+        else set.add('native');
+        wantMap.set(c, set);
+      }
+      const out = [];
+      for (const [c, set] of wantMap.entries()) for (const t of set.values()) out.push(`${c}:${t}`);
+      return out;
+    })();
+    const t = setTimeout(() => setDebouncedTokenKeys(keys), 200);
+    return () => clearTimeout(t);
+  }, [rows]);
+
   useEffect(() => {
     let dead = false;
     const run = async () => {
       try {
-        const wantChains = new Set();
-        const wantContractsByChain = new Map();
-        for (const r of filtered) {
-          const c = String(r.chain || '').toLowerCase();
-          wantChains.add(c);
-          const addr = r.token?.address;
-          if (r.kind === 'erc20' && addr) {
-            const set = wantContractsByChain.get(c) || new Set();
-            set.add(addr.toLowerCase());
-            wantContractsByChain.set(c, set);
+        const next = new Map(usdByKey);
+        const missesByChain = new Map();
+        // Populate from cache and queue misses
+        for (const key of debouncedTokenKeys) {
+          const [c, tokenPart] = key.split(':');
+          if (tokenPart === 'native') {
+            try {
+              const p = await DataClient.getPrice(c);
+              const usd = Number(p?.usd || 0);
+              if (usd > 0) next.set(`${c}:native`, usd);
+            } catch { }
+            continue;
+          }
+          // eslint-disable-next-line no-await-in-loop
+          const cached = await getPriceCached(c, tokenPart);
+          if (Number(cached || 0) > 0) next.set(`${c}:${tokenPart}`, Number(cached));
+          else {
+            const arr = missesByChain.get(c) || [];
+            arr.push(tokenPart);
+            missesByChain.set(c, arr);
           }
         }
-        const next = new Map(usdByKey);
-        await Promise.all(Array.from(wantChains).map(async (c) => {
-          try {
-            const p = await DataClient.getPrice(c);
-            const usd = Number(p?.usd || 0);
-            if (usd > 0) next.set(`${c}:native`, usd);
-          } catch { }
-        }));
-        for (const [c, addrs] of wantContractsByChain.entries()) {
-          const list = Array.from(addrs);
+        // Fetch erc20 misses in small batches
+        for (const [c, list] of missesByChain.entries()) {
           for (let i = 0; i < list.length; i += 25) {
             const batch = list.slice(i, i + 25);
             try {
@@ -380,7 +452,11 @@ export default function TransactionHistoryCard() {
               for (const a of batch) {
                 const info = byAddr.get(a.toLowerCase());
                 const usd = Number(info?.usd || 0);
-                if (usd > 0) next.set(`${c}:${a.toLowerCase()}`, usd);
+                if (usd > 0) {
+                  next.set(`${c}:${a.toLowerCase()}`, usd);
+                  // eslint-disable-next-line no-await-in-loop
+                  await putPriceCached(c, a.toLowerCase(), usd);
+                }
               }
             } catch { }
           }
@@ -388,9 +464,9 @@ export default function TransactionHistoryCard() {
         if (!dead) setUsdByKey(next);
       } catch { }
     };
-    if (filtered.length) run();
+    if (debouncedTokenKeys.length) run();
     return () => { dead = true; };
-  }, [filtered.map(r => `${r.chain}|${r.kind}|${r.token?.address || 'native'}`).join(',')]);
+  }, [debouncedTokenKeys.join(',')]);
 
   const nameByAddr = useMemo(() => {
     const m = new Map();
@@ -428,24 +504,15 @@ export default function TransactionHistoryCard() {
             <h5 className="mb-0">Transaction History {fromCache ? <span className="badge bg-secondary ms-2">cached</span> : null}</h5>
             <small className="text-muted">Last {days} days · {summary.total} tx · {summary.last7} in last 7 days</small>
             <div className="text-muted small">
-              Loaded from cache · Last sync: {lastSyncAt ? `${Math.max(0, Math.floor((Date.now() - lastSyncAt) / 1000))}s ago` : 'never'} · Auto-refresh: every 10 min
+              Loaded from cache · Last sync: {lastSyncAt ? `${Math.max(0, Math.floor((now - lastSyncAt) / 1000))}s ago` : 'never'} · Auto-refresh: every 10 min
               {syncWarn ? <span className="ms-2 badge bg-warning text-dark">{syncWarn}</span> : null}
             </div>
+            {netLoading ? <div className="text-muted small">Fetching updates…</div> : null}
           </div>
           <div className="d-flex align-items-center gap-2">
-            <Form.Select
-              size="sm"
-              value={days}
-              onChange={(e) => { setPage(1); setDays(Number(e.target.value) || 30); }}
-              style={{ width: 120 }}
-            >
-              <option value={7}>7 days</option>
-              <option value={30}>30 days</option>
-              <option value={90}>90 days</option>
-              <option value={180}>180 days</option>
-            </Form.Select>
-            <ChainSelector value={chain} onChange={(v) => { setPage(1); setChain(v); }} />
-            <Button size="sm" variant="outline-secondary" onClick={() => setDeltaBump((n) => n + 1)} disabled={loading}>Refresh</Button>
+            {/* Removed days dropdown */}
+            <ChainSelector value={chain} onChange={(v) => { setChain(v); }} />
+            {/* Refresh moved to footer */}
           </div>
         </div>
       </Card.Header>
@@ -466,18 +533,20 @@ export default function TransactionHistoryCard() {
               ))}
             </Form.Select>
             <Form.Control
+              size="sm"
               placeholder="Search token, address, hash"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              style={{ maxWidth: 360 }}
+              style={{ width: 400, height: 'calc(1.5em + .5rem + 2px)' }}
             />
           </div>
           <div className="d-flex align-items-center gap-2">
             <Button size="sm" variant="outline-secondary" onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
               Export CSV
             </Button>
-            <Button size="sm" variant="outline-secondary" onClick={() => setPage((p) => p + 1)} disabled={loading}>
-              Load more
+            {/* Refresh in footer */}
+            <Button size="sm" variant="outline-secondary" onClick={() => setDeltaBump((n) => n + 1)} disabled={netLoading}>
+              Refresh
             </Button>
           </div>
         </div>
@@ -497,20 +566,19 @@ export default function TransactionHistoryCard() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr><td colSpan={8} className="py-4 text-center text-muted">Loading…</td></tr>
-              )}
-              {!loading && !error && filtered.length === 0 && (
+              {/* removed loading row */}
+
+              {!error && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-4 text-center text-muted">
                     {walletFilter !== 'all' ? 'No transactions for this wallet' : (fromCache ? 'No transactions' : 'No transactions (offline/cache empty)')}
                   </td>
                 </tr>
               )}
-              {!loading && error && (
+              {error && (
                 <tr><td colSpan={8} className="py-4 text-center text-danger">{error}</td></tr>
               )}
-              {!loading && !error && filtered.map((r, i) => {
+              {!error && filtered.map((r, i) => {
                 const type = r.type || (r.kind === 'erc20' ? 'erc20' : 'native');
                 const fromName = nameByAddr.get((r.from || '').toLowerCase()) || 'External';
                 const toName = nameByAddr.get((r.to || '').toLowerCase()) || 'External';
@@ -531,7 +599,6 @@ export default function TransactionHistoryCard() {
                       </div>
                     </td>
                     <td className="text-end">
-                      {r.amount != null ? r.amount : ''}
                       {(() => {
                         try {
                           const c = r.kind === 'erc20' && r.token?.address
@@ -542,6 +609,7 @@ export default function TransactionHistoryCard() {
                           return val ? <div className="text-muted small">{toUsd(val)}</div> : null;
                         } catch { return null; }
                       })()}
+                      {r.amount != null ? r.amount : ''}
                     </td>
                     {/* From */}
                     <td style={{ fontFamily: 'monospace' }}>
@@ -568,7 +636,6 @@ export default function TransactionHistoryCard() {
                       </div>
                     </td>
                     <td className="text-end">
-                      {type === 'native' ? feeNative(r.chain, r.fee || r.feeWei) : ''}
                       {(() => {
                         try {
                           if (type !== 'native') return null;
@@ -579,6 +646,7 @@ export default function TransactionHistoryCard() {
                           return usd ? <div className="text-muted small">{toUsd(usd)}</div> : null;
                         } catch { return null; }
                       })()}
+                      {type === 'native' ? feeNative(r.chain, r.fee || r.feeWei) : ''}
                     </td>
                     <td>
                       <a href={r.link || r.explorer} target="_blank" rel="noreferrer">🔗 View ↗</a>
