@@ -222,14 +222,11 @@ export function getManagedWalletAddresses() {
 }
 
 // Prefetch everything (fire-and-forget)
+// DEPRECATED: orchestration moved to src/data/orchestrator.
+// Keep a no-op shim to avoid duplicate fetchers; start orchestrator instead.
 export async function prefetchAllManaged({ revalidate = true } = {}) {
-  const addrs = getManagedWalletAddresses();
-  const jobs = [];
-  for (const a of addrs) {
-    for (const c of CHAINS) {
-      jobs.push(getSnapshot(a, c, { revalidate }));
-    }
-  }
-  // Don’t throw on errors; warm whatever we can.
-  await Promise.allSettled(jobs);
+  try {
+    const { startOrchestrator } = await import('../data/orchestrator');
+    startOrchestrator();
+  } catch {}
 }

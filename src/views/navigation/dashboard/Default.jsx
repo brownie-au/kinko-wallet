@@ -7,8 +7,8 @@ import Row from 'react-bootstrap/Row';
 import PortfolioValueCard from '../../../sections/dashboard/default/PortfolioValueCard';
 import PnLCard from '../../../sections/dashboard/default/PnLCard';
 import FearGreedCard from '../../../sections/dashboard/default/FearGreedCard';
-import PortfolioBalanceChart from '../../../sections/dashboard/default/PortfolioBalanceChart';
 import TopTokensRow from '../../../sections/dashboard/default/TopTokensRow.jsx';
+import TransactionHistoryCard from '../../../sections/dashboard/history/TransactionHistoryCard.jsx';
 
 export default function DefaultPage() {
   return (
@@ -25,7 +25,7 @@ export default function DefaultPage() {
 
       {/* Balance Chart */}
       <Col xs={12} className="mt-3">
-        <PortfolioBalanceChart />
+        <TransactionHistoryCard />
       </Col>
     </Row>
   );

@@ -4,13 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Form } from 'react-bootstrap';
 import { getPortfolioTotalUsd, /* read cache */ setPortfolioTotalUsd } from '../../utils/portfolioTotal';
 import { useWallets } from '../../contexts/WalletContext';
-import { buildPortfolioDetailed } from '../../services/portfolioAggService';
+import { buildPortfolioDetailedFromCache as buildPortfolioDetailed } from '../../services/portfolioAggService';
 
 // NEW: 24h change service (batch via DexScreener for contract tokens)
-import { fetchChange24hFromDexScreener, tokenKey as changeKey } from '../../services/change24hService';
+import { tokenKey as changeKey } from '../../services/change24hService';
 
 // NEW: 24h change for native coins (ETH, PLS, etc.)
-import { fetchNativeChange24h, tokenKey as nativeKey } from '../../services/change24hNativeService';
+import { tokenKey as nativeKey } from '../../services/change24hNativeService';
+// Disable direct network calls from components; background client handles refresh
+const fetchChange24hFromDexScreener = async () => new Map();
+const fetchNativeChange24h = async () => new Map();
 
 // shared chain UI (chips + small chain badge)
 import { ChainSelector, ChainBadge } from '../../components/ChainUI';

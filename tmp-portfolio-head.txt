@@ -1,0 +1,250 @@
+// src/views/portfolio/Portfolio.jsx
+/* eslint-disable import/no-relative-parent-imports */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Row, Col, Card, Form } from 'react-bootstrap';
+import { getPortfolioTotalUsd, /* read cache */ setPortfolioTotalUsd } from '../../utils/portfolioTotal';
+import { useWallets } from '../../contexts/WalletContext';
+import { buildPortfolioDetailed } from '../../services/portfolioAggService';
+
+// NEW: 24h change service (batch via DexScreener for contract tokens)
+import { fetchChange24hFromDexScreener, tokenKey as changeKey } from '../../services/change24hService';
+
+// NEW: 24h change for native coins (ETH, PLS, etc.)
+import { fetchNativeChange24h, tokenKey as nativeKey } from '../../services/change24hNativeService';
+
+// shared chain UI (chips + small chain badge)
+import { ChainSelector, ChainBadge } from '../../components/ChainUI';
+import { getGlobalNetChip, setGlobalNetChip, setLastSection, consumeForceGlobalChipOnce } from '../../utils/uiState';
+import TokenLogo from '../../components/TokenLogo';
+
+// 🔒 reuse existing global token blocklist
+import { isTokenBlacklisted } from '../../data/tokenBlocklist';
+
+// ✅ publish Top tokens for Dashboard (now top 6 to match tiles)
+import { writeTopTokensCache } from '../../services/topTokensService';
+
+// ✅ publish this page’s total to the global PortfolioValueContext
+import { usePortfolioValue, PORTFOLIO_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+
+// --- shared keys so other pages can read the total ---
+const LS_TOTAL_KEY = 'kw:lastTotalUsd';
+const LS_PCT_KEY = 'kw:lastChangePct24h';
+const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
+const TOPN_DASHBOARD = 6;
+
+// === per-chain totals cache (used by Dashboard + here for instant chips) ===
+// NOTE: we now write/read under `${LS_CHAIN_TOTALS_KEY}:${walletsSig}` to avoid stale cross-wallet values.
+const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
+
+// ---- helpers: cache IO ----
+const now = () => Date.now();
+
+// Build the LS key with optional wallet signature
+const chainTotalsKeyFor = (sig) => (sig ? `${LS_CHAIN_TOTALS_KEY}:${sig}` : LS_CHAIN_TOTALS_KEY);
+
+// Read per-chain totals (tries wallet-specific key first, then legacy).
+function readChainTotalsCache(sig) {
+  try {
+    const tryKeys = [chainTotalsKeyFor(sig), LS_CHAIN_TOTALS_KEY];
+    for (const key of tryKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const { totals = {}, updatedAt = 0 } = JSON.parse(raw);
+      return {
+        eth: +totals.eth || +totals.ethereum || 0,
+        pulse: +totals.pulse || +totals.pulsechain || +totals.pls || 0,
+        bsc: +totals.bsc || 0,
+        polygon: +totals.polygon || +totals.matic || +totals.pol || 0,
+        base: +totals.base || 0,
+        updatedAt: +updatedAt || 0
+      };
+    }
+    return { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0, updatedAt: 0 };
+  } catch {
+    return { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0, updatedAt: 0 };
+  }
+}
+
+// Legacy single-key writer (kept for compatibility in case something else imports it)
+function publishChainTotalsFromTokens(list = []) {
+  try {
+    const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
+    for (const t of list) {
+      const chain = String(t?.chain || '').toLowerCase();
+      const id =
+        chain.startsWith('eth') ? 'eth'
+          : chain.startsWith('base') ? 'base'
+            : chain.startsWith('bsc') ? 'bsc'
+              : (chain.startsWith('polygon') || chain === 'matic' || chain === 'pol') ? 'polygon'
+                : (chain === 'pls' || chain === 'plsx' || chain.startsWith('pulse')) ? 'pulse'
+                  : null;
+      if (!id) continue;
+      const price = Number(t.priceUsd ?? t.price ?? 0);
+      const amount = Number(t.amount ?? 0);
+      const valueUsd = Number(t.valueUsd ?? (amount * price) ?? 0);
+      if (valueUsd > 0) totals[id] += valueUsd;
+    }
+    localStorage.setItem(
+      LS_CHAIN_TOTALS_KEY,
+      JSON.stringify({ updatedAt: Date.now(), totals })
+    );
+    window.dispatchEvent(new StorageEvent('storage', { key: LS_CHAIN_TOTALS_KEY, newValue: 'updated' }));
+  } catch { /* ignore */ }
+}
+
+// replace existing publishChainTotalsForWalletSig with this:
+function publishChainTotalsForWalletSig(list = [], sig) {
+  try {
+    if (!sig) return;
+
+    // EXACTLY match chip logic
+    const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
+    for (const t of list) {
+      if (isJunkToken(t)) continue;                          // ← filter junk/spam
+      const chain = String(t?.chain || '').toLowerCase();
+      const price = Number(t.priceUsd ?? t.price ?? 0);
+      const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
+      if (val <= 0) continue;
+
+      if (chain.startsWith('eth')) totals.eth += val;
+      else if (chain === 'pulse' || chain.startsWith('pls')) totals.pulse += val;
+      else if (chain.startsWith('bsc')) totals.bsc += val;
+      else if (chain.startsWith('polygon') || chain === 'matic' || chain === 'pol') totals.polygon += val;
+      else if (chain.startsWith('base')) totals.base += val;
+    }
+
+    const out = {
+      updatedAt: Date.now(),
+      totals: {
+        // alias-safe: every reader will see the same number
+        eth: totals.eth,
+        ethereum: totals.eth,
+        pulse: totals.pulse,
+        pulsechain: totals.pulse,
+        pls: totals.pulse,
+        bsc: totals.bsc,
+        polygon: totals.polygon,
+        matic: totals.polygon,
+        pol: totals.polygon,
+        base: totals.base
+      }
+    };
+
+    const key = `${LS_CHAIN_TOTALS_KEY}:${sig}`;
+    localStorage.setItem(key, JSON.stringify(out));
+    try { localStorage.removeItem(LS_CHAIN_TOTALS_KEY); } catch { }
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: 'updated' }));
+  } catch { /* ignore */ }
+}
+
+function saveTotalsToLS(totalUsd, changePct24h = 0) {
+  try {
+    localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
+    localStorage.setItem(LS_PCT_KEY, String(Number(changePct24h) || 0));
+    localStorage.setItem(LS_UPDATED_KEY, String(Date.now()));
+  } catch { }
+}
+
+// ---------- formats ----------
+const fmtUSD = (n) => {
+  const amt = (Number(n) || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  return `USD $${amt}`;
+};
+const fmtAmt = (n, p = 6) => {
+  const x = Number(n) || 0;
+  return !isFinite(x)
+    ? '0'
+    : x >= 1
+      ? x.toLocaleString(undefined, { maximumFractionDigits: 4 })
+      : x.toPrecision(p);
+};
+
+// smart precision for token prices
+const fmtPriceUSD = (n) => {
+  const p = Number(n) || 0;
+  let d;
+  if (p >= 0.5) d = 2;
+  else if (p >= 0.1) d = 4;
+  else if (p >= 0.01) d = 5;
+  else if (p >= 0.001) d = 6;
+  else if (p >= 0.0001) d = 7;
+  else d = 8;
+  const s = p.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  return `USD $${s}`;
+};
+
+const keyFor = (t) =>
+  `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
+
+// ---- minimal junk filter ----
+function isJunkToken(t) {
+  if (isTokenBlacklisted && isTokenBlacklisted(t)) return true;
+  if (t.possible_spam === true || t.is_spam === true) return true;
+  const price = Number(t.priceUsd ?? t.price);
+  if (Number.isNaN(price) || price > 100000) return true;
+  const amount = Number(t.amount);
+  if (!isFinite(amount) || amount < 0) return true;
+  return false;
+}
+
+// ---------------- Loading shimmer + layout helpers ----------------
+const Styles = () => (
+  <style>{`
+    @keyframes kinkoShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .kinko-loading-cell { position: relative; overflow: hidden; height: 56px;
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0.04) 0%,
+        rgba(255,255,255,0.08) 25%,
+        rgba(255,255,255,0.14) 50%,
+        rgba(255,255,255,0.08) 75%,
+        rgba(255,255,255,0.04) 100%);
+      background-size: 200% 100%; animation: kinkoShimmer 5s linear infinite; border-radius: 6px; }
+    .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+
+    /* Light theme override: stronger contrast on white backgrounds */
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-cell {
+      background: linear-gradient(90deg,
+        #f3f3f3 0%,
+        #ececec 25%,
+        #e0e0e0 50%,
+        #ececec 75%,
+        #f3f3f3 100%);
+      background-size: 200% 100%;
+    }
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-label {
+      color: #555555;
+      text-shadow: none;
+    }
+
+    .kwp-scope{
+      --kw-price: 140px;
+      --kw-amount: 170px;
+      --kw-value: 140px;
+      --kw-action: 84px;
+      --kw-gap: 18px;
+    }
+
+    .kwp-row { padding: 8px 12px; border-bottom: 1px solid var(--bs-border-color);
+      border-radius: 8px; transition: background-color .15s ease, box-shadow .15s ease; }
+    .kwp-row:hover { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    :root:not([data-pc-theme='dark']) .kwp-row:hover { background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+
+    .kwp-left { 
+      display: grid;
+      grid-template-columns: 36px 12px minmax(0, 1fr);
+      align-items: center;
+      min-width: 0;
+    }
+    .kwp-logo { width: 36px; height: 36px; display: flex; align-items: center; }
+    .kwp-spacer { width: 12px; }
+
+    .kwp-name { min-width:0; }
+    .kwp-symbol { font-weight:600; white-space:nowrap; }
+    .kwp-sub { font-size:12px; color: var(--bs-secondary-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .kwp-name-inline{ font-weight:400; font-size:12px; color: var(--bs-secondary-color); }
+    [data-pc-theme='dark'] .kwp-name-inline{ color: rgba(255,255,255,.70); }

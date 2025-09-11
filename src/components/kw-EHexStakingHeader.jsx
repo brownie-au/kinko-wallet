@@ -156,9 +156,6 @@ export default function KwEHexStakingHeader({
                     {alignControlsRight && (
                         <div className="kw-right">
                             <span className="kw-updated fw-semibold me-2">Updated: {updatedLabel}</span>
-                            <Button size="sm" variant="outline-secondary" className="kw-refresh" onClick={onRefresh}>
-                                Refresh
-                            </Button>
                         </div>
                     )}
                 </div>

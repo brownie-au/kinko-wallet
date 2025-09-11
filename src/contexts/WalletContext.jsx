@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { buildPortfolioDetailed } from '../services/portfolioAggService';
+import { buildPortfolioDetailedFromCache as buildPortfolioDetailed } from '../services/portfolioAggService';
 
 const WalletContext = createContext();
 export const useWallets = () => useContext(WalletContext);

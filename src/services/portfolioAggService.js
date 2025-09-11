@@ -504,3 +504,48 @@ export async function buildPortfolioTotals(wallets, options) {
   const { totalUsd, tokens } = await buildPortfolioDetailed(wallets, options);
   return { totalUsd, tokens };
 }
+
+// New: cache-first builder that aggregates from central IDB cache (no network)
+export async function buildPortfolioDetailedFromCache(wallets, options = {}) {
+  const { DataClient } = await import('../data/dataClient');
+  const wantAll     = !options?.only || options.only === 'all';
+  const chains = wantAll ? ['eth','pulse','bsc','polygon','base'] : [String(options.only || 'eth')];
+  const addrs = (wallets || []).map((w) => (w.address || '').toLowerCase()).filter(Boolean);
+
+  const byKey = new Map();
+  const breakdown = new Map();
+
+  for (const a of addrs) {
+    for (const c of chains) {
+      // eslint-disable-next-line no-await-in-loop
+      const rows = (await DataClient.getBalances(c, a)) || [];
+      for (const r of rows) {
+        const row = toRow(r, a);
+        const k = tokenKey(row);
+        if (!byKey.has(k)) byKey.set(k, { ...row });
+        else {
+          const t = byKey.get(k);
+          t.amount += row.amount || 0;
+          if (!t.priceUsd && row.priceUsd) t.priceUsd = row.priceUsd;
+          t.valueUsd += row.valueUsd || (row.amount || 0) * (t.priceUsd || 0);
+        }
+        if (!breakdown.has(k)) breakdown.set(k, []);
+        breakdown.get(k).push({ wallet: row.wallet, amount: row.amount, valueUsd: row.valueUsd });
+      }
+    }
+  }
+
+  for (const k of breakdown.keys()) breakdown.get(k).sort((a, b) => (b.amount || 0) - (a.amount || 0));
+
+  const tokensAll = [...byKey.values()]
+    .filter((t) => !isSpamToken(t))
+    .filter((t) => !isTokenBlacklisted(t))
+    .map((t) => ({ ...t, valueUsd: t.valueUsd || (t.amount || 0) * (t.priceUsd || 0) }))
+    .sort((a, b) => (b.valueUsd || 0) - (a.valueUsd || 0));
+
+  const tokens = tokensAll.filter((t) => Number(t.valueUsd || 0) >= HIDE_USD_MIN);
+  const visibleBreakdown = new Map();
+  for (const t of tokens) { const k = tokenKey(t); visibleBreakdown.set(k, breakdown.get(k) || []); }
+  const totalUsd = tokens.reduce((s, t) => s + (t.valueUsd || 0), 0);
+  return { totalUsd, tokens, breakdown: visibleBreakdown };
+}
