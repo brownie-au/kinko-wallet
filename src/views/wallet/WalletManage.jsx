@@ -520,7 +520,13 @@ const WalletManage = () => {
       </Modal>
 
       {/* Modals */}
-      <PortfolioIdModal show={showUseId} onHide={() => setShowUseId(false)} />
+      <PortfolioIdModal
+        show={showUseId}
+        onHide={() => setShowUseId(false)}
+        onSuccess={() => {
+          try { setWallets(readAll()); } catch {}
+        }}
+      />
       <CreatePortfolioIdModal show={showCreateId} onHide={() => setShowCreateId(false)} />
     </div>
   );

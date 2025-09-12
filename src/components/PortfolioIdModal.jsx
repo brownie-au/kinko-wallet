@@ -13,7 +13,31 @@ export default function PortfolioIdModal({ show, onHide, onSuccess }) {
     try {
       setBusy(true); setErr('');
       const { wallets } = await loadPortfolio(id.trim().toUpperCase());
-      replaceWallets(wallets);
+
+      // Persist the full list (including hidden) for the Manage page
+      try {
+        const all = Array.isArray(wallets) ? wallets : [];
+        const normalized = all.map((w) => ({
+          address: String(w?.address || '').trim(),
+          name: String(w?.name || '').trim(),
+          hidden: !!w?.hidden
+        }));
+        localStorage.setItem('wallets', JSON.stringify(normalized));
+
+        // Update context with visible-only view for the rest of the app
+        const visible = normalized
+          .filter((w) => !w.hidden)
+          .map(({ address, name }) => ({ address, name }));
+        replaceWallets(visible);
+      } catch {
+        // Even if LS fails, still attempt to update context with whatever came back
+        try {
+          const visible = (Array.isArray(wallets) ? wallets : [])
+            .filter((w) => !w?.hidden)
+            .map(({ address, name }) => ({ address, name }));
+          replaceWallets(visible);
+        } catch {}
+      }
       onHide?.();
       onSuccess?.();
     } catch (e) {
