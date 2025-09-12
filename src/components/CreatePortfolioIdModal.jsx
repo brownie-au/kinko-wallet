@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
 import { createPortfolio, generatePortfolioId, getSyncId, setSyncId } from '../services/syncService.js';
-import { useWallets } from '../contexts/WalletContext.jsx';
+
+function readAllWalletsFromLS() {
+  try {
+    const raw = localStorage.getItem('wallets');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
-  const { wallets } = useWallets();
+  // Include hidden wallets for Portfolio ID operations
+  const wallets = readAllWalletsFromLS();
   const [id, setId] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -77,4 +85,3 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
     </Modal>
   );
 }
-

@@ -23,7 +23,8 @@ import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../.
 const SOFT = {
   success: { backgroundColor: 'rgba(25,135,84,0.12)', borderColor: 'rgba(25,135,84,0.35)', color: '#1e7e55' },
   warning: { backgroundColor: 'rgba(255,193,7,0.12)', borderColor: 'rgba(255,193,7,0.45)', color: '#996c00' },
-  danger: { backgroundColor: 'rgba(220,53,69,0.12)', borderColor: 'rgba(220,53,69,0.40)', color: '#9f1c28' }
+  danger: { backgroundColor: 'rgba(220,53,69,0.12)', borderColor: 'rgba(220,53,69,0.40)', color: '#9f1c28' },
+  info:   { backgroundColor: 'rgba(13,110,253,0.12)', borderColor: 'rgba(13,110,253,0.35)', color: '#0a58ca' } // blue
 };
 
 const ACTION_BTN_STYLE = {
@@ -34,7 +35,9 @@ const ACTION_BTN_STYLE = {
 };
 
 const WalletManage = () => {
-  const { wallets, addWallet: addWalletCtx, deleteWallet: deleteWalletCtx, replaceWallets } = useWallets();
+  const { replaceWallets } = useWallets();
+  // Local authoritative list for Manage page (includes hidden)
+  const [wallets, setWallets] = useState([]);
   const [_, setWalletsStateTick] = useState(0); // force re-render after edits if needed
   const [dragIndex, setDragIndex] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -103,7 +106,32 @@ const WalletManage = () => {
   const navigate = useNavigate();
   const { removeSource } = usePortfolioValue();
 
-  // Wallets come from context, which persists to localStorage for durability.
+  // ---- Local storage helpers (Manage uses full list incl. hidden) ----
+  const readAll = () => {
+    try {
+      const raw = localStorage.getItem('wallets');
+      const arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) return [];
+      return arr.map((w) => ({ address: (w?.address || '').trim(), name: (w?.name || '').trim(), hidden: !!w?.hidden }));
+    } catch { return []; }
+  };
+  const writeAll = (list) => {
+    try { localStorage.setItem('wallets', JSON.stringify(Array.isArray(list) ? list : [])); } catch {}
+    // keep app views in sync: update context with visible-only
+    try {
+      const visible = (Array.isArray(list) ? list : []).filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }));
+      replaceWallets(visible);
+    } catch {}
+  };
+
+  // Hydrate on mount
+  useEffect(() => {
+    const all = readAll();
+    setWallets(all);
+    // also ensure context sees visible-only
+    try { replaceWallets(all.filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }))); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Add
   const addWallet = (e) => {
@@ -111,13 +139,15 @@ const WalletManage = () => {
     if (!address) return;
 
     const normalized = address.trim().toLowerCase();
-    const exists = wallets.some((w) => (w.address || '').trim().toLowerCase() === normalized);
+    const exists = (wallets || []).some((w) => (w.address || '').trim().toLowerCase() === normalized);
     if (exists) {
       setError('This wallet address already exists.');
       return;
     }
 
-    addWalletCtx(address.trim(), name);
+    const next = [...(wallets || []), { address: address.trim(), name, hidden: false }];
+    setWallets(next);
+    writeAll(next);
     setAddress('');
     setName('');
     setError('');
@@ -125,8 +155,9 @@ const WalletManage = () => {
 
   // Delete (confirmed)
   const deleteWallet = (idx) => {
-    const toDelete = wallets[idx]?.address;
-    if (toDelete) deleteWalletCtx(toDelete);
+    const next = (wallets || []).filter((_, i) => i !== idx);
+    setWallets(next);
+    writeAll(next);
     setConfirmIdx(null);
   };
 
@@ -138,8 +169,9 @@ const WalletManage = () => {
 
   const saveEdit = (idx) => {
     const trimmed = (tempName || '').trim();
-    const next = wallets.map((w, i) => (i === idx ? { ...w, name: trimmed } : w));
-    replaceWallets(next);
+    const next = (wallets || []).map((w, i) => (i === idx ? { ...w, name: trimmed } : w));
+    setWallets(next);
+    writeAll(next);
     setEditingIndex(null);
     setTempName('');
     setWalletsStateTick((x) => x + 1);
@@ -170,10 +202,11 @@ const WalletManage = () => {
     setIsDragging(false);
     destroyDragGhost();
     if (from == null || from === idx) return;
-    const next = wallets.slice();
+    const next = (wallets || []).slice();
     const [m] = next.splice(from, 1);
     next.splice(idx, 0, m);
-    replaceWallets(next);
+    setWallets(next);
+    writeAll(next);
   };
   const onDragEnd = () => { setDragIndex(null); setIsDragging(false); destroyDragGhost(); };
 
@@ -196,6 +229,13 @@ const WalletManage = () => {
   const openWallet = (addr) => {
     if (!addr) return;
     navigate(`/wallet/${addr}`);
+  };
+
+  // Hide/Unhide
+  const toggleHidden = (idx) => {
+    const next = (wallets || []).map((w, i) => (i === idx ? { ...w, hidden: !w.hidden } : w));
+    setWallets(next);
+    writeAll(next);
   };
 
   return (
@@ -273,12 +313,14 @@ const WalletManage = () => {
               <ListGroup.Item>No wallets added yet.</ListGroup.Item>
             )}
 
-            {wallets.map((w, idx) => {
+            {(wallets || []).map((w, idx) => {
               const isEditing = editingIndex === idx;
+              const isHidden = !!w.hidden;
               return (
                 <ListGroup.Item
                   key={`${w.address}-${idx}`}
                   className="d-flex justify-content-between align-items-center"
+                  style={isHidden ? { opacity: 0.6 } : undefined}
                   onDragOver={onDragOver(idx)}
                   onDrop={onDrop(idx)}
                   onDragEnd={onDragEnd}
@@ -312,7 +354,10 @@ const WalletManage = () => {
                       <strong>{w.address}</strong>
                       {' - '}
                       {!isEditing ? (
-                        <span>{w.name || 'Unnamed'}</span>
+                        <>
+                          <span>{w.name || 'Unnamed'}</span>
+                          {isHidden && <span className="badge bg-secondary ms-2">Hidden</span>}
+                        </>
                       ) : (
                         <InputGroup size="sm" className="mt-1" style={{ maxWidth: 420 }}>
                           <Form.Control
@@ -334,12 +379,16 @@ const WalletManage = () => {
                       {/* Open (soft green) */}
                       <Button
                         as={Link}
-                        to={`/wallet/${w.address}`}
+                        to={isHidden ? '#' : `/wallet/${w.address}`}
                         variant="outline-success"
                         size="sm"
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.success }}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          if (isHidden) { e.preventDefault(); return; }
+                          e.stopPropagation();
+                        }}
+                        disabled={isHidden}
                       >
                         Open
                       </Button>
@@ -351,8 +400,20 @@ const WalletManage = () => {
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.warning }}
                         onClick={(e) => { e.stopPropagation(); startEdit(idx); }}
+                        disabled={isHidden}
                       >
                         Edit
+                      </Button>
+
+                      {/* Hide / Unhide (soft blue) */}
+                      <Button
+                        variant="outline-info"
+                        size="sm"
+                        className="me-2"
+                        style={{ ...ACTION_BTN_STYLE, ...SOFT.info }}
+                        onClick={(e) => { e.stopPropagation(); toggleHidden(idx); }}
+                      >
+                        {isHidden ? 'Unhide' : 'Hide'}
                       </Button>
 
                       {/* Delete (soft red) */}
@@ -361,6 +422,7 @@ const WalletManage = () => {
                         size="sm"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.danger }}
                         onClick={(e) => { e.stopPropagation(); setConfirmIdx(idx); }}
+                        disabled={isHidden}
                       >
                         Delete
                       </Button>

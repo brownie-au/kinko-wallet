@@ -3,7 +3,9 @@
 export function loadWallets() {
   try {
     const data = localStorage.getItem('wallets');
-    return data ? JSON.parse(data) : [];
+    const arr = data ? JSON.parse(data) : [];
+    const list = Array.isArray(arr) ? arr : [];
+    return list.filter((w) => !w?.hidden);
   } catch {
     return [];
   }

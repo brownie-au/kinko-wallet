@@ -11,16 +11,15 @@ export const WalletProvider = ({ children }) => {
     try {
       const raw = localStorage.getItem('wallets');
       const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
+      const list = Array.isArray(arr) ? arr : [];
+      return list.filter((w) => !w?.hidden).map(({ address, name }) => ({ address, name }));
     } catch {
       return [];
     }
   }); // [{ address, name }]
 
-  // Persist whenever wallets changes
-  useEffect(() => {
-    try { localStorage.setItem('wallets', JSON.stringify(wallets || [])); } catch {}
-  }, [wallets]);
+  // Do NOT blindly persist here; Manage page owns persistence including the hidden flag.
+  // Other pages should treat context as the visible subset only and must not overwrite LS.
 
   const addWallet = (address, name) => {
     const addr = String(address || '').trim();
