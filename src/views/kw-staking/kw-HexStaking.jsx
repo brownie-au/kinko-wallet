@@ -35,6 +35,23 @@ function writeHdsLS(obj) {
     try { localStorage.setItem(HDS_LS_KEY, JSON.stringify(obj)); } catch { }
 }
 
+/* HDS cached readers (prefer fresh, allow stale for instant paint) */
+function getFreshHdsFromLS() {
+    try {
+        const now = Date.now();
+        const obj = JSON.parse(localStorage.getItem(HDS_LS_KEY) || 'null');
+        if (obj?.data && now - (obj.ts || 0) < HDS_TTL_MS) return obj.data;
+    } catch { }
+    return null;
+}
+function getAnyHdsFromLS() {
+    try {
+        const obj = JSON.parse(localStorage.getItem(HDS_LS_KEY) || 'null');
+        return obj?.data || null;
+    } catch { }
+    return null;
+}
+
 /** Fetch HDS full dataset (PulseChain) with LS + memory caching */
 async function fetchHdsPls({ force = false } = {}) {
     const now = Date.now();
@@ -328,6 +345,70 @@ function ShimmerTable() {
     );
 }
 
+/* ---------------- Yield snapshot (mimic eHEX) ---------------- */
+const HEX_YIELD_SNAP_KEY = 'kw:hex:yieldSnap:v1';
+function readYieldSnap() {
+    try { return JSON.parse(localStorage.getItem(HEX_YIELD_SNAP_KEY) || 'null'); } catch { return null; }
+}
+function writeYieldSnap(snap) {
+    try { localStorage.setItem(HEX_YIELD_SNAP_KEY, JSON.stringify(snap)); } catch { }
+}
+
+/* ---------------- Instant yield/APY hydrate (HDS fresh|stale → snapshot) --------- */
+function instantYieldHydrate(initialRows, initialRowsEnded, initialCurrentDay, initialPayoutPerTShareDailyHex) {
+    try {
+        // Prefer cached HDS (fresh OR stale) for instant compute
+        const hdsRows = getFreshHdsFromLS() || getAnyHdsFromLS();
+        if (Array.isArray(hdsRows) && hdsRows.length) {
+            const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
+            const dayForCalc = Number(initialCurrentDay) > 0 ? initialCurrentDay : hdsDay;
+
+            const nextActive = {};
+            for (const r of (initialRows || [])) {
+                const yHex = computeStakeYieldHex(r, dayForCalc, pps);
+                const apy = computeApyPct(r, yHex, dayForCalc);
+                nextActive[r.id] = { yieldHex: yHex, apyPct: apy };
+            }
+
+            const nextEnded = {};
+            for (const r of (initialRowsEnded || [])) {
+                const until = Number(r.unlockedDay || 0) || dayForCalc;
+                const yHex = computeYieldHexWithUntil(r, pps, until);
+                const apy = computeApyPct(r, yHex, until);
+                nextEnded[r.id] = { yieldHex: yHex, apyPct: apy };
+            }
+
+            const payoutToday =
+                Number(initialPayoutPerTShareDailyHex) > 0
+                    ? Number(initialPayoutPerTShareDailyHex)
+                    : (pps?.[Number(dayForCalc) || 0] || 0);
+
+            return {
+                ppsByDayInstant: pps,
+                currentDayInstant: Number(dayForCalc) || 0,
+                payoutPerTShareDailyHexInstant: payoutToday || 0,
+                yieldMapInstant: nextActive,
+                yieldMapEndedInstant: nextEnded
+            };
+        }
+
+        // Fallback: last saved yield snapshot
+        const ys = readYieldSnap();
+        if (ys) {
+            return {
+                ppsByDayInstant: [],
+                currentDayInstant: Number(ys.currentDay || 0) || 0,
+                payoutPerTShareDailyHexInstant: Number(ys.payoutPerTShareDailyHex || 0) || 0,
+                yieldMapInstant: ys.yieldMap || {},
+                yieldMapEndedInstant: ys.yieldMapEnded || {}
+            };
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 /* ---------------- Component ---------------- */
 export default function KwHexStaking() {
     /* Wallets source (context first, LS fallback) */
@@ -377,7 +458,19 @@ export default function KwHexStaking() {
     const [payoutPerTShareDailyHex, setPayoutPerTShareDailyHex] = useState(() => initialCached?.payoutPerTShareDailyHex ?? null);
     const [updatedAt, setUpdatedAt] = useState(() => initialCached?.updatedAt || null);
 
-    // If we had cache, don't show loading skeleton. If not, show once.
+    // Instant hydrate (HDS fresh|stale or yield snap)
+    const instant = useMemo(
+        () => instantYieldHydrate(
+            initialCached?.rows || [],
+            initialCached?.rowsEnded || [],
+            initialCached?.currentDay ?? null,
+            initialCached?.payoutPerTShareDailyHex ?? null
+        ),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [pulseAddresses]
+    );
+
+    // If we had cache, don't show loading skeleton. If not, show once (but we'll paint immediately below).
     const [loading, setLoading] = useState(() => !initialCached);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [setupError, setSetupError] = useState('');
@@ -418,8 +511,7 @@ export default function KwHexStaking() {
         return () => window.removeEventListener('storage', onStorage);
     }, []);
 
-    // If we still have no price, do a one-shot DexScreener fetch,
-    // then write it back to the unified caches so EVERYTHING sees the same value.
+    // Price fetch (unchanged)
     useEffect(() => {
         let alive = true;
         if (Number.isFinite(hexPriceUsd) && hexPriceUsd > 0) return;
@@ -451,9 +543,18 @@ export default function KwHexStaking() {
     }, []); // run once
 
     /* HDS daily payouts + precomputed yields */
-    const [ppsByDay, setPpsByDay] = useState([]);
-    const [yieldMap, setYieldMap] = useState({});
-    const [yieldMapEnded, setYieldMapEnded] = useState({});
+    const [ppsByDay, setPpsByDay] = useState(() => instant?.ppsByDayInstant || []);
+    const [yieldMap, setYieldMap] = useState(() => instant?.yieldMapInstant || {});
+    const [yieldMapEnded, setYieldMapEnded] = useState(() => instant?.yieldMapEndedInstant || {});
+
+    // If instant hydrate had a better currentDay / payout, use them immediately
+    useEffect(() => {
+        if (instant?.currentDayInstant && !Number(currentDay)) setCurrentDay(instant.currentDayInstant);
+        if (instant?.payoutPerTShareDailyHexInstant && !Number(payoutPerTShareDailyHex)) {
+            setPayoutPerTShareDailyHex(instant.payoutPerTShareDailyHexInstant);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // once
 
     /* Sorting */
     const [sort, setSort] = useState({ key: 'daysRemaining', dir: 'asc' }); // default to Days Remaining ASC
@@ -531,7 +632,7 @@ export default function KwHexStaking() {
         return arr;
     }, [rowsEnded]);
 
-    /* ---------------- Background revalidation on mount (no blanking) ---------------- */
+    /* ---------------- Background revalidation on mount (paint first) ---------------- */
     const refreshNow = useCallback(async () => {
         if (!pulseAddresses.length) return;
         setIsRefreshing(true);
@@ -550,7 +651,7 @@ export default function KwHexStaking() {
             setPayoutPerTShareDailyHex(payload.payoutPerTShareDailyHex ?? null);
             setUpdatedAt(new Date());
 
-            // HDS assist (for day/payout if service missing) + yield maps + price fallback
+            // HDS assist + yield maps + price fallback
             try {
                 const hdsRows = await fetchHdsPls({ force: false });
                 const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
@@ -578,6 +679,15 @@ export default function KwHexStaking() {
                 }
                 setYieldMapEnded(nextEnded);
 
+                // Persist yield snapshot for instant first-paint next visit
+                writeYieldSnap({
+                    currentDay: Number(payload.currentDay ?? hdsDay ?? currentDay ?? 0) || 0,
+                    payoutPerTShareDailyHex: Number(payload.payoutPerTShareDailyHex ?? (pps?.[hdsDay] ?? 0)) || 0,
+                    yieldMap: nextActive,
+                    yieldMapEnded: nextEnded,
+                    updatedAt: Date.now()
+                });
+
                 try {
                     const fresh = await fetchDexscreenerHexPlsUsd();
                     writePriceCache(fresh);
@@ -601,19 +711,17 @@ export default function KwHexStaking() {
             setSetupError(e?.message || String(e));
         } finally {
             setIsRefreshing(false);
-            setLoading(false); // if it was the first load with no cache
+            setLoading(false); // ensure UI is visible even on first load
         }
-    }, [pulseAddresses, hexPriceUsd]);
+    }, [pulseAddresses, hexPriceUsd, currentDay]);
 
-    // Initial background revalidation
+    // Initial: paint immediately (with snapshot) then refresh
     useEffect(() => {
+        setLoading(false);
         if (!pulseAddresses.length) {
-            // No wallets: keep any cached view; don't blank the UI
             setProgress({ done: 0, total: 0 });
-            setLoading(false);
             return;
         }
-        // If we had cache, we already rendered — just refresh silently
         refreshNow();
     }, [pulseAddresses, refreshNow]);
 
@@ -636,12 +744,22 @@ export default function KwHexStaking() {
                     if (alive) { setYieldMap({}); setYieldMapEnded({}); }
                     return;
                 }
-                const hdsRows = await fetchHdsPls();
-                const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
+
+                // Prefer cached HDS (fresh OR stale) to avoid blank totals
+                const cachedHds = getFreshHdsFromLS() || getAnyHdsFromLS();
+                let pps = [], hdsDay = 0;
+                if (cachedHds) {
+                    const r = extractPpsAndDay(cachedHds);
+                    pps = r.pps; hdsDay = r.currentDay;
+                } else {
+                    const hdsRows = await fetchHdsPls();
+                    const r = extractPpsAndDay(hdsRows);
+                    pps = r.pps; hdsDay = r.currentDay;
+                }
                 if (!alive) return;
                 setPpsByDay(pps);
 
-                // 🔁 Backfill currentDay / daily payout for header tiles if the stake service didn't provide them
+                // Backfill header counters if missing
                 if (!(Number(currentDay) > 0) && Number(hdsDay) > 0) setCurrentDay(hdsDay);
                 if (!(Number(payoutPerTShareDailyHex) > 0) && Number(hdsDay) > 0) {
                     const todayPayout = Number(pps?.[hdsDay] || 0);
@@ -650,7 +768,7 @@ export default function KwHexStaking() {
 
                 // Fallback price from HDS if still missing
                 if (!(Number(hexPriceUsd) > 0)) {
-                    const px = extractHexPriceUsd(hdsRows);
+                    const px = extractHexPriceUsd(cachedHds || hdsMem.data || []);
                     if (px && alive) {
                         setHexPriceUsd(px);
                         setHexPriceUpdatedAt(Date.now());
@@ -658,7 +776,7 @@ export default function KwHexStaking() {
                     }
                 }
 
-                // ✅ Build per-stake yield/APY maps
+                // Build per-stake yield/APY maps
                 const dayForCalc = Number(currentDay) > 0 ? currentDay : hdsDay;
 
                 const nextActive = {};
@@ -676,17 +794,28 @@ export default function KwHexStaking() {
                     nextEnded[r.id] = { yieldHex: yHex, apyPct: apy };
                 }
 
-                if (alive) { setYieldMap(nextActive); setYieldMapEnded(nextEnded); }
+                if (alive) {
+                    setYieldMap(nextActive);
+                    setYieldMapEnded(nextEnded);
+                    // Persist snapshot so next visit paints instantly
+                    writeYieldSnap({
+                        currentDay: Number(dayForCalc) || 0,
+                        payoutPerTShareDailyHex: Number(pps?.[dayForCalc] ?? 0) || 0,
+                        yieldMap: nextActive,
+                        yieldMapEnded: nextEnded,
+                        updatedAt: Date.now()
+                    });
+                }
             } catch {
                 if (alive) { setYieldMap({}); setYieldMapEnded({}); }
             }
         })();
         return () => { alive = false; };
-    }, [rows, rowsEnded, currentDay]); // eslint-disable-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rows, rowsEnded, currentDay]);
 
     /* ---------------- Manual Refresh handler (wired to header) ---------------- */
     const handleRefresh = useCallback(() => {
-        // Manual refresh should bypass stale: we already always fetch fresh in refreshNow()
         refreshNow();
     }, [refreshNow]);
 
@@ -710,7 +839,6 @@ export default function KwHexStaking() {
 
     /* ---------------- Build gridRows with the exact values shown in the table --------- */
     const gridRows = useMemo(() => {
-        // Attach the already-computed yield/apy to each visible row so the header can total exactly
         return (filteredRows || []).map(r => ({
             ...r,
             yieldHex: Number(yieldMap[r.id]?.yieldHex || 0),
@@ -719,7 +847,6 @@ export default function KwHexStaking() {
     }, [filteredRows, yieldMap]);
 
     /* ---------------- Derived totals for header tiles (from EXACT visible rows) ------- */
-    // Prefer the service value, fall back to today's HDS payout
     const effectivePayoutPerTShare = useMemo(
         () => (Number(payoutPerTShareDailyHex) > 0
             ? Number(payoutPerTShareDailyHex)
@@ -732,13 +859,11 @@ export default function KwHexStaking() {
         [gridRows]
     );
 
-    // Yield (Day) = Σ(T-Shares) × PayoutPerTshare
     const yieldDayHex = useMemo(
         () => totalTSharesActive * (Number(effectivePayoutPerTShare) || 0),
         [totalTSharesActive, effectivePayoutPerTShare]
     );
 
-    // Total Yield (to-date) = Σ per-stake accrued yield (EXACTLY what the table shows)
     const totalYieldHex = useMemo(
         () => (gridRows || []).reduce((acc, r) => acc + (Number(r.yieldHex) || 0), 0),
         [gridRows]
@@ -751,7 +876,6 @@ export default function KwHexStaking() {
     /* ---------------- Publish page total to global PortfolioValueContext --------------- */
     const { setSource } = usePortfolioValue();
 
-    // Keep this as the full-page value (all active rows, not filtered) for portfolio aggregation.
     const hexStakingUsdTotal = useMemo(() => {
         if (!priceNow) return 0;
         return (rows || []).reduce((acc, r) => {
@@ -773,7 +897,6 @@ export default function KwHexStaking() {
                 {!loading && (
                     <Col xs={12} className="pt-0 mt-0">
                         <KwHexStakingHeaderContainer
-                            /* pass the exact rows you see in the table so tiles match */
                             stakes={gridRows}
                             gridRows={gridRows}
                             currentHexDay={currentDay ?? 0}
@@ -781,7 +904,6 @@ export default function KwHexStaking() {
                             updatedAt={updatedAt}
                             onRefresh={handleRefresh}
                             sticky
-                            /* keep title USD aligned with table USD */
                             hexPriceUsdOverride={Number.isFinite(hexPriceUsd) ? hexPriceUsd : undefined}
                             /* explicit yield overrides for the tiles (based on visible rows) */
                             yieldDayHexOverride={yieldDayHex}
