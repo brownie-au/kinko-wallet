@@ -8,7 +8,6 @@ import Offcanvas from 'react-bootstrap/Offcanvas';
 import Stack from 'react-bootstrap/Stack';
 
 // project-imports
-import ThemeModeLayout from './Layout/ThemeMode';
 import ThemeWidth from './Layout/ThemeWidth';
 import SimpleBarScroll from 'components/third-party/SimpleBar';
 import { ThemeDirection } from 'config';
@@ -73,10 +72,7 @@ export default function Customization() {
           </Stack>
         </Offcanvas.Header>
 
-        {/* Keep Theme Mode pinned at top */}
-        <Offcanvas.Body>
-          <ThemeModeLayout />
-        </Offcanvas.Body>
+        {/* Theme Mode moved to sidebar footer */}
 
         {/* Only Layout Width remains */}
         <SimpleBarScroll style={{ height: 'calc(100vh - 240px)' }}>

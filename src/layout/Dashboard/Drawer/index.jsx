@@ -1,3 +1,4 @@
+// src/layout/Dashboard/Drawer/index.jsx
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 
@@ -6,6 +7,7 @@ import Image from 'react-bootstrap/Image';
 
 // project-imports
 import DrawerContent from './DrawerContent';
+import SidebarThemeToggle from './SidebarThemeToggle';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 import { MenuOrientation } from 'config';
 import useConfig from 'hooks/useConfig';
@@ -37,9 +39,7 @@ export default function MainDrawer() {
         handlerDrawerOpen(false);
       }
     };
-    if (isMobile) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    if (isMobile) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMobile]);
 
@@ -93,10 +93,10 @@ export default function MainDrawer() {
   }, [menuOrientation, isLargeScreen, location.pathname]);
 
   return (
-    <nav id="pc-sidebar" className={`pc-sidebar ${drawerOpen ? 'pc-sidebar-hide mob-sidebar-active' : ''} `}>
+    <nav id="pc-sidebar" className={`pc-sidebar ${drawerOpen ? 'pc-sidebar-hide mob-sidebar-active' : ''}`}>
       <div className="navbar-wrapper">
         <div className="m-header">
-          {/* Make the brand a link back to the landing page */}
+          {/* Brand → home */}
           <Link to="/" className="b-brand text-primary" aria-label="Go to Kinko Wallet home">
             <Image
               src={sidebarTheme === true ? DarkLogo : logo}
@@ -107,10 +107,24 @@ export default function MainDrawer() {
           </Link>
         </div>
 
+        {/* Sidebar scroll/content area */}
         <div className={menuOrientation === MenuOrientation.TAB ? 'tab-container' : 'navbar-content'}>
-          <DrawerContent selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
+          {/* Menu tree */}
+          <div className="drawer-content">
+            <DrawerContent
+              selectedItems={selectedItems}
+              setSelectedItems={setSelectedItems}
+            />
+          </div>
+
+          {/* Footer: theme toggle (keep as last child of sidebar content) */}
+          <div className="kw-sidebar-footer" data-testid="kw-sidebar-footer">
+            <SidebarThemeToggle />
+          </div>
         </div>
+
       </div>
+
       {drawerOpen && isMobile && <div className="pc-menu-overlay" ref={overlayRef} />}
     </nav>
   );

@@ -1,27 +1,29 @@
 // src/index.jsx
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-// styles
+// global styles
 import './index.scss';
 
-// project-imports
-import App from './App';
-import { ConfigProvider } from 'contexts/ConfigContext';
-import { WalletProvider } from 'contexts/WalletContext.jsx'; // existing
-import { PrivacyProvider } from 'contexts/PrivacyContext.jsx'; // ⬅️ NEW
-
+// fonts
 import '@fontsource/open-sans/300.css';
 import '@fontsource/open-sans/400.css';
 import '@fontsource/open-sans/500.css';
 import '@fontsource/open-sans/600.css';
+
+// app + providers
+import App from './App';
+import { ConfigProvider } from 'contexts/ConfigContext';
+import { WalletProvider } from 'contexts/WalletContext.jsx';
+import { PrivacyProvider } from 'contexts/PrivacyContext.jsx';
 
 const container = document.getElementById('root');
 const root = createRoot(container);
 
 root.render(
   <ConfigProvider>
-    <PrivacyProvider>        {/* ⬅️ Wrap globally so any component can scrub */}
-      <WalletProvider>       {/* existing */}
+    <PrivacyProvider>
+      <WalletProvider>
         <App />
       </WalletProvider>
     </PrivacyProvider>
