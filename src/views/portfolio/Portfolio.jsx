@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Row, Col, Card, Form } from 'react-bootstrap';
 import { getPortfolioTotalUsd, /* read cache */ setPortfolioTotalUsd } from '../../utils/portfolioTotal';
 import { useWallets } from '../../contexts/WalletContext';
-import { buildPortfolioDetailedFromCache as buildPortfolioDetailed } from '../../services/portfolioAggService';
+// Use live aggregator for Ethereum (completeness), cache-first for others
+import { buildPortfolioDetailedFromCache, buildPortfolioDetailed as buildPortfolioLive } from '../../services/portfolioAggService';
 
 // NEW: 24h change service (batch via DexScreener for contract tokens)
 import { tokenKey as changeKey } from '../../services/change24hService';
@@ -647,7 +648,8 @@ export default function Portfolio() {
     }
 
     try {
-      const { totalUsd, tokens, breakdown } = await buildPortfolioDetailed(wallets, { only: mode, force });
+      const builder = (mode === 'eth') ? buildPortfolioLive : buildPortfolioDetailedFromCache;
+      const { totalUsd, tokens, breakdown } = await builder(wallets, { only: mode, force });
       if (reqIdRef.current !== myReq) return; // stale
       setTotalUsd(totalUsd);
       persistTotal(totalUsd);

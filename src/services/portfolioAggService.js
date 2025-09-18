@@ -38,6 +38,15 @@ const HIDE_USD_MIN = Number(
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
 
 function toRow(sr, wallet) {
+  // Normalize a variety of upstream shapes into the aggregator row.
+  // Important: Ethereum cache (ethereumService -> DataClient) uses `usd` and `priceUSD` keys.
+  //            Previously we ignored `usd`, causing 0-value rows and the ETH pill to look empty.
+  const price = Number(
+    sr.price ?? sr.priceUsd ?? sr.priceUSD ?? sr.usdPrice ?? sr.usd_price ?? 0
+  );
+  const value = Number(
+    sr.value ?? sr.valueUsd ?? sr.usd ?? sr.usd_value ?? 0
+  );
   return {
     chain: (sr.chain || '').toLowerCase(), // 'pulse' | 'eth' | 'base'
     wallet,                                 // wallet address
@@ -48,8 +57,8 @@ function toRow(sr, wallet) {
     description: sr.description || '',
     decimals: Number(sr.decimals ?? 18),
     amount: Number(sr.balance ?? sr.amount ?? 0),
-    priceUsd: Number(sr.price ?? sr.priceUsd ?? 0),
-    valueUsd: Number(sr.value ?? sr.valueUsd ?? 0)
+    priceUsd: price,
+    valueUsd: value
   };
 }
 
@@ -509,7 +518,10 @@ export async function buildPortfolioTotals(wallets, options) {
 export async function buildPortfolioDetailedFromCache(wallets, options = {}) {
   const { DataClient } = await import('../data/dataClient');
   const wantAll     = !options?.only || options.only === 'all';
-  const chains = wantAll ? ['eth','pulse','bsc','polygon','base'] : [String(options.only || 'eth')];
+  // Hybrid approach: when building the All view, prefer live aggregation for Ethereum
+  // and cache-first for the other chains. This guarantees parity with Wallet Detail
+  // and fixes missing-wallet breakdowns for ETH while keeping other chains fast.
+  const chains = wantAll ? ['pulse','bsc','polygon','base'] : [String(options.only || 'eth')];
   const addrs = (wallets || []).map((w) => (w.address || '').toLowerCase()).filter(Boolean);
 
   const byKey = new Map();
@@ -517,8 +529,18 @@ export async function buildPortfolioDetailedFromCache(wallets, options = {}) {
 
   for (const a of addrs) {
     for (const c of chains) {
+      // Try cache first, then (best-effort) refresh if empty.
+      // This keeps the Portfolio "chips" path consistent with WalletDetail, which uses live aggregation.
       // eslint-disable-next-line no-await-in-loop
-      const rows = (await DataClient.getBalances(c, a)) || [];
+      let rows = (await DataClient.getBalances(c, a)) || [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await DataClient.refreshBalances(c, a, { force: false });
+          // eslint-disable-next-line no-await-in-loop
+          rows = (await DataClient.getBalances(c, a)) || [];
+        } catch { /* non-fatal */ }
+      }
       for (const r of rows) {
         const row = toRow(r, a);
         const k = tokenKey(row);
@@ -532,6 +554,32 @@ export async function buildPortfolioDetailedFromCache(wallets, options = {}) {
         if (!breakdown.has(k)) breakdown.set(k, []);
         breakdown.get(k).push({ wallet: row.wallet, amount: row.amount, valueUsd: row.valueUsd });
       }
+    }
+  }
+
+  // If building All, merge in Ethereum via live aggregator to ensure completeness
+  if (wantAll) {
+    try {
+      const { tokens: ethTokens, breakdown: ethBd } = await buildPortfolioDetailed(wallets, { only: 'eth' });
+      for (const t of ethTokens || []) {
+        const k = tokenKey(t);
+        if (!byKey.has(k)) byKey.set(k, { ...t });
+        else {
+          const base = byKey.get(k);
+          base.amount = Number(base.amount || 0) + Number(t.amount || 0);
+          // Prefer non-zero price
+          if (!Number(base.priceUsd) && Number(t.priceUsd)) base.priceUsd = Number(t.priceUsd);
+          base.valueUsd = Number(base.valueUsd || 0) + Number(t.valueUsd || 0);
+        }
+        const rows = ethBd.get(k) || [];
+        if (rows.length) {
+          if (!breakdown.has(k)) breakdown.set(k, []);
+          const list = breakdown.get(k);
+          for (const r of rows) list.push({ wallet: r.wallet, amount: r.amount, valueUsd: r.valueUsd });
+        }
+      }
+    } catch (e) {
+      console.warn('[PortfolioAgg] ETH live merge failed:', e?.message || e);
     }
   }
 
