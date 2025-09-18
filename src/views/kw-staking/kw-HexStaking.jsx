@@ -715,6 +715,15 @@ export default function KwHexStaking() {
         }
     }, [pulseAddresses, hexPriceUsd, currentDay]);
 
+    // Guard: only refresh if last update >= 30 minutes ago.
+    const shouldRefresh = useCallback(() => {
+        if (!updatedAt) return true; // first paint or no prior update
+        const last = updatedAt instanceof Date ? updatedAt.getTime() : Number(updatedAt) || 0;
+        if (!last) return true;
+        const diffMinutes = (Date.now() - last) / (1000 * 60);
+        return diffMinutes >= 30;
+    }, [updatedAt]);
+
     // Initial: paint immediately (with snapshot) then refresh
     useEffect(() => {
         setLoading(false);
@@ -722,7 +731,19 @@ export default function KwHexStaking() {
             setProgress({ done: 0, total: 0 });
             return;
         }
-        refreshNow();
+        // First load in this tab OR an explicit reload -> force refresh once
+        const sessionKey = 'kw:staking:firstPaintDone:hex';
+        const nav = (performance && performance.getEntriesByType) ? performance.getEntriesByType('navigation')[0] : null;
+        const isReload = (nav?.type === 'reload') || (performance?.navigation?.type === 1);
+        const firstPaint = !sessionStorage.getItem(sessionKey);
+
+        if (isReload || firstPaint) {
+            try { sessionStorage.setItem(sessionKey, '1'); } catch { }
+            refreshNow();
+            return;
+        }
+        // Otherwise only refresh if 30+ minutes since last update
+        if (shouldRefresh()) refreshNow();
     }, [pulseAddresses, refreshNow]);
 
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
@@ -730,10 +751,10 @@ export default function KwHexStaking() {
         if (!pulseAddresses.length) return;
         const TEN_MIN = 10 * 60 * 1000;
         const id = setInterval(() => {
-            if (!isRefreshing) refreshNow();
+            if (!isRefreshing && shouldRefresh()) refreshNow();
         }, TEN_MIN);
         return () => clearInterval(id);
-    }, [pulseAddresses, isRefreshing, refreshNow]);
+    }, [pulseAddresses, isRefreshing, refreshNow, shouldRefresh]);
 
     /* ---------------- Compute yields via HDS when rows/currentDay change ---------------- */
     useEffect(() => {

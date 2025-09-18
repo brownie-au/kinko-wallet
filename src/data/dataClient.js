@@ -264,7 +264,8 @@ function explorerBase(chain) {
     case 'bsc': return 'https://bscscan.com';
     case 'polygon': return 'https://polygonscan.com';
     case 'base': return 'https://basescan.org';
-    case 'pulse': return 'https://otter.pulsechain.com';
+    // Update PulseChain explorer host per request
+    case 'pulse': return 'https://scan.9mm.pro';
     default: return '';
   }
 }

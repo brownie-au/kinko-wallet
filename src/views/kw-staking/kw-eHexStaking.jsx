@@ -697,10 +697,30 @@ export default function KwEhexStaking({ config }) {
         }
     }, [ethAddresses, cfg.hexAddress, cfg.chain, cfg.priceKey, hexPriceUsd]);
 
+    // Guard: only refresh if last update >= 30 minutes ago.
+    const shouldRefresh = useCallback(() => {
+        if (!updatedAt) return true; // first paint or no prior update
+        const last = updatedAt instanceof Date ? updatedAt.getTime() : Number(updatedAt) || 0;
+        if (!last) return true;
+        const diffMinutes = (Date.now() - last) / (1000 * 60);
+        return diffMinutes >= 30;
+    }, [updatedAt]);
+
     // Initial background revalidation (after cache-first paint)
     useEffect(() => {
         setLoading(false); // ensure header/table render immediately with snapshot/snap
-        refreshNow();
+        // First load in this tab OR an explicit reload -> force refresh once
+        const sessionKey = 'kw:staking:firstPaintDone:ehex';
+        const nav = (performance && performance.getEntriesByType) ? performance.getEntriesByType('navigation')[0] : null;
+        const isReload = (nav?.type === 'reload') || (performance?.navigation?.type === 1);
+        const firstPaint = !sessionStorage.getItem(sessionKey);
+
+        if (isReload || firstPaint) {
+            try { sessionStorage.setItem(sessionKey, '1'); } catch { }
+            refreshNow();
+            return;
+        }
+        if (shouldRefresh()) refreshNow();
     }, [refreshNow]);
 
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
@@ -708,10 +728,10 @@ export default function KwEhexStaking({ config }) {
         if (!ethAddresses.length) return;
         const TEN_MIN = 10 * 60 * 1000;
         const id = setInterval(() => {
-            if (!isRefreshing) refreshNow();
+            if (!isRefreshing && shouldRefresh()) refreshNow();
         }, TEN_MIN);
         return () => clearInterval(id);
-    }, [ethAddresses, isRefreshing, refreshNow]);
+    }, [ethAddresses, isRefreshing, refreshNow, shouldRefresh]);
 
     /* ---------------- Recompute Yield/APY whenever stakes or currentDay change ---------------- */
     useEffect(() => {

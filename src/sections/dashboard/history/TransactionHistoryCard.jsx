@@ -207,7 +207,8 @@ export default function TransactionHistoryCard() {
           bsc: 'https://bscscan.com',
           polygon: 'https://polygonscan.com',
           base: 'https://basescan.org',
-          pulse: 'https://scan.pulsechain.com'
+          // Update PulseChain explorer host per request
+          pulse: 'https://scan.9mm.pro'
         };
         const getKey = (c) => {
           try {
@@ -582,6 +583,13 @@ export default function TransactionHistoryCard() {
                 const type = r.type || (r.kind === 'erc20' ? 'erc20' : 'native');
                 const fromName = nameByAddr.get((r.from || '').toLowerCase()) || 'External';
                 const toName = nameByAddr.get((r.to || '').toLowerCase()) || 'External';
+
+                // Ensure PulseChain links use scan.9mm.pro even when cached
+                try {
+                  if (String(r.chain || '').toLowerCase() === 'pulse') {
+                    r.explorer = `https://scan.9mm.pro/tx/${r.hash}`;
+                  }
+                } catch {}
 
                 return (
                   <tr key={`${r.hash}-${i}`}>
