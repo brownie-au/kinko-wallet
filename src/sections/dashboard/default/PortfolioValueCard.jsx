@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Card } from 'react-bootstrap';
+import { Card, OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 import KwChainAllocationPie from '../../../components/kw-ChainAllocationPie';
 import { ChainBadge } from '../../../components/ChainUI';
@@ -12,8 +12,11 @@ import { useWallets } from '../../../contexts/WalletContext.jsx';
 
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
+const LS_PCT_META_KEY = 'kw:lastChangePct24hMeta';
 const LS_CHAIN_TOTALS_KEY = 'kw:chainTotalsUsd:v1';
 const chainTotalsKeyFor = (sig) => (sig ? `${LS_CHAIN_TOTALS_KEY}:${sig}` : LS_CHAIN_TOTALS_KEY);
+const APPROX_TOOLTIP = 'Approximate based on market 24h change.';
+const COUNTDOWN_TOOLTIP = 'Full 24h change available after your first 24h of usage.';
 
 // optional LS fallbacks some staking views may write
 const LS_HEX_STAKE_SUMMARY = 'kw:staking:hex:summary';
@@ -75,6 +78,24 @@ function readChainTotalsCache(sig) {
   }
 }
 
+function readChangeMeta() {
+  try {
+    const raw = localStorage.getItem(LS_PCT_META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatCountdown(ms) {
+  const minutes = Math.ceil(Math.max(0, Number(ms) || 0) / 60000);
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const hh = hours.toString().padStart(2, '0');
+  const mm = mins.toString().padStart(2, '0');
+  return `${hh}h ${mm}m`;
+}
+
 // robust numeric extraction for staking context values
 function toUsd(value) {
   if (value == null) return 0;
@@ -115,7 +136,8 @@ export default function PortfolioValueCard() {
     .join(',');
 
   const [totalUsd, setTotalUsd] = useState(0);
-  const [pct24h, setPct24h] = useState(0);
+  const [pct24h, setPct24h] = useState(null);
+  const [changeMeta, setChangeMeta] = useState(() => readChangeMeta());
 
   const [{ eth, pulse, bsc, polygon, base }, setChainTotals] = useState({ eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 });
   const lastTsRef = useRef(0);
@@ -158,10 +180,24 @@ export default function PortfolioValueCard() {
   useEffect(() => {
     const pullTotals = () => {
       try {
-        setTotalUsd(Number(localStorage.getItem(LS_TOTAL_KEY) || 0) || 0);
-        setPct24h(Number(localStorage.getItem(LS_PCT_KEY) || 0) || 0);
+        const total = Number(localStorage.getItem(LS_TOTAL_KEY) || 0) || 0;
+        setTotalUsd(total);
+        const meta = readChangeMeta();
+        setChangeMeta(meta);
+        const rawPct = localStorage.getItem(LS_PCT_KEY);
+        let nextPct = null;
+        const metaPct = meta?.pct;
+        if (typeof metaPct === 'number' && Number.isFinite(metaPct)) {
+          nextPct = metaPct;
+        } else if (rawPct != null) {
+          const parsed = Number(rawPct);
+          if (Number.isFinite(parsed)) nextPct = parsed;
+        }
+        setPct24h(nextPct);
       } catch {
-        setTotalUsd(0); setPct24h(0);
+        setTotalUsd(0);
+        setChangeMeta(null);
+        setPct24h(null);
       }
     };
     const pullChains = () => {
@@ -179,7 +215,7 @@ export default function PortfolioValueCard() {
     pullChains();
 
     const onStorage = (e) => {
-      if (e.key === LS_TOTAL_KEY || e.key === LS_PCT_KEY) pullTotals();
+      if (e.key === LS_TOTAL_KEY || e.key === LS_PCT_KEY || e.key === LS_PCT_META_KEY) pullTotals();
       if (e.key === chainTotalsKeyFor(walletsSig)) pullChains(); // per-wallet only
     };
     window.addEventListener('storage', onStorage);
@@ -254,7 +290,48 @@ export default function PortfolioValueCard() {
   const fmtUsd0 = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
     .format(Number(n || 0));
 
-  const up = Number(pct24h) >= 0;
+  const meta = changeMeta || {};
+  const pctFromMeta = typeof meta.pct === 'number' && Number.isFinite(meta.pct) ? meta.pct : null;
+  const pctValue = pctFromMeta ?? (typeof pct24h === 'number' && Number.isFinite(pct24h) ? pct24h : null);
+  const approx = Boolean(meta.approx);
+  const mode = meta.mode || (pctValue != null ? 'api' : 'unknown');
+
+  let changeClass = 'text-muted mb-3';
+  let changeLabel = '0.00% (24h)';
+  let changeTooltip;
+
+  if (mode === 'countdown' && typeof meta.remainingMs === 'number') {
+    changeClass = 'text-muted mb-3';
+    changeLabel = `Collecting 24h history — ${formatCountdown(meta.remainingMs)} remaining`;
+    changeTooltip = COUNTDOWN_TOOLTIP;
+  } else if (pctValue != null) {
+    const isZero = Math.abs(pctValue) < 0.005;
+    const prefix = approx ? '~ ' : '';
+    const formatted = Math.abs(pctValue).toFixed(2);
+    if (isZero) {
+      changeLabel = `${prefix}${formatted}% (24h)`;
+      changeClass = 'text-muted mb-3';
+    } else if (pctValue > 0) {
+      changeLabel = `${prefix}▲ ${formatted}% (24h)`;
+      changeClass = 'text-success mb-3';
+    } else {
+      changeLabel = `${prefix}▼ ${formatted}% (24h)`;
+      changeClass = 'text-danger mb-3';
+    }
+    if (approx) changeTooltip = APPROX_TOOLTIP;
+  }
+
+  const changeDiv = (
+    <div className={changeClass} style={changeTooltip ? { cursor: 'help' } : undefined}>
+      {changeLabel}
+    </div>
+  );
+
+  const changeNode = changeTooltip ? (
+    <OverlayTrigger placement="top" overlay={<Tooltip>{changeTooltip}</Tooltip>}>
+      {changeDiv}
+    </OverlayTrigger>
+  ) : changeDiv;
 
   return (
     <Card className="h-100">
@@ -263,9 +340,7 @@ export default function PortfolioValueCard() {
         <div style={{ minWidth: 336, flex: '1 1 336px', paddingRight: 36 }}>
           <div className="text-muted mb-1">Total Portfolio Value</div>
           <div className="h3 mb-1 kw-color-total">USD ${formattedTotal}</div>
-          <div className={up ? 'text-success mb-3' : 'text-danger mb-3'}>
-            {up ? '▲' : '▼'} {Math.abs(Number(pct24h) || 0).toFixed(2)}% (24h)
-          </div>
+          {changeNode}
 
           <div style={{ display: 'grid', gap: 8 }}>
             {chainList.map((row) => (

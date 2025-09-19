@@ -7,6 +7,20 @@
   }
 }
 
+// Align table edges with the rounded surface standard
+.table {
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+
+.table-responsive {
+  border-radius: var(--bs-border-radius);
+}
+
+.table-responsive > .table {
+  border-radius: inherit;
+}
+
 .landing-background-image {
   background-image: url('assets/images/landing/img-title-line.svg');
 }

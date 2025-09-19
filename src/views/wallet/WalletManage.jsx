@@ -494,6 +494,9 @@ const WalletManage = () => {
               try { localStorage.removeItem('kw:lastTopTokensAt'); } catch {}
               try { localStorage.removeItem('kw:lastTotalUsd'); } catch {}
               try { localStorage.removeItem('kw:lastChangePct24h'); } catch {}
+              try { localStorage.removeItem('kw:lastChangePct24hMeta'); } catch {}
+              try { localStorage.removeItem('kw:portfolio:firstSeenAt'); } catch {}
+              try { localStorage.removeItem('kw:portfolio:snap:24h'); } catch {}
               try { localStorage.removeItem('kw:lastTotalUpdatedAt'); } catch {}
               // Remove all per-wallet chain totals (legacy and namespaced)
               try {

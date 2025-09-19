@@ -34,6 +34,10 @@ import { usePortfolioValue, PORTFOLIO_SOURCE } from '../../contexts/PortfolioVal
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
 const LS_PCT_KEY = 'kw:lastChangePct24h';
 const LS_UPDATED_KEY = 'kw:lastTotalUpdatedAt';
+const LS_PCT_META_KEY = 'kw:lastChangePct24hMeta';
+const LS_FIRST_SEEN_KEY = 'kw:portfolio:firstSeenAt';
+const LS_SNAP_24H_KEY = 'kw:portfolio:snap:24h';
+const DAY_MS = 24 * 60 * 60 * 1000;
 const TOPN_DASHBOARD = 6;
 
 // === per-chain totals cache (used by Dashboard + here for instant chips) ===
@@ -141,12 +145,141 @@ function publishChainTotalsForWalletSig(list = [], sig) {
   } catch { /* ignore */ }
 }
 
-function saveTotalsToLS(totalUsd, changePct24h = 0) {
+function saveTotalsToLS(totalUsd, changePct24h, meta = null) {
   try {
     localStorage.setItem(LS_TOTAL_KEY, String(Number(totalUsd) || 0));
-    localStorage.setItem(LS_PCT_KEY, String(Number(changePct24h) || 0));
+    if (Number.isFinite(changePct24h)) {
+      localStorage.setItem(LS_PCT_KEY, String(changePct24h));
+    } else {
+      localStorage.removeItem(LS_PCT_KEY);
+    }
     localStorage.setItem(LS_UPDATED_KEY, String(Date.now()));
+    if (meta) localStorage.setItem(LS_PCT_META_KEY, JSON.stringify(meta));
+    else localStorage.removeItem(LS_PCT_META_KEY);
   } catch { }
+}
+
+function readJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { }
+}
+
+function ensureFirstSeen(nowMs) {
+  try {
+    const existing = localStorage.getItem(LS_FIRST_SEEN_KEY);
+    if (existing) {
+      const ms = Date.parse(existing);
+      if (!Number.isNaN(ms)) return { iso: existing, ms };
+    }
+  } catch { }
+  const iso = new Date(nowMs).toISOString();
+  try { localStorage.setItem(LS_FIRST_SEEN_KEY, iso); } catch { }
+  return { iso, ms: nowMs };
+}
+
+function readSnapshot() {
+  const snap = readJson(LS_SNAP_24H_KEY);
+  if (!snap || typeof snap.totalUsd !== 'number' || !snap.ts) return null;
+  const ms = Date.parse(snap.ts);
+  if (Number.isNaN(ms)) return null;
+  return { ...snap, ms };
+}
+
+function writeSnapshot(totalUsd, nowMs) {
+  const payload = { ts: new Date(nowMs).toISOString(), totalUsd: Number(totalUsd) || 0 };
+  writeJson(LS_SNAP_24H_KEY, payload);
+  return { ...payload, ms: nowMs };
+}
+
+function computePortfolioChangeMeta(tokens = [], totalUsd = 0) {
+  const nowMs = Date.now();
+  const total = Number(totalUsd) || 0;
+  const firstSeen = ensureFirstSeen(nowMs);
+  let snapshot = readSnapshot();
+  if (!snapshot) snapshot = writeSnapshot(total, nowMs);
+
+  let withData = 0;
+  let considered = 0;
+  let sumThen = 0;
+  let missing = 0;
+
+  for (const token of tokens || []) {
+    const amount = Number(token?.amount ?? token?.balance ?? 0) || 0;
+    const price = Number(token?.priceUsd ?? token?.price ?? 0) || 0;
+    const value = Number(token?.valueUsd ?? token?.usd ?? (amount * price)) || 0;
+    if (!(value > 0)) continue;
+    considered += 1;
+    const pct = getChangePct(token);
+    if (typeof pct === 'number' && Number.isFinite(pct)) {
+      const denom = 1 + (pct / 100);
+      if (denom > 1e-6) {
+        const thenVal = value / denom;
+        if (Number.isFinite(thenVal)) {
+          withData += 1;
+          sumThen += thenVal;
+          continue;
+        }
+      }
+    }
+    missing += value;
+  }
+
+  if (withData > 0) {
+    const approx = missing > 0.01;
+    const thenTotal = sumThen + missing;
+    const pct = thenTotal > 0 ? ((total - thenTotal) / thenTotal) * 100 : 0;
+    snapshot = writeSnapshot(total, nowMs);
+    return {
+      mode: 'api',
+      pct,
+      approx,
+      missingUsd: missing,
+      tokensWithChange: withData,
+      tokensConsidered: considered,
+      updatedAt: new Date(nowMs).toISOString(),
+      snapshotTs: snapshot.ts
+    };
+  }
+
+  if (snapshot.totalUsd > 0 && nowMs - snapshot.ms >= DAY_MS) {
+    const pct = ((total - snapshot.totalUsd) / snapshot.totalUsd) * 100;
+    snapshot = writeSnapshot(total, nowMs);
+    return {
+      mode: 'snapshot',
+      pct,
+      approx: false,
+      updatedAt: new Date(nowMs).toISOString(),
+      snapshotTs: snapshot.ts
+    };
+  }
+
+  const remainingMs = Math.max(firstSeen.ms + DAY_MS - nowMs, 0);
+  if (!snapshot || !snapshot.ts) snapshot = writeSnapshot(total, nowMs);
+  return {
+    mode: 'countdown',
+    pct: null,
+    approx: false,
+    remainingMs,
+    firstSeenAt: firstSeen.iso,
+    updatedAt: new Date(nowMs).toISOString(),
+    snapshotTs: snapshot.ts
+  };
+}
+
+function applyChangeSnapshot(tokens, totalUsd) {
+  const meta = computePortfolioChangeMeta(tokens, totalUsd);
+  saveTotalsToLS(totalUsd, meta?.pct ?? null, meta);
+  return meta;
 }
 
 // ---------- formats ----------
@@ -588,6 +721,7 @@ export default function Portfolio() {
       persistTotal(memHit.totalUsd);
       setTokens(memHit.tokens);
       setBreakdown(new Map(memHit.breakdown));
+      applyChangeSnapshot(memHit.tokens || [], memHit.totalUsd);
       maybeExpandFromFocus(memHit.tokens);
       if (mode === 'all') publishChainTotalsForWalletSig(memHit.tokens, walletsSig);
       setBooting(false);
@@ -603,6 +737,7 @@ export default function Portfolio() {
       persistTotal(ls.totalUsd);
       setTokens(ls.tokens);
       setBreakdown(new Map(ls.breakdown || []));
+      applyChangeSnapshot(ls.tokens || [], ls.totalUsd);
       maybeExpandFromFocus(ls.tokens);
       if (mode === 'all') publishChainTotalsForWalletSig(ls.tokens, walletsSig);
       setBooting(false);
@@ -639,6 +774,7 @@ export default function Portfolio() {
       persistTotal(st);
       setTokens(stale.tokens || []);
       setBreakdown(new Map(stale.breakdown || []));
+      applyChangeSnapshot(stale.tokens || [], st);
       if (mode === 'all') publishChainTotalsForWalletSig(stale.tokens || [], walletsSig);
       setBooting(false);
       setRefreshing(true);
@@ -683,11 +819,11 @@ export default function Portfolio() {
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
       maybeExpandFromFocus(tokensWithValue);
+      applyChangeSnapshot(tokensWithValue, totalUsd);
 
       const payload = { totalUsd, tokens: tokensWithValue, breakdown: Array.from(breakdown.entries()), updatedAt: now() };
       memCacheRef.current.set(memKey, payload);
       writeCache(mode, walletsSig, payload);
-      saveTotalsToLS(totalUsd, 0);
 
       if (mode === 'all') publishChainTotalsForWalletSig(tokensWithValue, walletsSig);
 
