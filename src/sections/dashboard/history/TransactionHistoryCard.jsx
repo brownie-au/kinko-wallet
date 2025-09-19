@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Form, Button } from 'react-bootstrap';
 
 import { useWallets } from '../../../contexts/WalletContext.jsx';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 import useTxHistory from '../../../hooks/useTxHistory.js';
 import { ChainSelector, ChainBadge } from '../../../components/ChainUI';
 import TokenLogo from '../../../components/TokenLogo';
@@ -71,6 +72,7 @@ export default function TransactionHistoryCard() {
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
   const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
   const wallets = (fromCtx.length ? fromCtx : fromLS);
+  const { registerTask } = useRefresh();
 
   const [chain, setChain] = useState('all');
   const [q, setQ] = useState('');
@@ -92,6 +94,7 @@ export default function TransactionHistoryCard() {
   const pollRef = useRef(null);
   const activeKeyRef = useRef('');
   const [deltaBump, setDeltaBump] = useState(0);
+  const refreshTaskRef = useRef(async () => {});
 
   // --- NEW: ticking clock for live "Last sync" ---
   const [now, setNow] = useState(Date.now());
@@ -110,6 +113,19 @@ export default function TransactionHistoryCard() {
     if (walletFilter === 'all') return list;
     return list.filter((w) => (w.address || '').toLowerCase() === String(walletFilter || '').toLowerCase());
   }, [wallets, walletFilter]);
+
+  refreshTaskRef.current = async () => {
+    setDeltaBump((n) => n + 1);
+  };
+
+  useEffect(() => {
+    const unregister = registerTask('transaction-history', async () => {
+      if (typeof refreshTaskRef.current === 'function') {
+        await refreshTaskRef.current();
+      }
+    });
+    return unregister;
+  }, [registerTask]);
 
   // First paint from cache
   useEffect(() => {
@@ -669,3 +685,6 @@ export default function TransactionHistoryCard() {
     </Card>
   );
 }
+
+
+

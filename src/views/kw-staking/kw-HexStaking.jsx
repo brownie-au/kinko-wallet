@@ -5,6 +5,7 @@ import { useWallets } from '../../contexts/WalletContext';
 import { loadWallets } from '../../utils/walletStorage';
 import { readHexStakesCache, refreshHexStakesAndCache } from '../../services/kw-hexPulseService';
 import { usePortfolioValue, HEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 
 import KwHexStakingHeaderContainer from '../../components/kw-HexStakingHeaderContainer.jsx';
 import WalletFilterChips from '../../components/WalletFilterChips.jsx';
@@ -411,6 +412,7 @@ function instantYieldHydrate(initialRows, initialRowsEnded, initialCurrentDay, i
 
 /* ---------------- Component ---------------- */
 export default function KwHexStaking() {
+    const { registerTask } = useRefresh();
     /* Wallets source (context first, LS fallback) */
     const ctx = (typeof useWallets === 'function') ? useWallets() : null;
     const ctxWallets = ctx?.wallets || [];
@@ -745,6 +747,13 @@ export default function KwHexStaking() {
         // Otherwise only refresh if 30+ minutes since last update
         if (shouldRefresh()) refreshNow();
     }, [pulseAddresses, refreshNow]);
+
+    useEffect(() => {
+        const unregister = registerTask('staking:hex', async () => {
+            await refreshNow();
+        });
+        return unregister;
+    }, [refreshNow, registerTask]);
 
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
     useEffect(() => {
@@ -1176,3 +1185,5 @@ export default function KwHexStaking() {
         </div>
     );
 }
+
+

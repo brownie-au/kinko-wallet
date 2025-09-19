@@ -8,6 +8,7 @@ import Image from 'react-bootstrap/Image';
 // project-imports
 import DrawerContent from './DrawerContent';
 import SidebarThemeToggle from './SidebarThemeToggle';
+import KwUniversalRefreshButton from 'components/kw-UniversalRefreshButton.jsx';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 import { MenuOrientation } from 'config';
 import useConfig from 'hooks/useConfig';
@@ -96,7 +97,7 @@ export default function MainDrawer() {
     <nav id="pc-sidebar" className={`pc-sidebar ${drawerOpen ? 'pc-sidebar-hide mob-sidebar-active' : ''}`}>
       <div className="navbar-wrapper">
         <div className="m-header">
-          {/* Brand → home */}
+          {/* Brand - home */}
           <Link to="/" className="b-brand text-primary" aria-label="Go to Kinko Wallet home">
             <Image
               src={sidebarTheme === true ? DarkLogo : logo}
@@ -119,7 +120,10 @@ export default function MainDrawer() {
 
           {/* Footer: theme toggle (keep as last child of sidebar content) */}
           <div className="kw-sidebar-footer" data-testid="kw-sidebar-footer">
-            <SidebarThemeToggle />
+            <div className="d-flex align-items-center gap-3">
+              <SidebarThemeToggle />
+              <KwUniversalRefreshButton />
+            </div>
           </div>
         </div>
 
@@ -129,3 +133,4 @@ export default function MainDrawer() {
     </nav>
   );
 }
+

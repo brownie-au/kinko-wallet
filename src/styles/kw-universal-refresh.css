@@ -1,0 +1,163 @@
+/* Kinko Wallet — Universal Refresh
+   - Dark theme: inherit colour (matches moon/monitor)
+   - Light theme: fixed #A9B7D0
+   - Animations: spinning glyph + sweeping ring while refreshing
+*/
+
+.kw-universal-refresh {
+  --kw-size: 36px;
+  --kw-radius: 8px;
+
+  /* fed from component for the conic ring */
+  --kw-refresh-progress: 0;
+  /* degrees 0–360 */
+  --kw-refresh-ring-opacity: 0;
+  /* 0/1 */
+
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: var(--kw-size);
+  height: var(--kw-size);
+  padding: 6px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--kw-radius);
+  cursor: pointer;
+  line-height: 1;
+  position: relative;
+  isolation: isolate;
+
+  /* DARK THEME DEFAULT: match neighbours */
+  color: inherit;
+  opacity: 0.72;
+
+  transition:
+    background-color .15s ease,
+    opacity .15s ease,
+    transform .15s ease;
+}
+
+/* Hover/active (dark theme) */
+.kw-universal-refresh:hover:not(:disabled) {
+  opacity: 0.95;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.kw-universal-refresh:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Disabled */
+.kw-universal-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* LIGHT THEME OVERRIDES */
+body[data-pc-theme='light'] .kw-universal-refresh {
+  color: #A9B7D0;
+  /* requested */
+  opacity: 0.95;
+  /* matches other icons in light */
+}
+
+body[data-pc-theme='light'] .kw-universal-refresh:hover:not(:disabled) {
+  background-color: rgba(169, 183, 208, 0.12);
+  /* gentle tint with same hue */
+}
+
+body[data-pc-theme='light'] .kw-universal-refresh:disabled {
+  opacity: 0.55;
+}
+
+/* ---- Icon glyph (Tabler CSS icon: .ti.ti-refresh) ---- */
+.kw-universal-refresh__icon i {
+  font-size: 20px;
+  /* match moon/gear/monitor */
+  display: inline-block;
+  vertical-align: middle;
+  transition: transform .2s ease;
+  color: inherit;
+  /* follows theme rules above */
+}
+
+/* Spin while refreshing */
+.kw-universal-refresh.is-refreshing .kw-universal-refresh__icon i {
+  animation: kw-refresh-spin .9s linear infinite;
+}
+
+/* Reduced motion: no spin */
+@media (prefers-reduced-motion: reduce) {
+  .kw-universal-refresh.is-refreshing .kw-universal-refresh__icon i {
+    animation: none;
+  }
+}
+
+@keyframes kw-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Subtle click pulse (uses currentColor) ---- */
+.kw-universal-refresh__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--kw-radius);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(.95);
+  transition: opacity .25s ease, transform .25s ease;
+}
+
+.kw-universal-refresh__pulse.is-active {
+  opacity: .16;
+  transform: scale(1.05);
+  background: radial-gradient(closest-side, currentColor 0%, transparent 75%);
+}
+
+/* ---- Ultra-thin progress ring (conic) ---- */
+.kw-universal-refresh::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: var(--kw-refresh-ring-opacity, 0);
+  transition: opacity .15s ease;
+
+  /* default: show exact progress fed by the component (degrees) */
+  background: conic-gradient(currentColor calc(var(--kw-refresh-progress, 0) * 1deg), transparent 0);
+  -webkit-mask:
+    radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0) content-box,
+    linear-gradient(#000, #000);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 2px;
+  /* ring thickness */
+  box-sizing: border-box;
+}
+
+/* While refreshing, if the app hasn't set progress yet, add a gentle sweeping arc */
+.kw-universal-refresh.is-refreshing::after {
+  opacity: 1;
+  /* a 90deg arc that sweeps continuously */
+  background: conic-gradient(currentColor 0 90deg, transparent 90deg);
+  animation: kw-refresh-ring-sweep 1.2s linear infinite;
+}
+
+/* Reduced motion: keep ring static */
+@media (prefers-reduced-motion: reduce) {
+  .kw-universal-refresh.is-refreshing::after {
+    animation: none;
+  }
+}
+
+@keyframes kw-refresh-ring-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,6 +1,7 @@
 // src/sections/dashboard/default/FearGreedCard.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, Spinner } from 'react-bootstrap';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 
 // ---------- helpers ----------
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -10,7 +11,7 @@ const labelFor = (v) =>
   v <= 55 ? 'Neutral' :
   v <= 74 ? 'Greed' : 'Extreme Greed';
 const valueToColor = (v) => {
-  const hue = (clamp(v, 0, 100) * 120) / 100; // 0=red → 120=green
+  const hue = (clamp(v, 0, 100) * 120) / 100; // 0=red - 120=green
   return `hsl(${hue}deg 70% 45%)`;
 };
 const nearestByDays = (items, days) => {
@@ -27,9 +28,12 @@ const nearestByDays = (items, days) => {
 export default function FearGreedCard() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
+  const fetchTaskRef = useRef(async () => {});
+  const { registerTask } = useRefresh();
 
   useEffect(() => {
     let cancelled = false;
+
     const load = async () => {
       try {
         const r = await fetch('https://api.alternative.me/fng/?limit=400&format=json', { cache: 'no-store' });
@@ -45,9 +49,24 @@ export default function FearGreedCard() {
         if (!cancelled) setErr(String(e?.message || e));
       }
     };
+
+    fetchTaskRef.current = async () => {
+      cancelled = false;
+      await load();
+    };
+
     load();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const unregister = registerTask('market:fear-greed', async () => {
+      if (typeof fetchTaskRef.current === 'function') {
+        await fetchTaskRef.current();
+      }
+    });
+    return unregister;
+  }, [registerTask]);
 
   if (!rows && !err) {
     return (
@@ -64,7 +83,6 @@ export default function FearGreedCard() {
     );
   }
 
-  // points
   const now = rows[0];
   const prevClose = rows[1] || now;
   const weekAgo = nearestByDays(rows, 7);
@@ -178,3 +196,5 @@ function MiniPill({ value, caption }) {
     </div>
   );
 }
+
+

@@ -16,16 +16,20 @@ import App from './App';
 import { ConfigProvider } from 'contexts/ConfigContext';
 import { WalletProvider } from 'contexts/WalletContext.jsx';
 import { PrivacyProvider } from 'contexts/PrivacyContext.jsx';
+import { RefreshProvider } from '@/contexts/RefreshContext.jsx';
 
 const container = document.getElementById('root');
 const root = createRoot(container);
 
 root.render(
-  <ConfigProvider>
-    <PrivacyProvider>
-      <WalletProvider>
-        <App />
-      </WalletProvider>
-    </PrivacyProvider>
-  </ConfigProvider>
+  <RefreshProvider>
+    <ConfigProvider>
+      <PrivacyProvider>
+        <WalletProvider>
+          <App />
+        </WalletProvider>
+      </PrivacyProvider>
+    </ConfigProvider>
+  </RefreshProvider>
 );
+

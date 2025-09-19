@@ -36,6 +36,7 @@ import {
   getWalletNetChip,
   setWalletNetChip
 } from '../../utils/uiState';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 
 // ----------------------------- utils -----------------------------
 const fmtUSD = (n) => {
@@ -275,6 +276,7 @@ const LoadingRow = ({ label = 'Loading…', colSpan = 5 }) => (
 export default function WalletDetail() {
   const { address = '' } = useParams();
   const walletName = useMemo(() => resolveWalletName(address), [address]);
+  const { registerTask } = useRefresh();
 
   useEffect(() => { setLastSection('wallets'); }, []);
 
@@ -284,6 +286,7 @@ export default function WalletDetail() {
   const [tokens, setTokens] = useState([]);
   const [q, setQ] = useState('');
   const searchRef = useRef(null);
+  const refreshTaskRef = useRef(async () => {});
   const [sortKey, setSortKey] = useState('value');
   const [sortDir, setSortDir] = useState('desc');
   const [showQR, setShowQR] = useState(false);
@@ -831,6 +834,20 @@ export default function WalletDetail() {
     setRefreshBump((n) => n + 1);
   };
 
+  refreshTaskRef.current = async () => {
+    onRefresh();
+  };
+
+  useEffect(() => {
+    const key = address ? `wallet-detail:${address.toLowerCase()}` : 'wallet-detail';
+    const unregister = registerTask(key, async () => {
+      if (typeof refreshTaskRef.current === "function") {
+        await refreshTaskRef.current();
+      }
+    });
+    return unregister;
+  }, [address, registerTask]);
+
   // ----------------------------- render -----------------------------
   return (
     <>
@@ -1053,3 +1070,5 @@ export default function WalletDetail() {
     </>
   );
 }
+
+

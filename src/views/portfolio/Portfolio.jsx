@@ -29,6 +29,7 @@ import { writeTopTokensCache } from '../../services/topTokensService';
 
 // ✅ publish this page’s total to the global PortfolioValueContext
 import { usePortfolioValue, PORTFOLIO_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 
 // --- shared keys so other pages can read the total ---
 const LS_TOTAL_KEY = 'kw:lastTotalUsd';
@@ -616,6 +617,7 @@ export default function Portfolio() {
 
   const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
   const wallets = (fromCtx.length ? fromCtx : fromLS);
+  const { registerTask } = useRefresh();
   const walletsSig = walletsSigOf(wallets);
 
   useEffect(() => {
@@ -653,6 +655,7 @@ export default function Portfolio() {
   const memCacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
   const loadingRef = useRef(false);
+  const refreshTaskRef = useRef(async () => {});
 
   // toast state
   const [toast, setToast] = useState({ show: false, text: '' });
@@ -861,6 +864,19 @@ export default function Portfolio() {
       }
     }
   }
+
+  refreshTaskRef.current = async () => {
+    await load(true);
+  };
+
+  useEffect(() => {
+    const unregister = registerTask('portfolio-overview', async () => {
+      if (typeof refreshTaskRef.current === 'function') {
+        await refreshTaskRef.current();
+      }
+    });
+    return unregister;
+  }, [registerTask]);
 
   useEffect(() => { load(false); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [walletsSig, mode]);
   useEffect(() => { maybeExpandFromFocus(tokens); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [tokens]);
@@ -1207,3 +1223,5 @@ export default function Portfolio() {
     </>
   );
 }
+
+

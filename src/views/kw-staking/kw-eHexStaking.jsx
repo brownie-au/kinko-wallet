@@ -10,6 +10,7 @@ import {
 } from '../../services/kw-ehexStakingService';
 
 import { usePortfolioValue, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 import KwEHexStakingHeaderContainer from '../../components/kw-EHexStakingHeaderContainer.jsx';
 import WalletFilterChips from '../../components/WalletFilterChips.jsx';
 import '../../styles/kw-hex-staking-header.css';
@@ -387,6 +388,7 @@ export default function KwEhexStaking({ config }) {
         priceKey: 'EHEX'
     }), []);
     const cfg = useMemo(() => ({ ...defaultCfg, ...(config || {}) }), [defaultCfg, config]);
+    const { registerTask } = useRefresh();
 
     /* Wallets */
     const ctx = (typeof useWallets === 'function') ? useWallets() : null;
@@ -722,6 +724,13 @@ export default function KwEhexStaking({ config }) {
         }
         if (shouldRefresh()) refreshNow();
     }, [refreshNow]);
+
+    useEffect(() => {
+        const unregister = registerTask('staking:ehex', async () => {
+            await refreshNow();
+        });
+        return unregister;
+    }, [refreshNow, registerTask]);
 
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
     useEffect(() => {
@@ -1114,3 +1123,5 @@ export default function KwEhexStaking({ config }) {
         </div>
     );
 }
+
+

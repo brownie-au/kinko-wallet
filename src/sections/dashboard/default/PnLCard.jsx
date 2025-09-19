@@ -1,7 +1,8 @@
 // src/sections/dashboard/default/PnLCard.jsx
 /* eslint-disable import/no-relative-parent-imports */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Row, Col, Badge, Placeholder, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { useRefresh } from '@/contexts/RefreshContext.jsx';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
 import {
@@ -50,15 +51,18 @@ export default function PnLCard() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const fetchTaskRef = useRef(async () => {});
+  const { registerTask } = useRefresh();
 
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    const load = async () => {
       try {
+        setLoading(true);
         const [s, histMaybe] = await Promise.all([
           getGlobalSnapshot(),
-          getGlobalHistory1yWeekly?.('last') // first try: combined or cap-only
+          getGlobalHistory1yWeekly?.('last')
         ]);
 
         if (!alive) return;
@@ -89,7 +93,6 @@ export default function PnLCard() {
             // Shape B: single series (assume this is CAP)
             capRows = histMaybe.map(r => ({ x: r.t ?? r.x, y: r.y ?? 0 }))
               .filter(p => isFinite(p.x) && isFinite(p.y));
-
             // Try to fetch a separate VOL series if the service supports a metric arg
             try {
               const volMaybe = await getGlobalHistory1yWeekly?.('last', 'volume');
@@ -112,6 +115,7 @@ export default function PnLCard() {
         setErr(null);
       } catch (e) {
         console.warn('[PnLCard] load failed:', e);
+        if (!alive) return;
         setSnap({ ...ZERO_SNAP, updatedAt: Date.now() });
         setCapWeekly(buildFallbackSeries(0));
         setVolWeekly(buildFallbackSeries(0));
@@ -119,11 +123,24 @@ export default function PnLCard() {
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
 
+    fetchTaskRef.current = async () => {
+      await load();
+    };
+
+    load();
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    const unregister = registerTask('market:pnl', async () => {
+      if (typeof fetchTaskRef.current === 'function') {
+        await fetchTaskRef.current();
+      }
+    });
+    return unregister;
+  }, [registerTask]);
   const capUp = (snap?.changePct24h ?? 0) >= 0;
   const capColour = capUp ? GREEN : RED;
   // We don’t infer a 24h delta from weekly bins; show neutral for volume.
@@ -233,3 +250,5 @@ export default function PnLCard() {
 
 // ---- helpers ----
 function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+
