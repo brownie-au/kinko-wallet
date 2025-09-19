@@ -108,7 +108,7 @@ function publishChainTotalsForWalletSig(list = [], sig) {
     // EXACTLY match chip logic
     const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of list) {
-      if (isJunkToken(t)) continue;
+      if (isJunkToken(t)) continue;                          // ← filter junk/spam
       const chain = String(t?.chain || '').toLowerCase();
       const price = Number(t.priceUsd ?? t.price ?? 0);
       const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
@@ -345,17 +345,10 @@ const Styles = () => (
 
     /* Light theme override */
     :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-cell {
-      background: linear-gradient(90deg,
-        #f3f3f3 0%,
-        #ececec 25%,
-        #e0e0e0 50%,
-        #ececec 75%,
-        #f3f3f3 100%);
+      background: linear-gradient(90deg, #f3f3f3 0%, #ececec 25%, #e0e0e0 50%, #ececec 75%, #f3f3f3 100%);
       background-size: 200% 100%;
     }
-    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-label {
-      color: #555555; text-shadow: none;
-    }
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-label { color: #555555; text-shadow: none; }
 
     .kwp-scope{
       --kw-price: 140px;
@@ -364,6 +357,15 @@ const Styles = () => (
       --kw-change: 120px;
       --kw-action: 84px;
       --kw-gap: 18px;
+
+      /* Colors for $ change text (match pill text colors) */
+      --kw-up: #16c784;   /* light theme up */
+      --kw-down: #ea3943; /* light theme down */
+    }
+    /* Dark theme overrides to match pill text in dark mode */
+    [data-pc-theme='dark'] .kwp-scope{
+      --kw-up: #40914F;
+      --kw-down: #914040;
     }
 
     .kwp-row { padding: 8px 12px; border-bottom: 1px solid var(--bs-border-color);
@@ -371,7 +373,7 @@ const Styles = () => (
     .kwp-row:hover { background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
     :root:not([data-pc-theme='dark']) .kwp-row:hover { background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 
-    .kwp-left { 
+    .kwp-left {
       display: grid;
       grid-template-columns: 36px 12px minmax(0, 1fr);
       align-items: center; min-width: 0;
@@ -406,9 +408,9 @@ const Styles = () => (
     :root[data-pc-theme='dark'] .kwp-change-pill.down { background: rgba(234,57,67,0.28); color: #ff6b6b; }
     :root[data-pc-theme='dark'] .kwp-sub{ color: rgba(255,255,255,.65); }
 
-    /* Softer per-wallet $ change colours to match the pills */
-    .kwp-change-up   { color: #32d296; } /* darker green like the pill */
-    .kwp-change-down { color: #ff6b6b; } /* darker red like the pill  */
+    /* Per-wallet $ change colors (use the vars above) */
+    .kwp-change-up   { color: var(--kw-up); }
+    .kwp-change-down { color: var(--kw-down); }
 
     .kwp-break { margin-top: 4px; }
     .kwp-break-hdr{
@@ -434,14 +436,8 @@ const Styles = () => (
     .kwp-break-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .kwp-right{ text-align:right; }
 
-    .kwp-break-row:hover{
-      background: rgba(255,255,255,.06);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-    }
-    :root:not([data-pc-theme='dark']) .kwp-break-row:hover{
-      background: rgba(0,0,0,.04);
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
-    }
+    .kwp-break-row:hover{ background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    :root:not([data-pc-theme='dark']) .kwp-break-row:hover{ background: rgba(0,0,0,.04); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 
     .k-chain-btn {
       padding: var(--k-chip-padding-y, 6px) var(--k-chip-padding-x, 12px);
@@ -455,23 +451,12 @@ const Styles = () => (
       box-shadow: 0 1px 0 rgba(0,0,0,.05);
       transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease;
     }
-    .k-chain-btn:hover {
-      background: color-mix(in srgb, var(--k-chip-bg, var(--bs-secondary-bg)) 85%, #fff 15%);
-      border-color: color-mix(in srgb, var(--bs-border-color) 70%, #fff 30%);
-    }
-    .k-chain-btn.is-active {
-      background: var(--k-chip-active-bg, var(--bs-primary));
-      color: #fff;
-      border-color: transparent;
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 35%, #000 65%) inset;
-    }
+    .k-chain-btn:hover { background: color-mix(in srgb, var(--k-chip-bg, var(--bs-secondary-bg)) 85%, #fff 15%); border-color: color-mix(in srgb, var(--bs-border-color) 70%, #fff 30%); }
+    .k-chain-btn.is-active { background: var(--k-chip-active-bg, var(--bs-primary)); color: #fff; border-color: transparent; box-shadow: 0 0 0 1px color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 35%, #000 65%) inset; }
     [data-pc-theme='dark'] .k-chain-btn { --k-chip-bg: #2b2f36; --k-chip-fg: #f3f6fb; border-color: #3e4451; }
     [data-pc-theme='dark'] .k-chain-btn:hover { background: #383e49; border-color: #4d5564; }
     [data-pc-theme='dark'] .k-chain-btn.is-active { color: #fff; border-color: transparent; }
-    .k-chain-btn:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 70%, #fff 30%);
-      outline-offset: 2px;
-    }
+    .k-chain-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 70%, #fff 30%); outline-offset: 2px; }
 
     /* --- copy icon button + toast --- */
     .kw-copy-btn{
@@ -586,7 +571,7 @@ function formatChangeSource(raw) {
   const key = String(raw || '').toLowerCase();
   if (!key) return null;
   if (Object.prototype.hasOwnProperty.call(SOURCE_LABELS, key)) return SOURCE_LABELS[key];
-  return key.replace(/(^|[\s_-])([a-z])/g, (m, p, c) => `${p}${c.toUpperCase()}`);
+  return key.replace(/(^|[\\s_-])([a-z])/g, (m, p, c) => `${p}${c.toUpperCase()}`);
 }
 
 function ChangeBadge({ pct, source }) {
@@ -596,9 +581,7 @@ function ChangeBadge({ pct, source }) {
   const label = formatChangeSource(source);
   const tooltip = label ? `24h change from market data (${label})` : '24h change from market data';
   const isZero = Math.abs(pct) < 0.005;
-  if (isZero) {
-    return <span className="kwp-change-pill zero" title={tooltip}>0.00%</span>;
-  }
+  if (isZero) return <span className="kwp-change-pill zero" title={tooltip}>0.00%</span>;
   const positive = pct > 0;
   const arrow = positive ? String.fromCharCode(0x25B2) : String.fromCharCode(0x25BC);
   const className = positive ? 'kwp-change-pill up' : 'kwp-change-pill down';
@@ -1187,7 +1170,7 @@ export default function Portfolio() {
                         {rows.map((r, idx) => {
                           const amt = Number(r.amount) || 0;
                           const valNow = amt * price;
-                          // show only the +/- USD DIFFERENCE for the last 24h (no minus sign; color encodes direction)
+                          // Only show absolute USD difference for last 24h
                           const deltaUsd = (delta == null || !isFinite(delta)) ? null : valNow * (delta / 100);
                           const cls =
                             deltaUsd == null || Math.abs(deltaUsd) < 0.005
@@ -1199,7 +1182,7 @@ export default function Portfolio() {
                           return (
                             <div key={idx} className="kwp-break-row">
                               <div className="kwp-break-name">{walletName(r.wallet)}</div>
-                              <div></div>{/* price placeholder, aligned with header */}
+                              <div></div>{/* price placeholder */}
                               <div className="kwp-right">{fmtAmt(r.amount)} {t.symbol}</div>
                               <div className="kwp-right">{fmtUSD(valNow)}</div>
                               <div className={cls}>
