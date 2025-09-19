@@ -108,7 +108,7 @@ function publishChainTotalsForWalletSig(list = [], sig) {
     // EXACTLY match chip logic
     const totals = { eth: 0, pulse: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of list) {
-      if (isJunkToken(t)) continue;                          // ← filter junk/spam
+      if (isJunkToken(t)) continue;
       const chain = String(t?.chain || '').toLowerCase();
       const price = Number(t.priceUsd ?? t.price ?? 0);
       const val = Number(t.valueUsd ?? (Number(t.amount || 0) * price)) || 0;
@@ -209,7 +209,8 @@ function computePortfolioChangeMeta(tokens = [], totalUsd = 0) {
   if (!snapshot) snapshot = writeSnapshot(total, nowMs);
 
   let withData = 0;
-  let considered = 0;
+  let considered = 0;
+
   let sumThen = 0;
   let missing = 0;
 
@@ -342,7 +343,7 @@ const Styles = () => (
     .kinko-loading-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 0.95rem; color: rgba(255,255,255,0.7); text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
 
-    /* Light theme override: stronger contrast on white backgrounds */
+    /* Light theme override */
     :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-cell {
       background: linear-gradient(90deg,
         #f3f3f3 0%,
@@ -353,14 +354,14 @@ const Styles = () => (
       background-size: 200% 100%;
     }
     :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kinko-loading-label {
-      color: #555555;
-      text-shadow: none;
+      color: #555555; text-shadow: none;
     }
 
     .kwp-scope{
       --kw-price: 140px;
       --kw-amount: 170px;
       --kw-value: 140px;
+      --kw-change: 120px;
       --kw-action: 84px;
       --kw-gap: 18px;
     }
@@ -373,8 +374,7 @@ const Styles = () => (
     .kwp-left { 
       display: grid;
       grid-template-columns: 36px 12px minmax(0, 1fr);
-      align-items: center;
-      min-width: 0;
+      align-items: center; min-width: 0;
     }
     .kwp-logo { width: 36px; height: 36px; display: flex; align-items: center; }
     .kwp-spacer { width: 12px; }
@@ -393,14 +393,27 @@ const Styles = () => (
     .kwp-price { width: var(--kw-price); }
     .kwp-amount { width: var(--kw-amount); }
     .kwp-value { width: var(--kw-value); }
-    .kwp-delta.up { color: #1fbf75; }
-    .kwp-delta.down { color: #e55353; }
-    [data-pc-theme='dark'] .kwp-sub{ color: rgba(255,255,255,.65); }
+    .kwp-change { width: var(--kw-change); display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:4px; }
+
+    .kwp-change-pill { display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:0.85rem; font-weight:600; background: rgba(108,117,125,0.15); color: var(--bs-secondary-color); }
+    .kwp-change-pill.up { color: #16c784; background: rgba(22,199,132,0.18); }
+    .kwp-change-pill.down { color: #ea3943; background: rgba(234,57,67,0.18); }
+    .kwp-change-pill.zero { color: var(--bs-secondary-color); background: rgba(108,117,125,0.18); }
+    .kwp-change-pill.muted { color: var(--bs-secondary-color); background: transparent; opacity: 0.7; }
+    .kwp-change-arrow { line-height: 1; }
+    :root[data-pc-theme='dark'] .kwp-change-pill { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85); }
+    :root[data-pc-theme='dark'] .kwp-change-pill.up { background: rgba(22,199,132,0.28); color: #32d296; }
+    :root[data-pc-theme='dark'] .kwp-change-pill.down { background: rgba(234,57,67,0.28); color: #ff6b6b; }
+    :root[data-pc-theme='dark'] .kwp-sub{ color: rgba(255,255,255,.65); }
+
+    /* Softer per-wallet $ change colours to match the pills */
+    .kwp-change-up   { color: #32d296; } /* darker green like the pill */
+    .kwp-change-down { color: #ff6b6b; } /* darker red like the pill  */
 
     .kwp-break { margin-top: 4px; }
     .kwp-break-hdr{
       display:grid;
-      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
+      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-change) var(--kw-action);
       column-gap: var(--kw-gap);
       align-items: end;
       margin-bottom: 2px;
@@ -409,7 +422,7 @@ const Styles = () => (
 
     .kwp-break-row{
       display:grid;
-      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-action);
+      grid-template-columns: 1fr var(--kw-price) var(--kw-amount) var(--kw-value) var(--kw-change) var(--kw-action);
       column-gap: var(--kw-gap);
       align-items:center;
       line-height:18px;
@@ -452,11 +465,7 @@ const Styles = () => (
       border-color: transparent;
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--k-chip-active-bg, var(--bs-primary)) 35%, #000 65%) inset;
     }
-    [data-pc-theme='dark'] .k-chain-btn {
-      --k-chip-bg: #2b2f36;
-      --k-chip-fg: #f3f6fb;
-      border-color: #3e4451;
-    }
+    [data-pc-theme='dark'] .k-chain-btn { --k-chip-bg: #2b2f36; --k-chip-fg: #f3f6fb; border-color: #3e4451; }
     [data-pc-theme='dark'] .k-chain-btn:hover { background: #383e49; border-color: #4d5564; }
     [data-pc-theme='dark'] .k-chain-btn.is-active { color: #fff; border-color: transparent; }
     .k-chain-btn:focus-visible {
@@ -473,10 +482,7 @@ const Styles = () => (
       background: var(--bs-secondary-bg);
       opacity:.85; transition: opacity .15s ease, background-color .15s ease, transform .06s ease;
     }
-    /* Light theme: stronger icon contrast only */
-    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kw-copy-btn{
-      color: rgba(0,0,0,0.6); /* darker icon stroke */
-    }
+    :root:not([data-theme='dark']):not([data-pc-theme='dark']) .kw-copy-btn{ color: rgba(0,0,0,0.6); }
     .kw-copy-btn:hover{ opacity:1; background: color-mix(in srgb, var(--bs-secondary-bg) 85%, #fff 15%); }
     .kw-copy-btn:active{ transform: translateY(1px); }
     [data-pc-theme='dark'] .kw-copy-btn{ background:#2b2f36; border-color:#3e4451; }
@@ -506,21 +512,13 @@ const Styles = () => (
   `}</style>
 );
 
-// Small copy icon (overlapping squares)
+// Small copy icon
 function CopyIcon() {
-  const searchRef = useRef(null);
-
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect
-        x="9" y="9" width="12" height="12" rx="2" ry="2"
-        fill="none" stroke="currentColor" strokeWidth="2"
-      />
-      <path
-        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-        fill="none" stroke="currentColor" strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round"
-      />
+      <rect x="9" y="9" width="12" height="12" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -563,6 +561,7 @@ function writeCache(mode, sig, payload) {
 // ---- extract % change if present on token ----
 function getChangePct(t) {
   const candidates = [
+    t.pctChange24h,
     t.change24hPct,
     t.change24h,
     t.priceChange24hPct,
@@ -574,19 +573,55 @@ function getChangePct(t) {
 }
 
 // ---- chainId resolver for TokenLogo ----
+const SOURCE_LABELS = {
+  defillama: 'DefiLlama',
+  dexscreener: 'DexScreener',
+  'dex(wpls)': 'Dex (WPLS)',
+  dex: 'DexScreener',
+  blockscout: 'Blockscout',
+  legacy: 'Legacy'
+};
+
+function formatChangeSource(raw) {
+  const key = String(raw || '').toLowerCase();
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(SOURCE_LABELS, key)) return SOURCE_LABELS[key];
+  return key.replace(/(^|[\s_-])([a-z])/g, (m, p, c) => `${p}${c.toUpperCase()}`);
+}
+
+function ChangeBadge({ pct, source }) {
+  if (pct == null) {
+    return <span className="kwp-change-pill muted" title="24h change not available">&mdash;</span>;
+  }
+  const label = formatChangeSource(source);
+  const tooltip = label ? `24h change from market data (${label})` : '24h change from market data';
+  const isZero = Math.abs(pct) < 0.005;
+  if (isZero) {
+    return <span className="kwp-change-pill zero" title={tooltip}>0.00%</span>;
+  }
+  const positive = pct > 0;
+  const arrow = positive ? String.fromCharCode(0x25B2) : String.fromCharCode(0x25BC);
+  const className = positive ? 'kwp-change-pill up' : 'kwp-change-pill down';
+  return (
+    <span className={className} title={tooltip}>
+      <span className="kwp-change-arrow">{arrow}</span>
+      {Math.abs(pct).toFixed(2)}%
+    </span>
+  );
+}
+
 function chainIdOf(chain) {
   switch (String(chain || '').toLowerCase()) {
-    case 'pulse': return 369;   // PulseChain
-    case 'bsc': return 56;      // BSC
-    case 'polygon': return 137; // Polygon
-    case 'base': return 8453;   // Base
+    case 'pulse': return 369;
+    case 'bsc': return 56;
+    case 'polygon': return 137;
+    case 'base': return 8453;
     case 'eth':
     case 'ethereum':
-    default: return 1;          // Ethereum
+    default: return 1;
   }
 }
 
-// small normaliser
 const norm = (n) => (Number.isFinite(+n) ? +n : 0);
 
 export default function Portfolio() {
@@ -604,17 +639,13 @@ export default function Portfolio() {
     if (wallets && wallets.length) replaceWallets(wallets);
   }, [walletsSig, replaceWallets]);
 
-  // Sticky chain filter sourced from global UI state
   useEffect(() => { setLastSection('portfolio'); }, []);
   const initialChip = useMemo(() => {
-    // One-time override from Dashboard (Top Tokens tiles or View All)
-    // If present and fresh, use it for initial chip without changing sticky state.
     const forced = consumeForceGlobalChipOnce();
     if (forced) return forced;
     const saved = getGlobalNetChip();
     return saved || 'all';
   }, []);
-  // 'all' | 'eth' | 'pulse' | 'bsc' | 'polygon' | 'base'
   const [mode, setMode] = useState(initialChip);
   const onChipChange = (code) => {
     setMode(code);
@@ -640,7 +671,7 @@ export default function Portfolio() {
   const reqIdRef = useRef(0);
   const loadingRef = useRef(false);
 
-  // toast state for copy feedback
+  // toast state
   const [toast, setToast] = useState({ show: false, text: '' });
   const toastTimerRef = useRef(null);
   const showToast = (text) => {
@@ -662,7 +693,6 @@ export default function Portfolio() {
     setLastUpdated(Date.now());
   };
 
-  // === helper: expand a token if Dashboard set focus keys ===
   const maybeExpandFromFocus = (list) => {
     try {
       const want = (localStorage.getItem('kw:focusToken') || '').trim();
@@ -671,13 +701,11 @@ export default function Portfolio() {
 
       let match = null;
 
-      // 1) If a composite key is provided, require an exact match (chain+address+symbol)
       if (wantKey) {
         const keyLc = wantKey.toLowerCase();
         match = (list || []).find((tt) => keyFor(tt).toLowerCase() === keyLc) || null;
       }
 
-      // 2) Fallback only when no key match found: allow symbol OR address match
       if (!match && want) {
         const wantLc = want.toLowerCase();
         match = (list || []).find((tt) => (
@@ -693,20 +721,15 @@ export default function Portfolio() {
           n.add(k);
           return n;
         });
-        // Clear hints once we successfully expanded
         try {
           localStorage.removeItem('kw:focusToken');
           localStorage.removeItem('kw:focusTokenKey');
-        } catch { /* ignore */ }
-        return;
+        } catch { }
       }
-
-      // If no match yet, keep the hints so the next tokens update can try again
-    } catch { /* noop */ }
+    } catch { }
   };
 
   async function load(force = false) {
-    // If a force-refresh is requested while a load is in-flight, ignore the click
     if (loadingRef.current && force) return;
     const myReq = ++reqIdRef.current;
     loadingRef.current = true;
@@ -786,11 +809,10 @@ export default function Portfolio() {
     try {
       const builder = (mode === 'eth') ? buildPortfolioLive : buildPortfolioDetailedFromCache;
       const { totalUsd, tokens, breakdown } = await builder(wallets, { only: mode, force });
-      if (reqIdRef.current !== myReq) return; // stale
+      if (reqIdRef.current !== myReq) return;
       setTotalUsd(totalUsd);
       persistTotal(totalUsd);
 
-      // Compute value for each token
       let tokensWithValue = (tokens || []).map((t) => {
         const price = Number(t.priceUsd ?? t.price ?? 0);
         const amount = Number(t.amount ?? 0);
@@ -798,14 +820,12 @@ export default function Portfolio() {
         return { ...t, valueUsd };
       });
 
-      // Attach 24h % change (contract + native) in parallel, then merge
       try {
         const [changeMap, nativeMap] = await Promise.all([
           fetchChange24hFromDexScreener(tokensWithValue),
           fetchNativeChange24h(tokensWithValue)
         ]);
         tokensWithValue = tokensWithValue.map((t) => {
-          // prefer contract change when available
           const contractPct = changeMap.get(changeKey(t));
           const nativePct = (!t.address && !t.contract) ? nativeMap.get(nativeKey(t)) : null;
           const pct = (contractPct != null && Number.isFinite(contractPct))
@@ -815,7 +835,7 @@ export default function Portfolio() {
         });
       } catch { /* non-fatal */ }
 
-      if (reqIdRef.current !== myReq) return; // stale
+      if (reqIdRef.current !== myReq) return;
       setTokens(tokensWithValue);
       setBreakdown(breakdown);
       maybeExpandFromFocus(tokensWithValue);
@@ -842,7 +862,6 @@ export default function Portfolio() {
                   ? (Number(t.valueUsd) || 0) / Number(t.amount ?? t.balance)
                   : 0
               ),
-              // pass through our new field so the dashboard tiles show ▲/▼
               change24hPct: getChangePct(t),
               dexUrl: t.dexUrl || null
             }));
@@ -860,21 +879,13 @@ export default function Portfolio() {
     }
   }
 
-  useEffect(() => { load(false); /* eslint-disable-next-line */ }, [walletsSig, mode]);
+  useEffect(() => { load(false); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [walletsSig, mode]);
+  useEffect(() => { maybeExpandFromFocus(tokens); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [tokens]);
 
-  // Retry expand whenever tokens update (in case timing was off)
-  useEffect(() => { maybeExpandFromFocus(tokens); /* eslint-disable-next-line */ }, [tokens]);
-
-  // ====== publish this page’s total into the global context ======
   const { setSource, removeSource } = usePortfolioValue();
-
-  useEffect(() => {
-    if (mode === 'all') setSource(PORTFOLIO_SOURCE, Number(totalUsd) || 0);
-  }, [mode, totalUsd, setSource]);
-
+  useEffect(() => { if (mode === 'all') setSource(PORTFOLIO_SOURCE, Number(totalUsd) || 0); }, [mode, totalUsd, setSource]);
   useEffect(() => () => removeSource(PORTFOLIO_SOURCE), [removeSource]);
 
-  // ====== per-chain totals from current tokens ======
   const chainTotalsFromTokens = useMemo(() => {
     const totals = { pulse: 0, eth: 0, bsc: 0, polygon: 0, base: 0 };
     for (const t of tokens) {
@@ -892,27 +903,22 @@ export default function Portfolio() {
     return totals;
   }, [tokens]);
 
-  // ====== choose totals to show in chips immediately (cache-first) ======
   const cached = readChainTotalsCache(walletsSig);
   const effectiveTotals = useMemo(() => {
-    // If fresh build hasn't populated tokens yet, fall back to cached totals so chips render instantly.
     const computed = chainTotalsFromTokens;
     const hasAny = (computed.eth + computed.pulse + computed.bsc + computed.polygon + computed.base) > 0;
     return hasAny ? computed : { eth: cached.eth, pulse: cached.pulse, bsc: cached.bsc, polygon: cached.polygon, base: cached.base };
   }, [chainTotalsFromTokens, cached.eth, cached.pulse, cached.bsc, cached.polygon, cached.base]);
 
-  // ====== header total reflects current mode ======
   const headerTotalUsd = useMemo(() => {
     if (mode === 'eth') return effectiveTotals.eth || 0;
     if (mode === 'pulse') return effectiveTotals.pulse || 0;
     if (mode === 'bsc') return effectiveTotals.bsc || 0;
     if (mode === 'polygon') return effectiveTotals.polygon || 0;
     if (mode === 'base') return effectiveTotals.base || 0;
-    // all
     return (effectiveTotals.eth + effectiveTotals.pulse + effectiveTotals.bsc + effectiveTotals.polygon + effectiveTotals.base) || Number(totalUsd) || 0;
   }, [mode, effectiveTotals, totalUsd]);
 
-  // ====== chips: All shows all; others show only the selected chain ======
   const assetChips = useMemo(() => {
     const possible = [
       { key: 'eth', label: 'Ethereum', usd: norm(effectiveTotals.eth), color: '#10b981' },
@@ -923,10 +929,9 @@ export default function Portfolio() {
     ];
 
     const filtered = mode === 'all'
-      ? possible // show all chips in All
+      ? possible
       : possible.filter(r => r.key === (mode === 'pulse' ? 'pulse' : mode === 'eth' ? 'eth' : mode === 'bsc' ? 'bsc' : mode === 'polygon' ? 'polygon' : 'base'));
 
-    // Keep Base visible even if 0.00; other non-selected chains are hidden by the filter above.
     filtered.sort((a, b) => b.usd - a.usd);
     return filtered;
   }, [effectiveTotals, mode]);
@@ -948,14 +953,12 @@ export default function Portfolio() {
     setExpanded(next);
   };
 
-  // copy contract handler (only used on mode === 'all')
   const copyContract = async (addr) => {
     if (!addr) return;
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(addr);
       } else {
-        // fallback
         const ta = document.createElement('textarea');
         ta.value = addr;
         ta.style.position = 'fixed';
@@ -990,10 +993,8 @@ export default function Portfolio() {
                     All Wallets
                   </div>
 
-                  {/* Total reflects selected chain (or All) */}
                   <h2 className="mb-1 kw-grand-total">{fmtUSD(headerTotalUsd)}</h2>
 
-                  {/* Chips: cache-first values; All shows all, chain views show one */}
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-1" style={{ fontSize: 12 }}>
                     {assetChips.map((r) => {
                       const denom = (mode === 'all')
@@ -1101,21 +1102,18 @@ export default function Portfolio() {
                 const rows = breakdown.get(k) || [];
                 const price = Number(t.priceUsd ?? t.price ?? 0);
                 const delta = getChangePct(t);
-                const deltaCls = delta == null ? '' : delta >= 0 ? 'up' : 'down';
-                const deltaTxt = delta == null ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
+                const changeSource = t.changeSource || t.priceSource || null;
 
-                // Show shorter ticker for Polygon on View All: POL
                 const label = (t.chain === 'pulse') ? 'Pulse' : (t.chain === 'bsc') ? 'BSC' : (t.chain === 'polygon') ? 'POL' : (t.chain === 'base') ? 'Base' : 'ETH';
                 const logoChainId = chainIdOf(t.chain);
                 const logoAddr = (t.address || t.contract || '') || null;
 
-                // address we can copy (only if exists)
                 const copyAddr = (t.address || t.contract || '').trim();
 
                 return (
                   <div key={`${k}:${i}`} className="kwp-row">
                     <div className="d-flex align-items-center justify-content-between">
-                      {/* LEFT: icon + spacer + symbol/name */}
+                      {/* LEFT */}
                       <div className="kwp-left">
                         <div className="kwp-logo">
                           <TokenLogo chainId={logoChainId} address={logoAddr} symbol={t.symbol} size={36} />
@@ -1131,7 +1129,6 @@ export default function Portfolio() {
                           </div>
                           <div className="kwp-sub d-flex align-items-center">
                             {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
-                            {/* Copy icon ONLY on View All + when token has a contract address */}
                             {mode === 'all' && !!copyAddr && (
                               <button
                                 type="button"
@@ -1147,12 +1144,11 @@ export default function Portfolio() {
                         </div>
                       </div>
 
-                      {/* RIGHT: price/amount/value + expand */}
+                      {/* RIGHT: price/amount/value + change + action */}
                       <div className="kwp-cols">
                         <div className="kwp-col kwp-price">
                           <div className="text-muted" style={{ fontSize: 12 }}>Price</div>
                           <div className="kw-price">{fmtPriceUSD(price)}</div>
-                          {delta != null && (<div className={`kwp-delta ${deltaCls}`} style={{ fontSize: 12 }}>{deltaTxt}</div>)}
                         </div>
                         <div className="kwp-col kwp-amount">
                           <div className="text-muted" style={{ fontSize: 12 }}>Amount</div>
@@ -1161,6 +1157,10 @@ export default function Portfolio() {
                         <div className="kwp-col kwp-value">
                           <div className="text-muted" style={{ fontSize: 12 }}>Value</div>
                           <div className="fw-semibold">{fmtUSD(Number(t.valueUsd ?? (Number(t.amount || 0) * price)))}</div>
+                        </div>
+                        <div className="kwp-col kwp-change">
+                          <div className="text-muted" style={{ fontSize: 12 }}>24h Change</div>
+                          <ChangeBadge pct={delta} source={changeSource} />
                         </div>
                         <div style={{ width: 'var(--kw-action)' }}>
                           <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => toggleExpand(k)}>
@@ -1174,24 +1174,41 @@ export default function Portfolio() {
                       <div className="kwp-break">
                         <div className="kwp-break-hdr">
                           <div className="kwp-break-title text-muted">Balance Breakdown</div>
-                          <div /> <div /> <div /> <div />
+                          <div /> <div /> <div /> <div /> <div />
                         </div>
 
                         {rows.length === 0 && (
                           <div className="kwp-break-row">
                             <div className="text-muted">No holdings.</div>
-                            <div></div><div></div><div></div><div></div>
+                            <div></div><div></div><div></div><div></div><div></div>
                           </div>
                         )}
-                        {rows.map((r, idx) => (
-                          <div key={idx} className="kwp-break-row">
-                            <div className="kwp-break-name">{walletName(r.wallet)}</div>
-                            <div></div>
-                            <div className="kwp-right">{fmtAmt(r.amount)} {t.symbol}</div>
-                            <div className="kwp-right">{fmtUSD((Number(r.amount) || 0) * price)}</div>
-                            <div></div>
-                          </div>
-                        ))}
+
+                        {rows.map((r, idx) => {
+                          const amt = Number(r.amount) || 0;
+                          const valNow = amt * price;
+                          // show only the +/- USD DIFFERENCE for the last 24h (no minus sign; color encodes direction)
+                          const deltaUsd = (delta == null || !isFinite(delta)) ? null : valNow * (delta / 100);
+                          const cls =
+                            deltaUsd == null || Math.abs(deltaUsd) < 0.005
+                              ? 'kwp-right text-muted'
+                              : deltaUsd > 0
+                                ? 'kwp-right kwp-change-up fw-semibold'
+                                : 'kwp-right kwp-change-down fw-semibold';
+
+                          return (
+                            <div key={idx} className="kwp-break-row">
+                              <div className="kwp-break-name">{walletName(r.wallet)}</div>
+                              <div></div>{/* price placeholder, aligned with header */}
+                              <div className="kwp-right">{fmtAmt(r.amount)} {t.symbol}</div>
+                              <div className="kwp-right">{fmtUSD(valNow)}</div>
+                              <div className={cls}>
+                                {deltaUsd == null ? '—' : fmtUSD(Math.abs(deltaUsd))}
+                              </div>
+                              <div></div>{/* action placeholder */}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

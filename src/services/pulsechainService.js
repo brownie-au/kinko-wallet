@@ -27,6 +27,7 @@ const fromUnits = (v, d = 18) => {
 };
 
 const liq = (p) => Number(p?.liquidity?.usd || 0);
+const toFinite = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
 
 // ---------- price helpers ----------
 function weightedUsd(pairs, maxN = 8) {
@@ -47,28 +48,62 @@ function filterPulsePairsForToken(addr, pairs) {
       (p?.quoteToken?.address || '').toLowerCase() === a
     );
 }
-function usdForTokenFromPairs(addr, pairs) {
+function dexMetaForTokenFromPairs(addr, pairs) {
   const a = (addr || '').toLowerCase();
   const mine = filterPulsePairsForToken(a, pairs);
-  if (!mine.length) return 0;
+  if (!mine.length) return { price: 0, change24hPct: null };
   const stable = mine.filter(p => {
     const isBase = (p?.baseToken?.address || '').toLowerCase() === a;
     const otherSym = isBase ? p?.quoteToken?.symbol : p?.baseToken?.symbol;
     return STABLES.has((otherSym || '').toUpperCase());
   });
-  const src = (stable.length ? stable : mine)
-    .map(p => {
+  const sample = (stable.length ? stable : mine)
+    .map((p) => {
       const isBase = (p?.baseToken?.address || '').toLowerCase() === a;
       const baseUsd = Number(p?.priceUsd || 0);
-      const ratio   = Number(p?.price ?? 0);
+      const ratio = Number(p?.price ?? 0);
       const usd = isBase ? baseUsd : (baseUsd && ratio ? baseUsd / ratio : 0);
-      return { usd, liq: liq(p) };
+      const liqUsd = liq(p);
+      const changeCandidates = [
+        p?.priceChange?.h24,
+        p?.priceChange?.H24,
+        p?.priceChange?.['h24'],
+        p?.priceChange24h,
+        p?.priceChangePercent24h,
+        p?.priceChange24hPercent,
+        p?.priceChangePercentage24h
+      ];
+      let pct = null;
+      for (const cand of changeCandidates) {
+        const num = toFinite(cand);
+        if (num != null) { pct = num; break; }
+      }
+      if (pct == null) {
+        const prevPrice = toFinite(p?.price24h ?? p?.info?.price24h);
+        if (prevPrice != null && usd > 0) {
+          const derived = ((usd - prevPrice) / prevPrice) * 100;
+          if (Number.isFinite(derived)) pct = derived;
+        }
+      }
+      return { usd, liq: liqUsd, change: pct };
     })
-    .filter(x => x.usd > 0 && x.liq > 0);
-  if (!src.length) return 0;
-  const num = src.reduce((s, r) => s + r.usd * r.liq, 0);
-  const den = src.reduce((s, r) => s + r.liq, 0);
-  return den > 0 ? num / den : 0;
+    .filter((x) => x.usd > 0 && x.liq > 0);
+  if (!sample.length) return { price: 0, change24hPct: null };
+  const priceNum = sample.reduce((s, r) => s + r.usd * r.liq, 0);
+  const priceDen = sample.reduce((s, r) => s + r.liq, 0);
+  const price = priceDen > 0 ? priceNum / priceDen : 0;
+  const changeEntries = sample.filter((x) => x.change != null);
+  let change24hPct = null;
+  if (changeEntries.length) {
+    const changeNum = changeEntries.reduce((s, r) => s + r.change * r.liq, 0);
+    const changeDen = changeEntries.reduce((s, r) => s + r.liq, 0);
+    if (changeDen > 0) change24hPct = changeNum / changeDen;
+  }
+  return { price, change24hPct };
+}
+
+function usdForTokenFromPairs(addr, pairs) {
+  return dexMetaForTokenFromPairs(addr, pairs).price;
 }
 
 // ---------- Native PLS price (via WPLS) ----------
@@ -209,8 +244,10 @@ async function dexPricesForBatch(addresses) {
       const { data } = await axios.get(`${DEXSCREENER}/tokens/${batch.join(',')}`, { timeout: 12000 });
       const pairs = data?.pairs || [];
       for (const addr of batch) {
-        const usd = usdForTokenFromPairs(addr, pairs);
-        if (usd > 0) out[addr.toLowerCase()] = usd;
+        const meta = dexMetaForTokenFromPairs(addr, pairs);
+        if (meta.price > 0 || meta.change24hPct != null) {
+          out[addr.toLowerCase()] = { ...meta, source: 'dexscreener' };
+        }
       }
     } catch {}
   }
@@ -219,10 +256,11 @@ async function dexPricesForBatch(addresses) {
 async function dexPriceForSingle(address) {
   try {
     const { data } = await axios.get(`${DEXSCREENER}/search?q=${address}%20chain:pulsechain`, { timeout: 8000 });
-    return usdForTokenFromPairs(address, data?.pairs || []);
-  } catch { return 0; }
+    return { ...dexMetaForTokenFromPairs(address, data?.pairs || []), source: 'dexscreener' };
+  } catch {
+    return { price: 0, change24hPct: null, source: 'dexscreener' };
+  }
 }
-
 // ---------- Public API ----------
 export async function getPLSBalance(address) {
   try {
@@ -266,23 +304,55 @@ async function fetchPulsechainTokensLive(address) {
 
   // 4) Dexscreener fallback
   try {
-    const needs = tokens.filter(t => (!t.price || t.price === 0) && t.address).map(t => t.address);
-    if (needs.length) {
-      const ds = await dexPricesForBatch(needs);
-      const still = needs.filter(a => !ds[a.toLowerCase()]);
-      for (let i = 0; i < Math.min(still.length, 12); i += 1) {
-        const a = still[i];
-        const p = await dexPriceForSingle(a);
-        if (p > 0) ds[a.toLowerCase()] = p;
+    const contractAddrs = tokens.filter(t => t.address).map(t => t.address);
+    if (contractAddrs.length) {
+      const ds = await dexPricesForBatch(contractAddrs);
+      const priceNeeds = contractAddrs.filter((a) => {
+        const meta = ds[a.toLowerCase()];
+        return !meta || !(Number(meta.price) > 0);
+      });
+      for (let i = 0; i < Math.min(priceNeeds.length, 12); i += 1) {
+        const addr = priceNeeds[i];
+        const meta = await dexPriceForSingle(addr);
+        if (meta.price > 0 || meta.change24hPct != null) ds[addr.toLowerCase()] = meta;
       }
-      tokens = tokens.map(t => {
-        if (t.price && t.price > 0) return t;
-        const p = ds[t.address?.toLowerCase()] || 0;
-        return { ...t, price: p, priceSource: p > 0 ? 'dex' : 'none', value: t.balance * (p || 0) };
+      tokens = tokens.map((t) => {
+        const addrLower = (t.address || '').toLowerCase();
+        const meta = addrLower ? ds[addrLower] : null;
+        const metaSource = meta?.source || 'dexscreener';
+        const patch = {};
+
+        if (!(Number(t.price) > 0)) {
+          const priceMeta = meta ? Number(meta.price) || 0 : 0;
+          patch.price = priceMeta;
+          patch.priceSource = priceMeta > 0 ? metaSource : (t.priceSource || 'none');
+          patch.value = t.balance * (priceMeta || 0);
+        }
+
+        const metaPct = toFinite(meta?.change24hPct);
+        const existingPct = [
+          t.change24hPct,
+          t.pctChange24h,
+          t.priceChange24hPct,
+          t.price_change_pct_24h,
+          t.price_change_24h_pct
+        ].map(toFinite).find((v) => v != null);
+
+        const finalPct = metaPct ?? existingPct;
+        if (finalPct != null) {
+          patch.change24hPct = finalPct;
+          patch.pctChange24h = finalPct;
+          patch.priceChange24hPct = finalPct;
+          patch.changeSource = metaSource;
+        } else if (existingPct != null) {
+          patch.changeSource = t.changeSource || t.priceSource || null;
+        }
+
+        if (!patch.priceSource && t.priceSource) patch.priceSource = t.priceSource;
+        return Object.keys(patch).length ? { ...t, ...patch } : t;
       });
     }
   } catch {}
-
   // 5) Final rows: native PLS stays; hide teensy values
   const all = [plsNative, ...tokens];
   const rows = all.filter((t, i) => i === 0 || ((t?.value ?? 0) > HIDE_USD_MIN + 1e-12));
@@ -313,3 +383,9 @@ export async function refreshPulsechainTokens(address) {
   setCachedJSON(`pls:tokens:${(address || '').toLowerCase()}`, fresh);
   return fresh;
 }
+
+
+
+
+
+

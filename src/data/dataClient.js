@@ -142,6 +142,15 @@ async function fetchAndCache(key, fetcher, { ttlMs = TEN_MIN, version = 1, force
 // -------------- High-level API --------------
 
 const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
+const toFiniteNumber = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
+const normalizePriceMeta = (meta, fallbackSource = 'defillama') => {
+  if (meta && typeof meta === 'object') {
+    const price = Number(meta.price ?? meta.usd ?? meta.value ?? 0) || 0;
+    return { price, change24hPct: toFiniteNumber(meta.change24hPct ?? meta.pctChange24h ?? meta.change24h), source: meta.source || fallbackSource };
+  }
+  const price = Number(meta) || 0;
+  return { price, change24hPct: null, source: fallbackSource };
+};
 
 // Chain helpers: normalize to canonical chain id in our keys
 function normChain(c) {
@@ -178,15 +187,53 @@ async function fetchBalancesLive(chain, address) {
     try {
       const discovered = await getBaseTokensFromBlockscout(addr);
       const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMap = await getBaseTokenPricesLlama(addrs);
-      const nativePriceUsd = await getBaseUsdPriceLlama();
+      const priceMapRaw = await getBaseTokenPricesLlama(addrs);
+      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+      const priceMap = new Map();
+      for (const [key, meta] of srcMap.entries()) {
+        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+      }
+      const nativeMeta = normalizePriceMeta(await getBaseUsdPriceLlama(), 'defillama');
+      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
       let nativeAmount = 0;
       try { nativeAmount = await getBaseNativeBalance(addr); } catch {}
-      const native = { chain: 'base', address: 'native', symbol: 'ETH', name: 'Ether', amount: nativeAmount, priceUsd: nativePriceUsd, valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0 };
+      const native = {
+        chain: 'base',
+        address: 'native',
+        symbol: 'ETH',
+        name: 'Ether',
+        amount: nativeAmount,
+        priceUsd: nativePrice,
+        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+        change24hPct: nativePct,
+        pctChange24h: nativePct,
+        priceSource: nativeSource,
+        changeSource: nativeSource
+      };
       const erc20 = discovered.map((t) => {
         const amount = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
-        const p = priceMap.get(t.address) || 0;
-        return { chain: 'base', address: t.address, symbol: t.symbol || '', name: t.name || t.symbol || 'Token', decimals: Number(t.decimals ?? 18), amount, priceUsd: p, valueUsd: p ? amount * p : 0 };
+        const meta = priceMap.get((t.address || '').toLowerCase());
+        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+        const source = meta?.source || 'defillama';
+        const priceSource = price > 0 ? source : 'none';
+        const changeSource = source;
+        return {
+          chain: 'base',
+          address: t.address,
+          symbol: t.symbol || '',
+          name: t.name || t.symbol || 'Token',
+          decimals: Number(t.decimals ?? 18),
+          amount,
+          priceUsd: price,
+          valueUsd: price ? amount * price : 0,
+          change24hPct: pct,
+          pctChange24h: pct,
+          priceSource,
+          changeSource
+        };
       });
       return [native, ...erc20];
     } catch { return []; }
@@ -195,15 +242,53 @@ async function fetchBalancesLive(chain, address) {
     try {
       const discovered = await getPolygonTokensFromBlockscout(addr);
       const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMap = await getPolygonTokenPricesLlama(addrs);
-      const nativePriceUsd = await getPolygonUsdPriceLlama();
+      const priceMapRaw = await getPolygonTokenPricesLlama(addrs);
+      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+      const priceMap = new Map();
+      for (const [key, meta] of srcMap.entries()) {
+        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+      }
+      const nativeMeta = normalizePriceMeta(await getPolygonUsdPriceLlama(), 'defillama');
+      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
       let nativeAmount = 0;
       try { nativeAmount = await getPolygonNativeBalance(addr); } catch {}
-      const native = { chain: 'polygon', address: 'native', symbol: 'MATIC', name: 'Polygon', amount: nativeAmount, priceUsd: nativePriceUsd, valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0 };
+      const native = {
+        chain: 'polygon',
+        address: 'native',
+        symbol: 'MATIC',
+        name: 'Polygon',
+        amount: nativeAmount,
+        priceUsd: nativePrice,
+        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+        change24hPct: nativePct,
+        pctChange24h: nativePct,
+        priceSource: nativeSource,
+        changeSource: nativeSource
+      };
       const erc20 = discovered.map((t) => {
         const amount = toUnitsPolygon(t.balanceRaw, Number(t.decimals ?? 18));
-        const p = priceMap.get(t.address) || 0;
-        return { chain: 'polygon', address: t.address, symbol: t.symbol || '', name: t.name || t.symbol || 'Token', decimals: Number(t.decimals ?? 18), amount, priceUsd: p, valueUsd: p ? amount * p : 0 };
+        const meta = priceMap.get((t.address || '').toLowerCase());
+        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+        const source = meta?.source || 'defillama';
+        const priceSource = price > 0 ? source : 'none';
+        const changeSource = source;
+        return {
+          chain: 'polygon',
+          address: t.address,
+          symbol: t.symbol || '',
+          name: t.name || t.symbol || 'Token',
+          decimals: Number(t.decimals ?? 18),
+          amount,
+          priceUsd: price,
+          valueUsd: price ? amount * price : 0,
+          change24hPct: pct,
+          pctChange24h: pct,
+          priceSource,
+          changeSource
+        };
       });
       return [native, ...erc20];
     } catch { return []; }
@@ -212,15 +297,53 @@ async function fetchBalancesLive(chain, address) {
     try {
       const discovered = await getBscTokensFromNodereal(addr);
       const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMap = await getBscTokenPricesLlama(addrs);
-      const nativePriceUsd = await getBscUsdPriceLlama();
+      const priceMapRaw = await getBscTokenPricesLlama(addrs);
+      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+      const priceMap = new Map();
+      for (const [key, meta] of srcMap.entries()) {
+        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+      }
+      const nativeMeta = normalizePriceMeta(await getBscUsdPriceLlama(), 'defillama');
+      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
       let nativeAmount = 0;
       try { nativeAmount = await getBscNativeBalance(addr); } catch {}
-      const native = { chain: 'bsc', address: 'native', symbol: 'BNB', name: 'BNB', amount: nativeAmount, priceUsd: nativePriceUsd, valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0 };
+      const native = {
+        chain: 'bsc',
+        address: 'native',
+        symbol: 'BNB',
+        name: 'BNB',
+        amount: nativeAmount,
+        priceUsd: nativePrice,
+        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+        change24hPct: nativePct,
+        pctChange24h: nativePct,
+        priceSource: nativeSource,
+        changeSource: nativeSource
+      };
       const erc20 = discovered.map((t) => {
         const amount = toUnitsBsc(t.balanceRaw, Number(t.decimals ?? 18));
-        const p = priceMap.get(t.address) || 0;
-        return { chain: 'bsc', address: t.address, symbol: t.symbol || '', name: t.name || t.symbol || 'Token', decimals: Number(t.decimals ?? 18), amount, priceUsd: p, valueUsd: p ? amount * p : 0 };
+        const meta = priceMap.get((t.address || '').toLowerCase());
+        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+        const source = meta?.source || 'defillama';
+        const priceSource = price > 0 ? source : 'none';
+        const changeSource = source;
+        return {
+          chain: 'bsc',
+          address: t.address,
+          symbol: t.symbol || '',
+          name: t.name || t.symbol || 'Token',
+          decimals: Number(t.decimals ?? 18),
+          amount,
+          priceUsd: price,
+          valueUsd: price ? amount * price : 0,
+          change24hPct: pct,
+          pctChange24h: pct,
+          priceSource,
+          changeSource
+        };
       });
       return [native, ...erc20];
     } catch { return []; }
@@ -232,13 +355,26 @@ async function fetchPriceLive(chain) {
   const c = normChain(chain);
   if (c === 'pulse') {
     const { getPLSPriceUSD } = await import('../services/pulsechainService');
-    return { usd: await getPLSPriceUSD() };
+    const price = await getPLSPriceUSD();
+    return { usd: Number(price) || 0, change24hPct: null };
   }
-  if (c === 'eth') return { usd: await getEthUsdPriceLlama() };
-  if (c === 'base') return { usd: await getBaseUsdPriceLlama() };
-  if (c === 'polygon') return { usd: await getPolygonUsdPriceLlama() };
-  if (c === 'bsc') return { usd: await getBscUsdPriceLlama() };
-  return { usd: 0 };
+  if (c === 'eth') {
+    const meta = await getEthUsdPriceLlama();
+    return { usd: toFiniteNumber(meta?.price) || 0, change24hPct: toFiniteNumber(meta?.change24hPct) };
+  }
+  if (c === 'base') {
+    const meta = await getBaseUsdPriceLlama();
+    return { usd: toFiniteNumber(meta?.price) || 0, change24hPct: toFiniteNumber(meta?.change24hPct) };
+  }
+  if (c === 'polygon') {
+    const meta = await getPolygonUsdPriceLlama();
+    return { usd: toFiniteNumber(meta?.price) || 0, change24hPct: toFiniteNumber(meta?.change24hPct) };
+  }
+  if (c === 'bsc') {
+    const meta = await getBscUsdPriceLlama();
+    return { usd: toFiniteNumber(meta?.price) || 0, change24hPct: toFiniteNumber(meta?.change24hPct) };
+  }
+  return { usd: 0, change24hPct: null };
 }
 
 function getExplorerKey(chain) {
@@ -400,3 +536,15 @@ export const DataClient = {
 };
 
 export default DataClient;
+
+
+
+
+
+
+
+
+
+
+
+

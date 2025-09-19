@@ -36,6 +36,35 @@ const HIDE_USD_MIN = Number(
 );
 
 const tokenKey = (t) => `${t.chain}:${t.address || 'native'}:${(t.symbol || '').toUpperCase()}`;
+const toFiniteNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const pickChangePct = (src) => {
+  if (!src) return null;
+  const candidates = [
+    src.pctChange24h,
+    src.change24hPct,
+    src.priceChange24hPct,
+    src.price_change_pct_24h,
+    src.price_change_24h_pct
+  ];
+  for (const cand of candidates) {
+    const num = toFiniteNumber(cand);
+    if (num != null) return num;
+  }
+  return null;
+};
+
+const normalizePriceMeta = (meta, fallbackSource = 'defillama') => {
+  if (meta && typeof meta === 'object') {
+    const price = Number(meta.price ?? meta.usd ?? meta.value ?? 0) || 0;
+    return {
+      price,
+      change24hPct: toFiniteNumber(meta.change24hPct ?? meta.pctChange24h ?? meta.change24h),
+      source: meta.source || fallbackSource
+    };
+  }
+  const price = Number(meta) || 0;
+  return { price, change24hPct: null, source: fallbackSource };
+};
 
 function toRow(sr, wallet) {
   // Normalize a variety of upstream shapes into the aggregator row.
@@ -47,6 +76,7 @@ function toRow(sr, wallet) {
   const value = Number(
     sr.value ?? sr.valueUsd ?? sr.usd ?? sr.usd_value ?? 0
   );
+  const changePct = pickChangePct(sr);
   return {
     chain: (sr.chain || '').toLowerCase(), // 'pulse' | 'eth' | 'base'
     wallet,                                 // wallet address
@@ -58,10 +88,14 @@ function toRow(sr, wallet) {
     decimals: Number(sr.decimals ?? 18),
     amount: Number(sr.balance ?? sr.amount ?? 0),
     priceUsd: price,
-    valueUsd: value
+    priceSource: sr.priceSource || null,
+    changeSource: sr.changeSource || sr.priceSource || null,
+    valueUsd: value,
+    change24hPct: changePct,
+    pctChange24h: changePct,
+    priceChange24hPct: changePct
   };
 }
-
 /* ────────────────────────────────────────────────────────────────────────────
    SPAM FILTER
    - Hides tokens whose name/symbol/description contains a URL *or* a domain-like string.
@@ -206,17 +240,21 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           const discovered = await getEthTokensFromBlockscout(addr, { cacheMs: 5 * 60 * 1000 });
 
           // 2) Prices via DefiLlama (native + ERC-20)
-          let priceMap = new Map(); // lowercased contract -> priceUsd
-          let nativePriceUsd = 0;
+          let priceMap = new Map(); // lowercased contract -> { price, change24hPct, source }
+          let nativeMeta = normalizePriceMeta(null, 'defillama');
           try {
-            // fetch native + erc20 prices in parallel
-            const addrs = (discovered || []).map(t => t.address).filter(Boolean);
-            const [nPrice, pMap] = await Promise.all([
+            const addrs = (discovered || []).map((t) => t.address).filter(Boolean);
+            const [nativeRes, pMap] = await Promise.all([
               getEthUsdPriceLlama(),
               getEthTokenPricesLlama(addrs)
             ]);
-            nativePriceUsd = nPrice;
-            priceMap = pMap;
+            nativeMeta = normalizePriceMeta(nativeRes, 'defillama');
+            const srcMap = pMap instanceof Map ? pMap : new Map(pMap || []);
+            const normalized = new Map();
+            for (const [key, meta] of srcMap.entries()) {
+              normalized.set(key, normalizePriceMeta(meta, 'defillama'));
+            }
+            priceMap = normalized;
           } catch (e) {
             console.warn('[PortfolioAgg] Llama price fetch failed for', addr, e?.message);
           }
@@ -227,9 +265,24 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
               const legacy = force ? await refreshEthereumTokens(addr) : await fetchEthereumTokens(addr);
               for (const t of Array.isArray(legacy) ? legacy : []) {
                 const k = (t.address || t.contract || '').toLowerCase();
-                if (k) priceMap.set(k, Number(t.priceUsd ?? t.price ?? 0));
-                if (t.address === 'native' && !nativePriceUsd) {
-                  nativePriceUsd = Number(t.priceUsd ?? t.price ?? nativePriceUsd);
+                if (k) {
+                  const fallbackMeta = {
+                    price: Number(t.priceUsd ?? t.price ?? 0) || 0,
+                    change24hPct: pickChangePct(t),
+                    source: t.priceSource || 'legacy'
+                  };
+                  priceMap.set(k, normalizePriceMeta(fallbackMeta, fallbackMeta.source));
+                }
+                if (t.address === 'native') {
+                  const legacyPrice = Number(t.priceUsd ?? t.price ?? 0) || 0;
+                  if (!toFiniteNumber(nativeMeta.price) && legacyPrice) {
+                    const fallbackMeta = {
+                      price: legacyPrice,
+                      change24hPct: pickChangePct(t),
+                      source: t.priceSource || 'legacy'
+                    };
+                    nativeMeta = normalizePriceMeta(fallbackMeta, fallbackMeta.source);
+                  }
                 }
               }
             } catch (e) {
@@ -240,6 +293,9 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           // 3) Native ETH row (real amount via RPC)
           let nativeAmount = 0;
           try { nativeAmount = await getEthNativeBalance(addr); } catch { }
+          const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+          const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+          const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
           bucket.push(
             toRow(
               {
@@ -248,8 +304,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                 symbol: 'ETH',
                 name: 'Ether',
                 amount: nativeAmount,
-                priceUsd: nativePriceUsd,
-                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+                priceUsd: nativePrice,
+                valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+                change24hPct: nativePct,
+                pctChange24h: nativePct,
+                priceSource: nativeSource,
+                changeSource: nativeSource
               },
               addr
             )
@@ -258,7 +318,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           // 4) ERC-20 rows
           for (const t of discovered) {
             const amountUnits = toUnits(t.balanceRaw, Number(t.decimals ?? 18));
-            const p = priceMap.get(t.address) || 0;
+            const meta = priceMap.get((t.address || '').toLowerCase());
+            const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+            const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+            const source = meta?.source || 'defillama';
+            const priceSource = price > 0 ? source : 'none';
+            const changeSource = source;
             bucket.push(
               toRow(
                 {
@@ -268,8 +333,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                   name: t.name || t.symbol || 'Token',
                   decimals: Number(t.decimals ?? 18),
                   amount: amountUnits,
-                  priceUsd: p,
-                  valueUsd: p ? (amountUnits * p) : 0
+                  priceUsd: price,
+                  valueUsd: price ? (amountUnits * price) : 0,
+                  change24hPct: pct,
+                  pctChange24h: pct,
+                  priceSource,
+                  changeSource
                 },
                 addr
               )
@@ -289,10 +358,18 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
 
           // 2) Prices via DefiLlama (Base namespace)
           const addrs = discovered.map((t) => t.address).filter(Boolean);
-          const priceMap = await getBaseTokenPricesLlama(addrs);
+          const priceMapRaw = await getBaseTokenPricesLlama(addrs);
+          const srcMapBase = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+          const priceMap = new Map();
+          for (const [key, meta] of srcMapBase.entries()) {
+            priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+          }
 
           // 3) Native ETH on Base
-          const nativePriceUsd = await getBaseUsdPriceLlama();
+          const nativeMeta = normalizePriceMeta(await getBaseUsdPriceLlama(), 'defillama');
+          const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+          const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+          const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
           let nativeAmount = 0;
           try { nativeAmount = await getBaseNativeBalance(addr); } catch { }
           bucket.push(
@@ -303,8 +380,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                 symbol: 'ETH',
                 name: 'Ether',
                 amount: nativeAmount,
-                priceUsd: nativePriceUsd,
-                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+                priceUsd: nativePrice,
+                valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+                change24hPct: nativePct,
+                pctChange24h: nativePct,
+                priceSource: nativeSource,
+                changeSource: nativeSource
               },
               addr
             )
@@ -313,7 +394,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           // 4) ERC-20 rows
           for (const t of discovered) {
             const amountUnits = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
-            const p = priceMap.get(t.address) || 0;
+            const meta = priceMap.get((t.address || '').toLowerCase());
+            const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+            const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+            const source = meta?.source || 'defillama';
+            const priceSource = price > 0 ? source : 'none';
+            const changeSource = source;
             bucket.push(
               toRow(
                 {
@@ -323,15 +409,19 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                   name: t.name || t.symbol || 'Token',
                   decimals: Number(t.decimals ?? 18),
                   amount: amountUnits,
-                  priceUsd: p,
-                  valueUsd: p ? (amountUnits * p) : 0
+                  priceUsd: price,
+                  valueUsd: price ? amountUnits * price : 0,
+                  change24hPct: pct,
+                  pctChange24h: pct,
+                  priceSource,
+                  changeSource
                 },
                 addr
               )
             );
           }
         } catch (e) {
-          console.warn('[PortfolioAgg] BASE (Blockscout) fetch failed for', addr, e?.message);
+          console.warn('[PortfolioAgg] Base (Blockscout) fetch failed for', addr, e?.message);
         }
       })());
     }
@@ -344,10 +434,18 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
 
           // 2) Prices via DefiLlama (Polygon namespace)
           const addrs = discovered.map((t) => t.address).filter(Boolean);
-          const priceMap = await getPolygonTokenPricesLlama(addrs);
+          const priceMapRaw = await getPolygonTokenPricesLlama(addrs);
+          const srcMapPolygon = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+          const priceMap = new Map();
+          for (const [key, meta] of srcMapPolygon.entries()) {
+            priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+          }
 
           // 3) Native MATIC (Polygon PoS)
-          const nativePriceUsd = await getPolygonUsdPriceLlama();
+          const nativeMeta = normalizePriceMeta(await getPolygonUsdPriceLlama(), 'defillama');
+          const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+          const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+          const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
           let nativeAmount = 0;
           try { nativeAmount = await getPolygonNativeBalance(addr); } catch { }
           bucket.push(
@@ -358,8 +456,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                 symbol: 'MATIC',
                 name: 'Polygon',
                 amount: nativeAmount,
-                priceUsd: nativePriceUsd,
-                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+                priceUsd: nativePrice,
+                valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+                change24hPct: nativePct,
+                pctChange24h: nativePct,
+                priceSource: nativeSource,
+                changeSource: nativeSource
               },
               addr
             )
@@ -368,7 +470,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
           // 4) ERC-20 rows
           for (const t of discovered) {
             const amountUnits = toUnitsPolygon(t.balanceRaw, Number(t.decimals ?? 18));
-            const p = priceMap.get(t.address) || 0;
+            const meta = priceMap.get((t.address || '').toLowerCase());
+            const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+            const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+            const source = meta?.source || 'defillama';
+            const priceSource = price > 0 ? source : 'none';
+            const changeSource = source;
             bucket.push(
               toRow(
                 {
@@ -378,31 +485,39 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                   name: t.name || t.symbol || 'Token',
                   decimals: Number(t.decimals ?? 18),
                   amount: amountUnits,
-                  priceUsd: p,
-                  valueUsd: p ? (amountUnits * p) : 0
+                  priceUsd: price,
+                  valueUsd: price ? amountUnits * price : 0,
+                  change24hPct: pct,
+                  pctChange24h: pct,
+                  priceSource,
+                  changeSource
                 },
                 addr
               )
             );
           }
         } catch (e) {
-          console.warn('[PortfolioAgg] POLYGON (Blockscout) fetch failed for', addr, e?.message);
+          console.warn('[PortfolioAgg] Polygon (Blockscout) fetch failed for', addr, e?.message);
         }
       })());
     }
 
-    if (wantBsc) {
+    if (wantBsc  ) {
       tasks.push((async () => {
         try {
-          // 1) Discover via NodeReal
           const discovered = await getBscTokensFromNodereal(addr);
-
-          // 2) Prices via DefiLlama (BSC namespace)
           const addrs = discovered.map((t) => t.address).filter(Boolean);
-          const priceMap = await getBscTokenPricesLlama(addrs);
+          const priceMapRaw = await getBscTokenPricesLlama(addrs);
+          const srcMapBsc = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
+          const priceMap = new Map();
+          for (const [key, meta] of srcMapBsc.entries()) {
+            priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
+          }
 
-          // 3) Native BNB
-          const nativePriceUsd = await getBscUsdPriceLlama();
+          const nativeMeta = normalizePriceMeta(await getBscUsdPriceLlama(), 'defillama');
+          const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
+          const nativePct = toFiniteNumber(nativeMeta.change24hPct);
+          const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
           let nativeAmount = 0;
           try { nativeAmount = await getBscNativeBalance(addr); } catch { }
           bucket.push(
@@ -413,17 +528,25 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                 symbol: 'BNB',
                 name: 'BNB',
                 amount: nativeAmount,
-                priceUsd: nativePriceUsd,
-                valueUsd: nativePriceUsd ? nativeAmount * nativePriceUsd : 0
+                priceUsd: nativePrice,
+                valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
+                change24hPct: nativePct,
+                pctChange24h: nativePct,
+                priceSource: nativeSource,
+                changeSource: nativeSource
               },
               addr
             )
           );
 
-          // 4) ERC-20 rows (BEP-20)
           for (const t of discovered) {
             const amountUnits = toUnitsBsc(t.balanceRaw, Number(t.decimals ?? 18));
-            const p = priceMap.get(t.address) || 0;
+            const meta = priceMap.get((t.address || '').toLowerCase());
+            const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
+            const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
+            const source = meta?.source || 'defillama';
+            const priceSource = price > 0 ? source : 'none';
+            const changeSource = source;
             bucket.push(
               toRow(
                 {
@@ -433,8 +556,12 @@ export async function buildPortfolioDetailed(wallets = [], options = {}) {
                   name: t.name || t.symbol || 'Token',
                   decimals: Number(t.decimals ?? 18),
                   amount: amountUnits,
-                  priceUsd: p,
-                  valueUsd: p ? (amountUnits * p) : 0
+                  priceUsd: price,
+                  valueUsd: price ? amountUnits * price : 0,
+                  change24hPct: pct,
+                  pctChange24h: pct,
+                  priceSource,
+                  changeSource
                 },
                 addr
               )
