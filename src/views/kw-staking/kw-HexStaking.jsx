@@ -9,6 +9,8 @@ import { useRefresh } from '@/contexts/RefreshContext.jsx';
 
 import KwHexStakingHeaderContainer from '../../components/kw-HexStakingHeaderContainer.jsx';
 import WalletFilterChips from '../../components/WalletFilterChips.jsx';
+import { computeStakeProgress, getStakeProgressColor } from '../../utils/kwStakingProgress.js';
+import '../../styles/kw-staking-progress.css';
 import '../../styles/kw-hex-staking-header.css';
 
 /* ---------- Formatters ---------- */
@@ -1087,8 +1089,22 @@ export default function KwHexStaking() {
                                                 ? (unlockDayComputed - Number(currentDay))
                                                 : null;
 
+                                            const progress = computeStakeProgress({
+                                                lockedDay: r.lockedDay,
+                                                stakedDays: r.stakedDays,
+                                                unlockedDay: r.unlockedDay,
+                                                currentDay
+                                            });
+                                            const progressValue = Number.isFinite(progress)
+                                                ? Math.max(0, Math.min(progress * 100, 100)).toFixed(2)
+                                                : '0.00';
+                                            const rowStyle = {
+                                                '--kw-stake-progress': progressValue,
+                                                '--kw-stake-progress-color': getStakeProgressColor(status)
+                                            };
+
                                             return (
-                                                <tr key={r.id}>
+                                                <tr key={r.id} className="kw-staking-row" style={rowStyle}>
                                                     <td className="text-start"><span className="kw-wallet-chip">{walletDisplay}</span></td>
                                                     <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
                                                     <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
@@ -1154,9 +1170,28 @@ export default function KwHexStaking() {
                                             const totalUsd = Number.isFinite(price) && price > 0 ? totalHex * price : null;
 
                                             const unlockTooltip = formatAestDate(dateForHexDay(r.unlockedDay, currentDay));
+                                            const statusEnded = getStakeStatus({
+                                                lockedDay: r.lockedDay,
+                                                stakedDays: r.stakedDays,
+                                                unlockedDay: r.unlockedDay,
+                                                currentDay
+                                            });
+                                            const progressEnded = computeStakeProgress({
+                                                lockedDay: r.lockedDay,
+                                                stakedDays: r.stakedDays,
+                                                unlockedDay: r.unlockedDay,
+                                                currentDay
+                                            });
+                                            const progressValueEnded = Number.isFinite(progressEnded)
+                                                ? Math.max(0, Math.min(progressEnded * 100, 100)).toFixed(2)
+                                                : '0.00';
+                                            const rowStyleEnded = {
+                                                '--kw-stake-progress': progressValueEnded,
+                                                '--kw-stake-progress-color': getStakeProgressColor(statusEnded)
+                                            };
 
                                             return (
-                                                <tr key={`ended-${r.id}`}>
+                                                <tr key={`ended-${r.id}`} className="kw-staking-row" style={rowStyleEnded}>
                                                     <td className="text-start"><span className="kw-wallet-chip">{walletDisplay}</span></td>
                                                     <td className="text-end">{r.principalHex != null ? fmt0(r.principalHex) : '—'}</td>
                                                     <td className="text-end">{r.tShares != null ? fmt2(r.tShares) : '—'}</td>
@@ -1185,5 +1220,4 @@ export default function KwHexStaking() {
         </div>
     );
 }
-
 
