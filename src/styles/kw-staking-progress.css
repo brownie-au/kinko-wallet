@@ -5,37 +5,17 @@
     --kw-stake-progress: 0;
     --kw-stake-progress-color: rgba(72, 135, 255, 0.28);
     --kw-stake-progress-track: rgba(255, 255, 255, 0.04);
-}
-
-.kw-staking-row::before,
-.kw-staking-row::after {
-    content: '';
-    position: absolute;
-    inset: 0;
+    background-image:
+        linear-gradient(90deg, var(--kw-stake-progress-color), var(--kw-stake-progress-color)),
+        linear-gradient(0deg, var(--kw-stake-progress-track), var(--kw-stake-progress-track));
+    background-repeat: no-repeat;
+    background-position: left top, left top;
+    background-size: 0 100%, 0 100%;
+    transition: background-size 160ms ease;
     border-radius: 12px;
-    pointer-events: none;
-    opacity: 0;
 }
 
-.kw-staking-row::before {
-    background: var(--kw-stake-progress-track);
-    z-index: -2;
-}
-
-.kw-staking-row::after {
-    background: var(--kw-stake-progress-color);
-    width: 0;
-    z-index: -1;
-}
-
-.kw-staking-row:hover::before,
-.kw-staking-row:focus-visible::before,
-.kw-staking-row:hover::after,
-.kw-staking-row:focus-visible::after {
-    opacity: 1;
-}
-
-.kw-staking-row:hover::after,
-.kw-staking-row:focus-visible::after {
-    width: calc(var(--kw-stake-progress) * 1%);
+.kw-staking-row:hover,
+.kw-staking-row:focus-visible {
+    background-size: calc(var(--kw-stake-progress) * 1%) 100%, 100% 100%;
 }
