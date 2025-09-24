@@ -11,8 +11,8 @@
     background-repeat: no-repeat;
     background-position: left top, left top;
     background-size: 0 100%, 0 100%;
-    transition: background-size 160ms ease;
     border-radius: 12px;
+    clip-path: inset(0 round 12px);
 }
 
 .kw-staking-row:hover,
