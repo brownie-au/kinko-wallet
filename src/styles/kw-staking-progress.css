@@ -9,13 +9,15 @@
         linear-gradient(90deg, var(--kw-stake-progress-color), var(--kw-stake-progress-color)),
         linear-gradient(0deg, var(--kw-stake-progress-track), var(--kw-stake-progress-track));
     background-repeat: no-repeat;
-    background-position: left top, left top;
-    background-size: 0 100%, 0 100%;
-    border-radius: 12px;
-    clip-path: inset(0 round 12px);
+    background-position: left center, left center;
+    background-size: 0 calc(100% - 8px), 0 calc(100% - 8px);
+    border-radius: 16px;
+    clip-path: inset(0 round 16px);
 }
 
 .kw-staking-row:hover,
 .kw-staking-row:focus-visible {
-    background-size: calc(var(--kw-stake-progress) * 1%) 100%, 100% 100%;
+    background-size: calc(var(--kw-stake-progress) * 1%) calc(100% - 8px), 100% calc(100% - 8px);
 }
+
+

@@ -411,3 +411,14 @@
         padding-bottom: 12px;
     }
 }
+
+.kw-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: calc(7ch + 1.5rem);
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+}

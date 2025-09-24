@@ -557,6 +557,15 @@ export default function KwEhexStaking({ config }) {
             case 'lockedDay': return Number(r.lockedDay) || 0;
             case 'stakedDays': return Number(r.stakedDays) || 0;
             case 'unlockDay': return calcUnlockDay(r.lockedDay, r.stakedDays) || 0;
+            case 'progress': {
+                const fraction = computeStakeProgress({
+                    lockedDay: r.lockedDay,
+                    stakedDays: r.stakedDays,
+                    unlockedDay: r.unlockedDay,
+                    currentDay
+                });
+                return Number.isFinite(fraction) ? Math.max(0, Math.min(fraction * 100, 100)) : 0;
+            }
             case 'daysRemaining': {
                 const cd = Number(currentDay) || 0;
                 const ud = calcUnlockDay(r.lockedDay, r.stakedDays) || 0;
@@ -974,6 +983,11 @@ export default function KwEhexStaking({ config }) {
                                                     Unlock Day {sort.key === 'unlockDay' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
                                                 </button>
                                             </th>
+                                            <th aria-sort={ariaSort('progress')} className="text-end">
+                                                <button type="button" className="kw-sort-plain" onClick={() => toggleSort('progress')}>
+                                                    Progress {sort.key === 'progress' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
+                                                </button>
+                                            </th>
                                             <th aria-sort={ariaSort('daysRemaining')} className="text-end">
                                                 <button type="button" className="kw-sort-plain" onClick={() => toggleSort('daysRemaining')}>
                                                     Days Remaining {sort.key === 'daysRemaining' && <span className={`kw-sort-arrow ${sort.dir}`} aria-hidden />}
@@ -1035,11 +1049,13 @@ export default function KwEhexStaking({ config }) {
                                                 unlockedDay: r.unlockedDay,
                                                 currentDay
                                             });
-                                            const progressValue = Number.isFinite(progress)
-                                                ? Math.max(0, Math.min(progress * 100, 100)).toFixed(2)
-                                                : '0.00';
+                                            const progressPercent = Number.isFinite(progress)
+                                                ? Math.max(0, Math.min(progress * 100, 100))
+                                                : 0;
+                                            const progressStyleValue = progressPercent.toFixed(2);
+                                            const progressDisplay = `${Math.round(progressPercent)}%`;
                                             const rowStyle = {
-                                                '--kw-stake-progress': progressValue,
+                                                '--kw-stake-progress': progressStyleValue,
                                                 '--kw-stake-progress-color': getStakeProgressColor(status)
                                             };
 
@@ -1051,16 +1067,17 @@ export default function KwEhexStaking({ config }) {
                                                     <td className="text-end" title={lockedTooltip} aria-label={lockedTooltip}>{r.lockedDay ?? '—'}</td>
                                                     <td className="text-end">{r.stakedDays ?? '—'}</td>
                                                     <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{unlockDayComputed ? unlockDayComputed : '—'}</td>
+                                                    <td className="text-end">{progressDisplay}</td>
                                                     <td className="text-end">{daysRemaining != null ? daysRemaining : '—'}</td>
                                                     <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
                                                     <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
                                                     <td className="text-end">{fmt0(totalHex)}</td>
                                                     <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
                                                     <td className="text-start">
-                                                        {status === 'Active' && <Badge bg="primary">Active</Badge>}
-                                                        {status === 'Ready' && <Badge bg="success">Ready</Badge>}
-                                                        {status === 'Overdue' && <Badge bg="danger">Overdue</Badge>}
-                                                        {status === 'Ended' && <Badge bg="danger">Ended</Badge>}
+                                                        {status === 'Active' && <Badge bg="primary" className="kw-status-pill">Active</Badge>}
+                                                        {status === 'Ready' && <Badge bg="success" className="kw-status-pill">Ready</Badge>}
+                                                        {status === 'Overdue' && <Badge bg="danger" className="kw-status-pill">Overdue</Badge>}
+                                                        {status === 'Ended' && <Badge bg="danger" className="kw-status-pill">Ended</Badge>}
                                                     </td>
                                                 </tr>
                                             );
@@ -1085,6 +1102,7 @@ export default function KwEhexStaking({ config }) {
                                             <th className="text-end">Locked Day</th>
                                             <th className="text-end">Staked Days</th>
                                             <th className="text-end">Unlock Day</th>
+                                            <th className="text-end">Progress</th>
                                             <th className="text-end">{`Yield (${unit})`}</th>
                                             <th className="text-end">% APY</th>
                                             <th className="text-end">{`Total (${unit})`}</th>
@@ -1120,11 +1138,13 @@ export default function KwEhexStaking({ config }) {
                                                 unlockedDay: r.unlockedDay,
                                                 currentDay
                                             });
-                                            const progressValueEnded = Number.isFinite(progressEnded)
-                                                ? Math.max(0, Math.min(progressEnded * 100, 100)).toFixed(2)
-                                                : '0.00';
+                                            const progressPercentEnded = Number.isFinite(progressEnded)
+                                                ? Math.max(0, Math.min(progressEnded * 100, 100))
+                                                : 0;
+                                            const progressStyleValueEnded = progressPercentEnded.toFixed(2);
+                                            const progressDisplayEnded = `${Math.round(progressPercentEnded)}%`;
                                             const rowStyleEnded = {
-                                                '--kw-stake-progress': progressValueEnded,
+                                                '--kw-stake-progress': progressStyleValueEnded,
                                                 '--kw-stake-progress-color': getStakeProgressColor(statusEnded)
                                             };
 
@@ -1136,11 +1156,12 @@ export default function KwEhexStaking({ config }) {
                                                     <td className="text-end">{r.lockedDay ?? '—'}</td>
                                                     <td className="text-end">{r.stakedDays ?? '—'}</td>
                                                     <td className="text-end" title={unlockTooltip} aria-label={unlockTooltip}>{r.unlockedDay || '—'}</td>
+                                                    <td className="text-end">{progressDisplayEnded}</td>
                                                     <td className="text-end">{yieldHex != null ? fmt0(yieldHex) : '—'}</td>
                                                     <td className="text-end">{apyPct != null ? `${fmt2(apyPct)}%` : '—'}</td>
                                                     <td className="text-end">{fmt0(totalHex)}</td>
                                                     <td className="text-end">{totalUsd != null ? `$${fmt2(totalUsd)}` : '—'}</td>
-                                                    <td className="text-start"><Badge bg="secondary">Ended</Badge></td>
+                                                    <td className="text-start"><Badge bg="secondary" className="kw-status-pill">Ended</Badge></td>
                                                 </tr>
                                             );
                                         })}
