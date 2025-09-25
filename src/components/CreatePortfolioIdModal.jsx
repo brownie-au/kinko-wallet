@@ -110,7 +110,7 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
           color: 'var(--bs-body-color)',
         }}>
           <span role="img" aria-label="warning">⚠️</span>{' '}
-          <strong>Keep this ID safe and private</strong> — anyone with it can view your saved addresses.
+          <strong>Keep this ID safe and private</strong> - anyone with it can view your saved addresses.
         </Alert>
 
         <div className="small text-body-secondary mb-2">Wallets saved: <span className="text-body">{walletCount}</span></div>
@@ -129,8 +129,10 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
         {ok && <Alert variant="success" className="py-2 px-3">{ok}</Alert>}
       </Modal.Body>
 
-      <Modal.Footer className="d-flex justify-content-between">
-        <Button variant="secondary" onClick={onHide} disabled={busy}>Close</Button>
+      <Modal.Footer>
+        <Button variant="outline-secondary" onClick={onHide} disabled={busy}>
+          Cancel
+        </Button>
         <Button variant="primary" onClick={handlePrimary} disabled={busy || (!hasPid && walletCount === 0)}>
           {busy ? (<><Spinner as="span" animation="border" size="sm" className="me-2" />Saving...</>) : (hasPid ? 'Update Remote' : 'Create Remote')}
         </Button>
@@ -138,4 +140,5 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
     </Modal>
   );
 }
+
 
