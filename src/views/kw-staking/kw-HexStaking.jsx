@@ -19,6 +19,17 @@ const nf2 = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFr
 const fmt0 = (x) => nf0.format(Number(x) || 0);
 const fmt2 = (x) => nf2.format(Number(x) || 0);
 
+function formatProgressDisplay(percent) {
+    if (!Number.isFinite(percent)) return '0%';
+    const clamped = Math.max(0, Math.min(percent, 100));
+    if (clamped >= 100) return '100%';
+    if (clamped >= 99) {
+        const capped = Math.min(clamped, 99.9);
+        return `${capped.toFixed(1)}%`;
+    }
+    return `${Math.round(clamped)}%`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* HEXDailyStats (PulseChain) fetch + cache (for Yield/APY & fallback Price)  */
 /* -------------------------------------------------------------------------- */
@@ -1113,7 +1124,7 @@ export default function KwHexStaking() {
                                                 ? Math.max(0, Math.min(progress * 100, 100))
                                                 : 0;
                                             const progressStyleValue = progressPercent.toFixed(2);
-                                            const progressDisplay = `${Math.round(progressPercent)}%`;
+                                            const progressDisplay = formatProgressDisplay(progressPercent);
                                             const rowStyle = {
                                                 '--kw-stake-progress': progressStyleValue,
                                                 '--kw-stake-progress-color': getStakeProgressColor(status)
@@ -1204,7 +1215,7 @@ export default function KwHexStaking() {
                                                 ? Math.max(0, Math.min(progressEnded * 100, 100))
                                                 : 0;
                                             const progressStyleValueEnded = progressPercentEnded.toFixed(2);
-                                            const progressDisplayEnded = `${Math.round(progressPercentEnded)}%`;
+                                            const progressDisplayEnded = formatProgressDisplay(progressPercentEnded);
                                             const rowStyleEnded = {
                                                 '--kw-stake-progress': progressStyleValueEnded,
                                                 '--kw-stake-progress-color': getStakeProgressColor(statusEnded)

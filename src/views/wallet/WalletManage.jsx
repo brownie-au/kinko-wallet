@@ -103,6 +103,12 @@ const WalletManage = () => {
   const [showUseId, setShowUseId] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
 
+  const walletList = Array.isArray(wallets) ? wallets : [];
+  const totalWallets = walletList.length;
+  const activeWallets = walletList.filter((w) => !w.hidden).length;
+  const hiddenWallets = totalWallets - activeWallets;
+  const walletCountLabel = `${totalWallets} (${activeWallets} Active${hiddenWallets > 0 ? ` / ${hiddenWallets} Hidden` : ''})`;
+
   const navigate = useNavigate();
   const { removeSource } = usePortfolioValue();
 
@@ -307,7 +313,13 @@ const WalletManage = () => {
 
       <Card>
         <Card.Body>
-          <h5>Existing Wallets</h5>
+          <h5 className="d-flex align-items-center gap-2 flex-wrap">
+            <span>Existing Wallets</span>
+            <span className="fw-normal">{totalWallets}</span>
+            <span className="text-muted fw-normal">
+              ({activeWallets} Active{hiddenWallets > 0 ? ` / ${hiddenWallets} Hidden` : ''})
+            </span>
+          </h5>
           <ListGroup>
             {wallets.length === 0 && (
               <ListGroup.Item>No wallets added yet.</ListGroup.Item>
@@ -536,3 +548,4 @@ const WalletManage = () => {
 };
 
 export default WalletManage;
+

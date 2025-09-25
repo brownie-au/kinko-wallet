@@ -1,85 +1,165 @@
-import { useEffect, useState } from 'react';
+// src/components/CreatePortfolioIdModal.jsx
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Button, Alert, Form, Spinner } from 'react-bootstrap';
-import { createPortfolio, generatePortfolioId, getSyncId, setSyncId } from '../services/syncService.js';
+import { createPortfolio, getSyncId, setSyncId } from '../services/syncService.js';
 
 function readAllWalletsFromLS() {
   try {
     const raw = localStorage.getItem('wallets');
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 export default function CreatePortfolioIdModal({ show, onHide }) {
-  // Include hidden wallets for Portfolio ID operations
-  const wallets = readAllWalletsFromLS();
-  const [id, setId] = useState('');
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [locked, setLocked] = useState(false);
+  const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
+  const [ok, setOk] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  // On open, read any stored Portfolio ID and lock the field if present
+  const wallets = useMemo(() => readAllWalletsFromLS(), [show]);
+  const walletCount = wallets.length;
+
+  const [pid, setPid] = useState('');
   useEffect(() => {
-    if (show) {
-      setMsg('');
-      setErr('');
-      try {
-        const existing = getSyncId();
-        setId(existing || '');
-        setLocked(!!existing);
-      } catch {
-        setLocked(false);
-      }
-    }
+    if (!show) return;
+    setErr('');
+    setInfo('');
+    setOk('');
+    setCopied(false);
+    const current = (typeof getSyncId === 'function' ? getSyncId() : '') || '';
+    setPid(current);
   }, [show]);
 
-  const onCreateOrUpdate = async () => {
+  const handleCreateRemote = async () => {
+    setErr('');
+    setInfo('');
+    setOk('');
+    setCopied(false);
+
+    if (walletCount === 0) {
+      setInfo('Add at least one wallet address to create a Portfolio ID.');
+      return;
+    }
+
+    setBusy(true);
     try {
-      setBusy(true); setMsg(''); setErr('');
-      // Use existing stored ID if present; else generate once
-      const existing = getSyncId();
-      const useId = (existing || id || generatePortfolioId()).toUpperCase();
-      await createPortfolio(useId, wallets);
-      setId(useId);
-      try { setSyncId(useId); } catch {}
-      setLocked(true);
-      setMsg(existing || id ? 'Updated remote Portfolio.' : 'Created remote Portfolio.');
+      // ✅ Always let backend generate a fresh ID
+      const res = await createPortfolio(wallets);
+      const newId = res?.id;
+
+      if (!newId) throw new Error('Server did not return a Portfolio ID.');
+
+      setSyncId(newId);
+      setPid(newId);
+      setOk('Remote portfolio saved. Portfolio ID is ready to use.');
     } catch (e) {
-      setErr(e?.message || 'Remote save failed.');
+      setErr(e?.message || 'Failed to create remote portfolio.');
     } finally {
       setBusy(false);
     }
   };
 
-  const copy = () => id && navigator.clipboard?.writeText(id).catch(() => {});
+  const handleCopy = async () => {
+    try {
+      if (!pid) return;
+      await navigator.clipboard.writeText(pid);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { }
+  };
 
   return (
     <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton><Modal.Title>Create / Update Portfolio ID</Modal.Title></Modal.Header>
+      <Modal.Header closeButton>
+        <Modal.Title>Create / Update Portfolio ID</Modal.Title>
+      </Modal.Header>
+
       <Modal.Body>
-        <p className="mb-2">This writes your current wallets straight to the remote store.</p>
-        <div className="text-muted small mb-2">Wallets saved: {wallets?.length || 0}</div>
-        <Form.Group className="mb-3">
-          <Form.Label>Portfolio ID</Form.Label>
-          <Form.Control
-            value={id}
-            onChange={(e) => (!locked) && setId(e.target.value.toUpperCase())}
-            placeholder={locked ? 'Locked on this device' : 'Leave blank to generate'}
-            disabled={busy || locked}
-            readOnly={locked}
-          />
-          <div className="mt-2 d-flex gap-2">
-            <Button variant="secondary" onClick={copy} disabled={!id || busy}>Copy</Button>
+        <div className="mb-3" style={{ lineHeight: 1.4 }}>
+          <div style={{ opacity: 0.92 }}>
+            <strong>You’re updating your current remote portfolio.</strong>
           </div>
+          <div className="text-body-secondary">
+            To create a different portfolio, switch ID or logout first.
+          </div>
+        </div>
+
+        {walletCount === 0 && (
+          <Alert
+            variant="warning"
+            className="py-2 px-3 mb-2"
+            style={{
+              background: 'color-mix(in srgb, var(--bs-warning, #ffc107) 22%, transparent)',
+              borderColor: 'color-mix(in srgb, var(--bs-warning, #ffc107) 55%, transparent)',
+              color: 'var(--bs-body-color)',
+            }}
+          >
+            Add at least one wallet address to create a Portfolio ID.
+          </Alert>
+        )}
+
+        <Alert
+          variant="warning"
+          className="py-2 px-3"
+          style={{
+            background: 'color-mix(in srgb, var(--bs-warning, #ffc107) 18%, transparent)',
+            borderColor: 'color-mix(in srgb, var(--bs-warning, #ffc107) 55%, transparent)',
+            color: 'var(--bs-body-color)',
+          }}
+        >
+          <span role="img" aria-label="warning">⚠️</span>{' '}
+          <strong>Keep this ID safe and private</strong> — anyone with it can
+          view your saved addresses.
+        </Alert>
+
+        <div className="small text-body-secondary mb-2">
+          Wallets saved: <span className="text-body">{walletCount}</span>
+        </div>
+
+        <Form.Group className="mb-2">
+          <Form.Label className="mb-1">Portfolio ID</Form.Label>
+          <Form.Control
+            type="text"
+            value={pid}
+            readOnly
+            placeholder="Click Create Remote to generate a new Portfolio ID."
+            className="text-monospace"
+          />
         </Form.Group>
-        {msg && <Alert variant="success" className="mb-0">{msg}</Alert>}
-        {err && <Alert variant="danger" className="mb-0">{err}</Alert>}
+
+        <div className="d-flex gap-2 mb-2">
+          <Button
+            variant="secondary"
+            onClick={handleCopy}
+            disabled={!pid}
+            title={pid ? 'Copy Portfolio ID' : 'Nothing to copy yet'}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
+
+        {err && <Alert variant="danger" className="py-2 px-3">{err}</Alert>}
+        {info && <Alert variant="info" className="py-2 px-3">{info}</Alert>}
+        {ok && <Alert variant="success" className="py-2 px-3">{ok}</Alert>}
       </Modal.Body>
-      <Modal.Footer>
-        <Button variant="outline-secondary" onClick={onHide} disabled={busy}>Close</Button>
-        <Button variant="primary" onClick={onCreateOrUpdate} disabled={busy}>
-          {busy ? (<><Spinner size="sm" className="me-2" />Working.</>) : ((id || locked) ? 'Update Remote' : 'Create Remote')}
+
+      <Modal.Footer className="d-flex justify-content-between">
+        <Button variant="secondary" onClick={onHide} disabled={busy}>
+          Close
+        </Button>
+        <Button variant="primary" onClick={handleCreateRemote} disabled={busy}>
+          {busy ? (
+            <>
+              <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+              Saving…
+            </>
+          ) : (
+            'Create Remote'
+          )}
         </Button>
       </Modal.Footer>
     </Modal>
