@@ -32,9 +32,9 @@ export default function Footer() {
           {/* Footer Text */}
           <Col xs="auto" className="my-1">
             <p className="m-0">
-              {branding.brandName} ♥ Built by Brownie{' '}
+              {branding.brandName} ♥ PulseChain{' '}
               <a
-                href="https://x.com/RobBrow22393477"
+                href="https://x.com/kinkowallet"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary"
@@ -51,7 +51,7 @@ export default function Footer() {
               <div className="d-flex align-items-center gap-2">
                 <span>Donations:</span>
                 <a
-                  href="https://libertyswap.finance"
+                  href="https://x.com/kinkowallet"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-reset text-decoration-none"
@@ -70,7 +70,7 @@ export default function Footer() {
               <Nav.Link
                 className="p-0"
                 as="a"
-                href="https://x.com/RobBrow22393477"
+                href="mailto:kinkowallet@gmail.com"
                 target="_blank"
                 rel="noopener noreferrer"
               >
