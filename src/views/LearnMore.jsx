@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
-import MainCard from "components/MainCard";
 
 import "assets/scss/learn-more.scss";
 
@@ -17,14 +16,14 @@ export default function LearnMore() {
     <Container fluid className="learn-more-wrapper py-4 py-lg-5">
       <Row className="justify-content-center">
         <Col xl={8} lg={9} md={10}>
-          <div className="learn-more-header mb-4">
-            <h1 className="learn-more-title">Learn More About Kinko Wallet</h1>
-            <p className="learn-more-subtitle">
-              Kinko Wallet is your safe, watch-only portfolio dashboard built for clarity, simplicity, and control.
-            </p>
-          </div>
+          <div className="glass-card">
+            <div className="learn-more-header mb-4 text-center">
+              <h1 className="learn-more-title">Learn More About Kinko Wallet</h1>
+              <p className="learn-more-subtitle">
+                Kinko Wallet is your safe, watch-only portfolio dashboard built for clarity, simplicity, and control.
+              </p>
+            </div>
 
-          <MainCard className="learn-more-card" content={false}>
             <div className="learn-more-card__body">
               {/* SAFETY */}
               <section>
@@ -155,7 +154,7 @@ export default function LearnMore() {
                 </ul>
               </section>
             </div>
-          </MainCard>
+          </div>
         </Col>
       </Row>
     </Container>

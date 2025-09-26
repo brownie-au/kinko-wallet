@@ -1,0 +1,163 @@
+/* =========================================================
+   Kinko Wallet — Graphite Frost (global, non-hero pages)
+   Background sits on .kw-app (Dashboard layout). Hero page
+   stays untouched via its own .landing-page wrapper.
+   ========================================================= */
+
+/* ---- Tokens (tweak centrally) ---- */
+:root {
+      --kw-bg-image: url('/kw-bg.png'); /* served from /public */
+  --kw-frost-blur: 12px;
+  --kw-frost-tint: rgba(20, 22, 28, 0.58);
+  --kw-frost-border: rgba(255, 255, 255, 0.08);
+  --kw-frost-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  --kw-frost-radius: 16px;
+  --kw-frost-sheen: rgba(255, 255, 255, 0.06);
+    /* served from /public */
+    --kw-frost-blur: 12px;
+    /* 10–12px sweet spot */
+    --kw-frost-tint: rgba(20, 22, 28, 0.58);
+    /* graphite grey glaze */
+    --kw-frost-border: rgba(255, 255, 255, 0.08);
+    --kw-frost-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+    --kw-frost-radius: 16px;
+    --kw-frost-sheen: rgba(255, 255, 255, 0.06);
+    /* 1px top sheen */
+}
+
+/* ---- App background (fixed) ---- */
+.kw-app {
+    position: relative;
+    min-height: 100vh;
+
+    background-image: var(--kw-bg-image);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+
+    /* Subtle vignette to reduce banding on big screens */
+    &::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+            radial-gradient(1200px 800px at 50% 20%, rgba(0, 0, 0, 0.12), transparent 60%),
+            linear-gradient(0deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.10));
+    }
+}
+
+/* ---- Frosted utility (no @extend for safety) ---- */
+.kw-frosted {
+    background: var(--kw-frost-tint);
+    backdrop-filter: blur(var(--kw-frost-blur));
+    -webkit-backdrop-filter: blur(var(--kw-frost-blur));
+    border: 1px solid var(--kw-frost-border);
+    border-radius: var(--kw-frost-radius);
+    box-shadow: var(--kw-frost-shadow);
+    position: relative;
+}
+
+/* ---- Apply frosted to common surfaces inside kw-app ---- */
+.kw-app .card,
+.kw-app .list-group,
+.kw-app .modal-content,
+.kw-app .dropdown-menu,
+.kw-app .popover,
+.kw-app .toast {
+    background: var(--kw-frost-tint);
+    backdrop-filter: blur(var(--kw-frost-blur));
+    -webkit-backdrop-filter: blur(var(--kw-frost-blur));
+    border: 1px solid var(--kw-frost-border);
+    border-radius: var(--kw-frost-radius);
+    box-shadow: var(--kw-frost-shadow);
+    position: relative;
+}
+
+/* Optional top sheen line (depth) */
+.kw-app .card::after,
+.kw-app .modal-content::after,
+.kw-app .dropdown-menu::after,
+.kw-app .popover::after,
+.kw-app .toast::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    background: var(--kw-frost-sheen);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* Card headers slightly denser for legibility */
+.kw-app .card .card-header {
+    background: color-mix(in srgb, var(--kw-frost-tint) 100%, #000 8%);
+    border-bottom: 1px solid color-mix(in srgb, var(--kw-frost-border) 100%, #fff 20%);
+}
+
+/* Keep sidebar/vertical nav solid so nav stays crisp.
+   Adjust selectors to your actual sidebar classnames if needed. */
+.sidebar,
+.navbar-vertical,
+.pc-sidebar,
+.drawer {
+    background: rgba(13, 16, 20, 0.95);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+/* ================= Sidebar (lighter, solid) ================= */
+.kw-app .pc-sidebar {
+    background: #07363a;
+    /* lighter than current solid */
+    border-right: 1px solid rgba(21, 177, 164, 0.219);
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.884);
+}
+
+/* Sidebar text/icons */
+.kw-app .pc-sidebar .nav-link,
+.kw-app .pc-sidebar .pc-item,
+.kw-app .pc-sidebar .pc-link {
+    color: #eaeaeacc;
+}
+
+/* Active/hover states pop */
+.kw-app .pc-sidebar .nav-link:hover,
+.kw-app .pc-sidebar .pc-item.active .pc-link {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+}
+/* Tables: transparent base, readable header/hover */
+.kw-app table {
+    background: transparent;
+}
+
+.kw-app table thead th,
+.kw-app .table thead th {
+    background: color-mix(in srgb, var(--kw-frost-tint) 100%, #000 10%);
+}
+
+.kw-app table tbody tr:hover,
+.kw-app .table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* Charts: container wrappers can inherit glass without hurting canvas */
+.kw-app .recharts-wrapper,
+.kw-app .chart-container {
+    background: var(--kw-frost-tint);
+    backdrop-filter: blur(var(--kw-frost-blur));
+    -webkit-backdrop-filter: blur(var(--kw-frost-blur));
+    border: 1px solid var(--kw-frost-border);
+    border-radius: var(--kw-frost-radius);
+    box-shadow: var(--kw-frost-shadow);
+}
+
+/* Performance guardrail for small screens */
+@media (max-width: 768px) {
+    :root {
+        --kw-frost-blur: 8px;
+    }
+}

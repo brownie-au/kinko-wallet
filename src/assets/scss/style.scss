@@ -146,21 +146,25 @@ File: style.css
 @import 'themes/plugins/data-tables';
 @import 'themes/plugins/treeview';
 @import 'themes/layouts/customizer';
+
 /* Kinko: hide the right-side quick-action icons in the app header */
-.pc-header .ms-auto .pc-h-item { 
-  display: none !important; 
+.pc-header .ms-auto .pc-h-item {
+  display: none !important;
 }
 
 /* Some builds wrap them in a <ul> */
-.pc-header .ms-auto .pc-h-items { 
-  display: none !important; 
+.pc-header .ms-auto .pc-h-items {
+  display: none !important;
 }
+
 /* ================= Kinko: Dark modal (desktop + mobile) ================= */
 .modal-content {
-  background-color: #2a2f36;     /* lighter dark so text pops on mobile */
-  color: #eaeaea;                /* default body text */
+  background-color: #2a2f36;
+  /* lighter dark so text pops on mobile */
+  color: #eaeaea;
+  /* default body text */
   border: 1px solid #3b414a;
-  box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
 }
 
 .modal-header,
@@ -169,7 +173,8 @@ File: style.css
 }
 
 .modal-title {
-  color: #ffffff;                /* title should be crisp */
+  color: #ffffff;
+  /* title should be crisp */
 }
 
 /* Close (×) visible on dark */
@@ -184,19 +189,22 @@ File: style.css
 }
 
 .modal-content .form-control {
-  background-color: #363c44;     /* one shade lighter than card bg */
+  background-color: #363c44;
+  /* one shade lighter than card bg */
   border: 1px solid #4a5058;
   color: #ffffff;
 }
 
 .modal-content .form-control::placeholder {
-  color: #c9ccd1;                /* readable placeholder on dark */
+  color: #c9ccd1;
+  /* readable placeholder on dark */
 }
 
 .modal-content .form-control:focus {
   background-color: #363c44;
   color: #fff;
-  border-color: #00bcd4;         /* your accent */
+  border-color: #00bcd4;
+  /* your accent */
   box-shadow: none;
 }
 
@@ -212,6 +220,7 @@ File: style.css
   background-color: #00bcd4;
   border-color: #00bcd4;
 }
+
 .modal-content .btn-primary:hover,
 .modal-content .btn-primary:focus {
   background-color: #0097a7;
@@ -220,12 +229,16 @@ File: style.css
 
 /* Slightly tighter padding on phones */
 @media (max-width: 575.98px) {
-  .modal-content { padding: .25rem; }
+  .modal-content {
+    padding: .25rem;
+  }
 }
+
 /* Kinko: make the modal helper note readable */
 .modal-content {
   /* Override Bootstrap's secondary text color inside modals */
-  --bs-secondary-color: #cfd6df; /* light, readable on dark */
+  --bs-secondary-color: #cfd6df;
+  /* light, readable on dark */
 }
 
 .modal-content .form-text,
@@ -233,11 +246,20 @@ File: style.css
 .modal-content .text-body-secondary,
 .modal-content small {
   color: var(--bs-secondary-color) !important;
-  opacity: 1;             /* kill any extra dimming */
-  font-size: .92rem;      /* tiny bump so it doesn’t disappear */
+  opacity: 1;
+  /* kill any extra dimming */
+  font-size: .92rem;
+  /* tiny bump so it doesn’t disappear */
 }
+
 /* Kinko – portfolio cards tighten up */
 .pc-container .card {
   background: var(--bs-card-bg);
-  border-color: rgba(255,255,255,0.08);
+  border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* =======================================================
+   Kinko Wallet: Graphite Frost theme (global activation)
+   NOTE: keep this import LAST so it overrides where needed.
+   ======================================================= */
+@import 'frosted-theme';

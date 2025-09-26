@@ -8,19 +8,20 @@ import Customizer from './Customizer';
 import Breadcrumbs from 'components/Breadcrumbs';
 import useConfig from 'hooks/useConfig';
 import NavigationScroll from 'components/NavigationScroll';
-
 import TickerBar from 'components/TickerBar';
 
 export default function MainLayout() {
   const { container } = useConfig();
 
   return (
-    <>
+    <div className="kw-app">
       <Customizer />
       <Drawer />
 
       {/* 🔝 Ticker first so it sits at the very top; header/hamburger comes below */}
-      <TickerBar />
+      <div className="kw-ticker">
+        <TickerBar />
+      </div>
 
       <Header />
 
@@ -34,6 +35,6 @@ export default function MainLayout() {
       </div>
 
       <Footer />
-    </>
+    </div>
   );
 }

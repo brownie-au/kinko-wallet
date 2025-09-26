@@ -17,21 +17,10 @@ const COINS = [
     { id: 'dogecoin', label: 'DOGE' },
     { id: 'cardano', label: 'ADA' },
     { id: 'tron', label: 'TRX' },
-        { id: 'pulsex', label: 'PLSX' },
+    { id: 'pulsex', label: 'PLSX' },
     { id: 'pulsex-incentive-token', label: 'INC' },
     { id: 'hex', label: 'eHEX' },
     { id: 'hex-pulsechain', label: 'HEX' }
-];
-
-const DEMO_ITEMS = [
-    { id: 'btc', symbol: 'BTC', price: 67321, change24h: 0.8 },
-    { id: 'eth', symbol: 'ETH', price: 3511, change24h: -0.5 },
-    { id: 'usdc', symbol: 'USDC', price: 1.0, change24h: 0.01 },
-    { id: 'pls', symbol: 'PLS', price: 0.00005, change24h: 3.2 },
-    { id: 'plsx', symbol: 'PLSX', price: 0.000035, change24h: -1.1 },
-    { id: 'inc', symbol: 'INC', price: 2.12, change24h: 0.7 },
-    { id: 'ehex', symbol: 'eHEX', price: 0.01148, change24h: -0.2 },
-    { id: 'phex', symbol: 'HEX', price: 0.0009, change24h: 0.4 }
 ];
 
 const fmtUsd = (n) => {
@@ -50,15 +39,15 @@ const fmtUsd = (n) => {
 };
 
 export default function TickerBar({
-    height = 38,
     refreshMs = 60_000,
     className = '',
-    /** NEW: lower = faster, higher = slower */
+    /** lower = faster, higher = slower (seconds per loop) */
     speedSec = 60
 }) {
     const { pathname } = useLocation();
     const [items, setItems] = useState([]);
 
+    // Hide on specific routes
     if (HIDDEN_ON.has(pathname)) return null;
 
     const reduceMotion = useMemo(() => {
@@ -107,12 +96,17 @@ export default function TickerBar({
                 const mapped = COINS.map((coin) => {
                     const r = byId.get(coin.id);
                     if (!r) return null;
-                    return { id: r.id, symbol: coin.label || r.symbol, price: r.price, change24h: r.change24h };
+                    return {
+                        id: r.id,
+                        symbol: coin.label || r.symbol,
+                        price: r.price,
+                        change24h: r.change24h
+                    };
                 }).filter(Boolean);
 
-                if (alive && mapped.length) setItems(mapped);
+                if (alive) setItems(mapped);
             } catch {
-                if (alive) setItems([]);
+                if (alive) setItems([]); // no demo items; stays empty
             }
         }
 
@@ -124,33 +118,42 @@ export default function TickerBar({
         };
     }, [refreshMs]);
 
-    const row = (items.length ? items : DEMO_ITEMS).map((c) => (
+    const row = items.map((c) => (
         <div key={c.id} className={styles.item}>
             <span className={styles.symbol}>{c.symbol}</span>
             <span className={styles.price}>{fmtUsd(c.price)}</span>
             <span
-                className={`${styles.change} ${Number(c.change24h) >= 0 ? 'text-success' : 'text-danger'}`}
+                className={`${styles.change} ${Number(c.change24h) >= 0 ? 'text-success' : 'text-danger'
+                    }`}
                 title="24h change"
             >
-                {Number(c.change24h) >= 0 ? '▲' : '▼'} {Math.abs(Number(c.change24h) || 0).toFixed(2)}%
+                {Number(c.change24h) >= 0 ? '▲' : '▼'}{' '}
+                {Math.abs(Number(c.change24h) || 0).toFixed(2)}%
             </span>
         </div>
     ));
 
     return (
-        <div
-            className={[styles.kwTicker, styles.sticky, className].filter(Boolean).join(' ')}
-            style={{ height }}
-            role="region"
-            aria-label="Crypto ticker"
-        >
+        <>
             <div
-                className={[styles.wrap, reduceMotion ? styles.wrapStatic : ''].join(' ')}
-                style={{ animationDuration: `${35}s` }}  // ← controls speed
+                className={[styles.kwTicker, className].filter(Boolean).join(' ')}
+                role="region"
+                aria-label="Crypto ticker"
             >
-                <div className={styles.track}>{row}</div>
-                <div className={styles.track}>{row}</div>
+                {/* Only animate when we have data */}
+                <div
+                    className={[styles.wrap, reduceMotion || items.length === 0 ? styles.wrapStatic : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                    style={{ animationDuration: `${speedSec}s` }}
+                >
+                    <div className={styles.track}>{row}</div>
+                    <div className={styles.track}>{row}</div>
+                </div>
             </div>
-        </div>
+
+            {/* Spacer to offset the fixed ticker height (see .spacer in CSS) */}
+            <div className={styles.spacer} />
+        </>
     );
 }

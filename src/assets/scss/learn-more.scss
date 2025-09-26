@@ -55,26 +55,34 @@
     color: #a7dcff;
   }
 
-  .learn-more-card {
-    background: var(--pc-active-background, rgba(27, 31, 40, 0.85));
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    color: inherit;
+  /* === Glass Card Style === */
+  .glass-card {
+    background: rgba(7, 64, 71, 0.432);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--bs-border-radius-xl, 1rem);
-    box-shadow: var(--pc-card-box-shadow, 0 16px 32px rgba(8, 10, 16, 0.45));
+    box-shadow: 0 16px 32px rgba(8, 10, 16, 0.55);
+    padding: 2.5rem 2.75rem;
+    color: inherit;
   }
 
   .learn-more-card__body {
-    padding: 2.5rem 2.75rem;
+    padding: 0;
+    /* content padding handled by glass-card now */
   }
 
-  .learn-more-card section + section {
+  .glass-card section+section {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     margin-top: 2.25rem;
+    padding-top: 2.25rem;
   }
 
   .section-heading {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: #2ac2b0;
+    /* Accent green for Kinko style */
     margin-bottom: 0.85rem;
   }
 
@@ -88,12 +96,12 @@
   }
 
   .faq-question {
-    color: rgba(255, 255, 255, 0.88);
+    color: rgba(255, 255, 255, 0.9);
     margin-bottom: 0.4rem;
   }
 
   .faq-answer {
-    color: rgba(255, 255, 255, 0.72);
+    color: rgba(255, 255, 255, 0.75);
   }
 
   .summary-list {
@@ -117,14 +125,15 @@
   }
 }
 
+/* === Responsive Tweaks === */
 @media (max-width: 991.98px) {
-  .learn-more-card__body {
+  .glass-card {
     padding: 2rem !important;
   }
 }
 
 @media (max-width: 575.98px) {
-  .learn-more-card__body {
+  .glass-card {
     padding: 1.5rem !important;
   }
 
@@ -136,4 +145,3 @@
     font-size: 1.1rem;
   }
 }
-

@@ -1,31 +1,59 @@
 /* src/components/TickerBar.module.css */
 
-/* Root container */
+/* Height token used by spacer and layout */
+:root {
+    --kw-ticker-h: 44px;
+    /* adjust if you tweak padding/font-size */
+}
+
+/* Root container (now fixed to the viewport) */
 .kwTicker {
-    width: 100%;
-    display: block;
-    overflow: hidden;
-    background: var(--bs-body-bg);
-    border: 0;
-    /* remove thin lines above/below */
-}
-
-/* Sticky placement */
-.sticky {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 1010;
-    /* above content overlays, below sidebar/offcanvas */
+    /* above content, below nav overlays if any */
+
+    width: 100%;
+    overflow: hidden;
+
+    /* Frosted, on-brand tint */
+    background: rgba(16, 42, 46, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+
+    /* Soft separation from content below */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05), 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-/* Track wrapper */
+/* Optional: graceful fallback when backdrop-filter unsupported */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .kwTicker {
+        background: rgba(16, 42, 46, 0.88);
+    }
+}
+
+/* Provide vertical space so content doesn't slide under the fixed bar.
+   Drop <div className={styles.spacer} /> directly AFTER the TickerBar component. */
+.spacer {
+    height: var(--kw-ticker-h);
+}
+
+/* Track wrapper (marquee) */
 .wrap {
     display: flex;
     width: max-content;
     gap: 64px;
-    /* space between the two tracks */
     will-change: transform;
     animation: kw_ticker_scroll 60s linear infinite;
+
+    /* keep the bar’s visual height stable */
+    padding: 8px 14px;
+    /* tweak with --kw-ticker-h above */
+    box-sizing: border-box;
+    min-height: var(--kw-ticker-h);
 }
 
 .wrapStatic {
@@ -36,7 +64,6 @@
 .track {
     display: inline-flex;
     gap: 20px;
-    padding: 6px 12px;
 }
 
 /* Items */
@@ -45,14 +72,16 @@
     align-items: center;
     gap: 8px;
     white-space: nowrap;
-    font-size: 0.95rem;
-    line-height: 1;
+    font-size: 0.9rem;
+    line-height: 1.25;
+    color: #e5f7f8;
     opacity: 0.95;
 }
 
 .symbol {
     font-weight: 700;
     letter-spacing: 0.2px;
+    color: #eafcff;
     opacity: 0.95;
 }
 
@@ -70,8 +99,6 @@
     to {
         transform: translateX(-50%);
     }
-
-    /* two tracks = 50% loop */
 }
 
 /* Respect reduced-motion */
@@ -82,14 +109,26 @@
     }
 }
 
-/* Pause the scroll when hovering the ticker */
+/* Pause on hover (desktop) */
 .kwTicker:hover .wrap {
     animation-play-state: paused;
 }
 
-/* On touch devices there's no hover — keep it running */
+/* Touch devices: keep running */
 @media (hover: none) {
     .kwTicker:hover .wrap {
         animation-play-state: running;
+    }
+}
+
+/* Compact tweaks */
+@media (max-width: 992px) {
+    .track {
+        gap: 16px;
+    }
+
+    .item {
+        font-size: 0.88rem;
+        gap: 6px;
     }
 }
