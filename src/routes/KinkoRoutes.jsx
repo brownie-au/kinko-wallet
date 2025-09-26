@@ -8,6 +8,7 @@ import { WalletProvider } from 'contexts/WalletContext';
 const WalletDashboard = Loadable(lazy(() => import('views/wallet/WalletDashboard')));
 const WalletManage = Loadable(lazy(() => import('views/wallet/WalletManage')));
 const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
+const LearnMore = Loadable(lazy(() => import('views/LearnMore')));
 
 // View All (Portfolio)
 const Portfolio = Loadable(lazy(() => import('views/portfolio/Portfolio')));
@@ -39,6 +40,7 @@ const KinkoRoutes = {
       ]
     },
     { path: 'wallet/:address', element: <WalletDetail /> },
+    { path: 'learn-more', element: <LearnMore /> },
 
     // View All -> always render the new Portfolio page
     {
@@ -79,3 +81,4 @@ const KinkoRoutes = {
 };
 
 export default KinkoRoutes;
+

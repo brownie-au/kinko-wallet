@@ -27,8 +27,8 @@ const router = createBrowserRouter(
       element: <SimpleLayout />,
       children: [
         { index: true, element: <PagesLanding /> },
-        { path: 'landing', element: <PagesLanding /> }
-        // ⛔ DO NOT put /portfolio here
+        { path: 'landing', element: <PagesLanding /> },
+        // ? DO NOT put /portfolio here
       ]
     },
 
@@ -48,3 +48,12 @@ const router = createBrowserRouter(
 );
 
 export default router;
+
+
+
+
+
+
+
+
+

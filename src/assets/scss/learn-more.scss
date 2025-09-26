@@ -1,0 +1,139 @@
+.learn-more-wrapper {
+  color: rgba(255, 255, 255, 0.88);
+  background: var(--bs-body-bg, #11151f);
+  min-height: calc(100vh - var(--pc-header-height, 0px));
+
+  .learn-more-header {
+    text-align: left;
+  }
+
+  .learn-more-title {
+    font-size: clamp(2rem, 1.6rem + 1.2vw, 2.8rem);
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: var(--pc-heading-color, #ffffff);
+  }
+
+  .learn-more-subtitle {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 1.05rem;
+    max-width: 680px;
+    margin: 0;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: #ffffff;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    line-height: 1.65;
+  }
+
+  ul {
+    margin-bottom: 1.75rem;
+    padding-left: 1.4rem;
+  }
+
+  li {
+    margin-bottom: 0.55rem;
+    line-height: 1.65;
+  }
+
+  a {
+    color: #7cc7ff;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  a:hover,
+  a:focus {
+    text-decoration: underline;
+    color: #a7dcff;
+  }
+
+  .learn-more-card {
+    background: var(--pc-active-background, rgba(27, 31, 40, 0.85));
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    color: inherit;
+    border-radius: var(--bs-border-radius-xl, 1rem);
+    box-shadow: var(--pc-card-box-shadow, 0 16px 32px rgba(8, 10, 16, 0.45));
+  }
+
+  .learn-more-card__body {
+    padding: 2.5rem 2.75rem;
+  }
+
+  .learn-more-card section + section {
+    margin-top: 2.25rem;
+  }
+
+  .section-heading {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.85rem;
+  }
+
+  .section-intro {
+    margin-bottom: 1.1rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .faq-item {
+    margin-bottom: 1.6rem;
+  }
+
+  .faq-question {
+    color: rgba(255, 255, 255, 0.88);
+    margin-bottom: 0.4rem;
+  }
+
+  .faq-answer {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .summary-list {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .summary-list li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .summary-list li::before {
+    content: '\2022';
+    position: absolute;
+    left: 0;
+    color: #7cc7ff;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .learn-more-card__body {
+    padding: 2rem !important;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .learn-more-card__body {
+    padding: 1.5rem !important;
+  }
+
+  .learn-more-title {
+    font-size: 1.9rem !important;
+  }
+
+  .section-heading {
+    font-size: 1.1rem;
+  }
+}
+

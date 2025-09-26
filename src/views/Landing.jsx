@@ -1,15 +1,42 @@
 // src/views/Landing.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import PortfolioIdModal from '../components/PortfolioIdModal.jsx';
 import DisclaimerModal from '../components/DisclaimerModal.jsx';
+import WelcomeModal from '../components/WelcomeModal.jsx'; // NEW
 import Logo from 'assets/images/logo-white.svg';
 import 'assets/scss/landing.scss';
+import '../styles/hero-buttons.css';
+
+function readAllWalletsFromLS() {
+  try {
+    const raw = localStorage.getItem('wallets');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function LandingPage() {
   const [showUsePid, setShowUsePid] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [walletCount, setWalletCount] = useState(0);
+
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const wallets = readAllWalletsFromLS();
+    setWalletCount(wallets.length);
+  }, []);
+
+  const handleNewUserClick = () => {
+    navigate('/wallets/manage');
+    if (walletCount === 0) {
+      setShowWelcome(true);
+    }
+  };
 
   return (
     <div className="landing-page">
@@ -21,18 +48,27 @@ export default function LandingPage() {
           <p className="lp-tagline">Secure insights, no keys required.</p>
           <br />
 
-          {/* Centered CTA row (hard-centered, ignores lp-cta left bias) */}
-          <div
-            className="lp-cta d-flex justify-content-center gap-3 flex-wrap"
-            style={{ marginLeft: 'auto', marginRight: 'auto', width: 'fit-content' }}
-          >
-            <Link to="/dashboard/default" className="btn btn-primary btn-lg">
-              Get Started
-            </Link>
+          {/* New User pill on its own row */}
+          {walletCount === 0 && (
+            <div className="mb-3">
+              <button
+                type="button"
+                className="btn hero-pill btn-kinko-green"
+                onClick={handleNewUserClick}
+              >
+                New User — Start Here
+              </button>
+            </div>
+          )}
 
+          {/* Dashboard + Portfolio ID row */}
+          <div className="hero-button-group">
+            <Link to="/dashboard/default" className="btn btn-primary hero-pill">
+              Dashboard
+            </Link>
             <button
               type="button"
-              className="btn btn-outline-secondary btn-lg"
+              className="btn btn-outline-secondary hero-pill"
               onClick={() => setShowUsePid(true)}
             >
               Use Portfolio ID
@@ -61,7 +97,6 @@ export default function LandingPage() {
             aria-haspopup="dialog"
             aria-controls="kw-disclaimer-modal"
             onClick={() => setShowDisclaimer(true)}
-            // Keep visual style identical to surrounding text
             style={{
               background: 'transparent',
               border: 0,
@@ -80,6 +115,7 @@ export default function LandingPage() {
         <div className="lp-hero-divider" />
       </header>
 
+      {/* Modals */}
       <PortfolioIdModal
         show={showUsePid}
         onHide={() => setShowUsePid(false)}
@@ -88,6 +124,10 @@ export default function LandingPage() {
       <DisclaimerModal
         show={showDisclaimer}
         onHide={() => setShowDisclaimer(false)}
+      />
+      <WelcomeModal
+        show={showWelcome}
+        onHide={() => setShowWelcome(false)}
       />
     </div>
   );

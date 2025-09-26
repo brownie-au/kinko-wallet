@@ -1,0 +1,41 @@
+/* src/styles/hero-buttons.css */
+.hero-button-group {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 0 auto;
+    width: fit-content;
+}
+
+.hero-button-group > * {
+    margin: 0.35rem 0.65rem;
+}
+
+@supports (gap: 0.75rem) {
+    .hero-button-group {
+        gap: 0.75rem;
+    }
+
+    .hero-button-group > * {
+        margin: 0;
+    }
+}
+
+.hero-pill {
+    border-radius: 50px !important;
+    padding: 0.6rem 1.5rem !important;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+.btn-kinko-green {
+    background-color: #2AC2B0 !important;
+    /* Kinko Wallet green */
+    border: none !important;
+    color: #fff !important;
+}
+
+.btn-kinko-green:hover {
+    background-color: #2ea68f !important;
+}

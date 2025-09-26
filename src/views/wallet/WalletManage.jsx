@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useWallets } from '../../contexts/WalletContext.jsx';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
+import WelcomeModal from '../../components/WelcomeModal.jsx';
 import { clearSyncId } from '../../services/syncService.js';
 import { clearEhexStakesCaches } from '../../services/kw-ehexStakingService.js';
 import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
@@ -42,6 +43,9 @@ const WalletManage = () => {
   const [dragIndex, setDragIndex] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragGhostRef = useRef(null);
+  const addressInputRef = useRef(null);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeModalDismissed, setWelcomeModalDismissed] = useState(false);
 
   const destroyDragGhost = () => {
     try {
@@ -138,6 +142,30 @@ const WalletManage = () => {
     try { replaceWallets(all.filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }))); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    if (totalWallets > 0 && welcomeModalDismissed) {
+      setWelcomeModalDismissed(false);
+    }
+  }, [totalWallets, welcomeModalDismissed]);
+
+  useEffect(() => {
+    if (totalWallets === 0 && !welcomeModalDismissed) {
+      setShowWelcomeModal(true);
+    } else if (totalWallets > 0 && showWelcomeModal) {
+      setShowWelcomeModal(false);
+    }
+  }, [totalWallets, welcomeModalDismissed, showWelcomeModal]);
+
+  const handleWelcomeModalHide = () => {
+    if (totalWallets === 0) {
+      setWelcomeModalDismissed(true);
+    }
+    setShowWelcomeModal(false);
+    setTimeout(() => {
+      try { addressInputRef.current && addressInputRef.current.focus(); } catch {}
+    }, 0);
+  };
+
 
   // Add
   const addWallet = (e) => {
@@ -281,6 +309,7 @@ const WalletManage = () => {
                 <Form.Group controlId="walletAddress">
                   <Form.Label>Wallet Address</Form.Label>
                   <Form.Control
+                    ref={addressInputRef}
                     type="text"
                     placeholder="0x1234...abcd"
                     value={address}
@@ -535,6 +564,11 @@ const WalletManage = () => {
       </Modal>
 
       {/* Modals */}
+      <WelcomeModal
+        show={showWelcomeModal}
+        onHide={handleWelcomeModalHide}
+      />
+
       <PortfolioIdModal
         show={showUseId}
         onHide={() => setShowUseId(false)}

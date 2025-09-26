@@ -3,7 +3,7 @@
   Keeps things tidy and prevents bleed onto app pages.
 ======================================================================*/
 
-// Theme deps
+/* Theme deps */
 @import 'bootstrap/scss/functions';
 @import 'bootstrap/scss/variables';
 @import 'settings/color-variables';
@@ -11,18 +11,36 @@
 @import 'settings/theme-variables';
 @import 'bootstrap/scss/mixins';
 
-/* Root wrapper to scope everything */
+/* ============================== ROOT WRAPPER ============================== */
+
 .landing-page {
-  background: var(--pc-sidebar-background); /* same grey as app */
+  /* Base colour in case image hasn’t loaded yet */
+  // background-color: var(--pc-sidebar-background);
+
+  /* Hero/landing background image + dark gradient overlay */
+  background-image:
+    linear-gradient(rgba(6, 24, 36, 0.137), rgba(6, 24, 36, 0.219)),
+    url('/kw-bg.png');
+  /* served from /public */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  /* Optional: nice feel on desktop; disabled on small screens below */
+  background-attachment: fixed;
+
   color: #fff;
   min-height: 100vh;
 
   /* Hide the tiny navbar brand on landing only (we show a centered one in hero) */
-  .navbar .navbar-brand { display: none !important; }
+  .navbar .navbar-brand {
+    display: none !important;
+  }
 
   /* NAVBAR sizing on landing so it matches the app header */
   .navbar {
-    padding: 8px 0; /* slim */
+    padding: 8px 0;
+    /* slim */
     box-shadow: 0 6px 10px rgba(12, 21, 70, 0.03);
     background: var(--pc-sidebar-background);
   }
@@ -32,10 +50,11 @@
 
 .landing-page .lp-hero {
   position: relative;
-  padding-top: 96px;          /* room for fixed navbar */
+  padding-top: 96px;
+  /* room for fixed navbar */
   padding-bottom: 72px;
   text-align: center;
-  background: var(--pc-sidebar-background);
+  background-color: transparent;
 
   /* center the whole stack vertically */
   display: flex;
@@ -44,11 +63,15 @@
   align-items: center;
   min-height: calc(100vh - 96px - 72px);
 
-  .container { max-width: 920px; }
+  .container {
+    max-width: 920px;
+  }
 
   .brand-badge {
-    height: 200px;            /* hero logo size */
-    width: auto;              /* keep aspect ratio — no squish */
+    height: 200px;
+    /* hero logo size */
+    width: auto;
+    /* keep aspect ratio — no squish */
     margin: 0 auto 18px;
     display: block;
     opacity: .98;
@@ -73,35 +96,38 @@
   /* copyright line just above the divider */
   .lp-copy {
     text-align: center;
-    font-size: 0.78rem;     /* a touch smaller */
-    font-weight: 300;       /* thinner */
-    opacity: 0.6;           /* lighter */
+    font-size: 0.78rem;
+    /* a touch smaller */
+    font-weight: 300;
+    /* thinner */
+    opacity: 0.6;
+    /* lighter */
     letter-spacing: 0.2px;
-    margin: 18px 0 10px;    /* breathing room */
+    margin: 18px 0 10px;
+    /* breathing room */
   }
 
   /* subtle divider under the hero, pinned to bottom */
   .lp-hero-divider {
     height: 1px;
     width: 100%;
-    margin-top: auto;       /* push to bottom of hero */
-    background: linear-gradient(
-      to right,
-      rgba(255,255,255,0) 0%,
-      rgba(255,255,255,0.14) 20%,
-      rgba(255,255,255,0.14) 80%,
-      rgba(255,255,255,0) 100%
-    );
+    margin-top: auto;
+    /* push to bottom of hero */
+    background: linear-gradient(to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.14) 20%,
+        rgba(255, 255, 255, 0.14) 80%,
+        rgba(255, 255, 255, 0) 100%);
     opacity: .7;
   }
 }
 
-/* ============================== FOOTER (kept minimal / hidden on landing) ============================== */
+/* ============================== FOOTER (minimal/hidden on landing) ============================== */
 
 .landing-page .lp-footer {
   background: var(--pc-sidebar-background);
-  border-top: 1px solid rgba(255,255,255,0.06);
-  padding: 28px 0 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 28px 0 0px;
 }
 
 /* ============================== UTILITIES ============================== */
@@ -114,8 +140,9 @@
   display: none !important;
 }
 
-/* Ensure nothing sets a random white background */
-.landing-page * {
+/* Ensure nothing else sets a random background image,
+   but DO NOT clobber our hero/landing background */
+.landing-page *:not(.lp-hero) {
   background-image: none !important;
 }
 
@@ -131,28 +158,47 @@
 /* ============================== RESPONSIVE ============================== */
 
 @media (max-width: 991.98px) {
-  .landing-page .lp-hero .brand-badge { height: 96px; }
+  .landing-page .lp-hero .brand-badge {
+    height: 96px;
+  }
 }
 
+/* Disable fixed background on small screens to avoid jank */
 @media (max-width: 767.98px) {
+  .landing-page {
+    background-attachment: scroll;
+  }
+
   .landing-page .lp-hero {
     padding-top: 84px;
     padding-bottom: 60px;
     min-height: calc(100vh - 84px - 60px);
   }
 
-  .landing-page .lp-hero .lp-title { font-size: 1.8rem; }
-  .landing-page .lp-hero .lp-cta .btn { padding: 9px 18px; }
-  .landing-page .lp-hero .lp-hero-divider { margin-top: 40px; }
+  .landing-page .lp-hero .lp-title {
+    font-size: 1.8rem;
+  }
+
+  .landing-page .lp-hero .lp-cta .btn {
+    padding: 9px 18px;
+  }
+
+  .landing-page .lp-hero .lp-hero-divider {
+    margin-top: 40px;
+  }
 }
 
 @media (max-width: 575.98px) {
-  .landing-page .lp-hero .brand-badge { height: 72px; }
+  .landing-page .lp-hero .brand-badge {
+    height: 72px;
+  }
 }
-/* Light mode: make hero heading/tagline white for contrast */
-[data-pc-theme='light'] .landing-page .lp-hero .lp-title { 
+
+/* Light mode: keep hero heading/tagline white for contrast */
+[data-pc-theme='light'] .landing-page .lp-hero .lp-title {
   color: #fff !important;
 }
-[data-pc-theme='light'] .landing-page .lp-hero .lp-tagline { 
+
+[data-pc-theme='light'] .landing-page .lp-hero .lp-tagline {
   color: rgba(255, 255, 255, 0.86) !important;
 }

@@ -86,7 +86,16 @@ const navigation = {
       type: 'item',
       url: '/wallets/manage',
       icon: <i className="ph ph-gear" /> // <— added back the gear icon
-      // if you prefer the six-tooth version: className="ph ph-gear-six"
+    // if you prefer the six-tooth version: className="ph ph-gear-six"
+    },
+
+    // --- About Kinko Wallet ---
+    {
+      id: 'learn-more',
+      title: 'About Kinko Wallet',
+      type: 'item',
+      url: '/learn-more',
+      icon: <i className="ph ph-book-open" />
     }
   ]
 };
