@@ -14,9 +14,6 @@
 /* ============================== ROOT WRAPPER ============================== */
 
 .landing-page {
-  /* Base colour in case image hasn’t loaded yet */
-  // background-color: var(--pc-sidebar-background);
-
   /* Hero/landing background image + dark gradient overlay */
   background-image:
     linear-gradient(rgba(6, 24, 36, 0.137), rgba(6, 24, 36, 0.219)),
@@ -30,19 +27,24 @@
   background-attachment: fixed;
 
   color: #fff;
-  min-height: 100vh;
+
+  /* lock to viewport; prevent micro overflow */
+  height: 100vh;
+  overflow-y: hidden;
 
   /* Hide the tiny navbar brand on landing only (we show a centered one in hero) */
   .navbar .navbar-brand {
     display: none !important;
   }
 
-  /* NAVBAR sizing on landing so it matches the app header */
+  /* NAVBAR on landing: fully transparent (no line/shadow) */
   .navbar {
     padding: 8px 0;
-    /* slim */
-    box-shadow: 0 6px 10px rgba(12, 21, 70, 0.03);
-    background: var(--pc-sidebar-background);
+    /* keep hit area consistent if you ever show items */
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    outline: 0 !important;
   }
 }
 
@@ -51,7 +53,7 @@
 .landing-page .lp-hero {
   position: relative;
   padding-top: 96px;
-  /* room for fixed navbar */
+  /* room if a fixed navbar ever shows */
   padding-bottom: 72px;
   text-align: center;
   background-color: transparent;
@@ -61,7 +63,9 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: calc(100vh - 96px - 72px);
+
+  /* fixed height so child margins can't push taller than viewport */
+  height: calc(100vh - 96px - 72px);
 
   .container {
     max-width: 920px;
@@ -172,7 +176,7 @@
   .landing-page .lp-hero {
     padding-top: 84px;
     padding-bottom: 60px;
-    min-height: calc(100vh - 84px - 60px);
+    height: calc(100vh - 84px - 60px);
   }
 
   .landing-page .lp-hero .lp-title {
@@ -200,5 +204,6 @@
 }
 
 [data-pc-theme='light'] .landing-page .lp-hero .lp-tagline {
-  color: rgba(255, 255, 255, 0.86) !important;
+  color: #fff !important;
+  opacity: 0.85 !important;
 }

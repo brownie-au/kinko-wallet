@@ -8,7 +8,7 @@
     width: fit-content;
 }
 
-.hero-button-group > * {
+.hero-button-group>* {
     margin: 0.35rem 0.65rem;
 }
 
@@ -17,7 +17,7 @@
         gap: 0.75rem;
     }
 
-    .hero-button-group > * {
+    .hero-button-group>* {
         margin: 0;
     }
 }
@@ -38,4 +38,13 @@
 
 .btn-kinko-green:hover {
     background-color: #2ea68f !important;
+}
+
+/* ================== NEW FIX ================== */
+/* Top button wrapper: keeps it centered and aligned with consistent rhythm */
+.hero-button-top {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    /* matches the horizontal gap for perfect rhythm */
 }

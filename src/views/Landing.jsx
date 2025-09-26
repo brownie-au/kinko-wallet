@@ -26,16 +26,17 @@ export default function LandingPage() {
 
   const navigate = useNavigate();
 
+  // On mount: read wallets and auto-open Disclaimer if none
   useEffect(() => {
     const wallets = readAllWalletsFromLS();
-    setWalletCount(wallets.length);
+    const count = wallets.length;
+    setWalletCount(count);
+    setShowDisclaimer(count === 0); // 🔔 auto-pop on new users
   }, []);
 
   const handleNewUserClick = () => {
     navigate('/wallets/manage');
-    if (walletCount === 0) {
-      setShowWelcome(true);
-    }
+    if (walletCount === 0) setShowWelcome(true);
   };
 
   return (
@@ -48,9 +49,9 @@ export default function LandingPage() {
           <p className="lp-tagline">Secure insights, no keys required.</p>
           <br />
 
-          {/* New User pill on its own row */}
+          {/* New User pill on its own row (centered) */}
           {walletCount === 0 && (
-            <div className="mb-3">
+            <div className="hero-button-top">
               <button
                 type="button"
                 className="btn hero-pill btn-kinko-green"
