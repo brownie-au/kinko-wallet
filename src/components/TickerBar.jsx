@@ -42,7 +42,7 @@ export default function TickerBar({
     refreshMs = 60_000,
     className = '',
     /** lower = faster, higher = slower (seconds per loop) */
-    speedSec = 60
+    speedSec = 40
 }) {
     const { pathname } = useLocation();
     const [items, setItems] = useState([]);

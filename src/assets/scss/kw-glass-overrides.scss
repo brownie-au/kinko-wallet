@@ -1,0 +1,26 @@
+/* Kinko Wallet — glass hover/tooltip fix
+   Load AFTER frosted-theme so it wins the cascade. */
+
+/* 1) Don’t let decorative glass layers intercept hover/clicks */
+.kw-app .kw-glass::before,
+.kw-app .kw-glass::after,
+.kw-app .kw-hex-stake-header .kw-card::before,
+.kw-app .kw-hex-stake-header .kw-card::after,
+.kw-app .kw-glass-overlay {
+    pointer-events: none !important;
+}
+
+/* 2) Ensure table + progress bar sit above background sheets */
+.kw-app .kw-hex-table,
+.kw-app .kw-hex-table .table,
+.kw-app .kw-hex-table .progress,
+.kw-app .kw-hex-table .progress-bar {
+    position: relative;
+    z-index: 1;
+}
+
+/* 3) Make sure Bootstrap tooltips render above cards/headers */
+.tooltip {
+    z-index: 1080;
+    /* above cards/headers */
+}

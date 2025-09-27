@@ -11,7 +11,8 @@
     --kw-chain-active-bg: #cc08c6;
     --kw-chain-active-br: rgba(204, 8, 198, 0.35);
     --kw-chain-active-fg: #ffffff;
-    --kw-chain-active-shadow: 0 2px 10px rgba(204, 8, 198, 0.20) inset,
+    --kw-chain-active-shadow:
+        0 2px 10px rgba(204, 8, 198, 0.20) inset,
         0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 
     /* Updated timestamp colours (defaults; overridden per theme below) */
@@ -26,23 +27,26 @@
     --kw-chip-neutral-bg: var(--bs-tertiary-bg);
     --kw-chip-neutral-br: var(--bs-border-color);
     --kw-chip-neutral-fg: var(--bs-secondary-color);
+
+    /* Glass tokens */
+    --kw-glass-bg: rgba(255, 255, 255, 0.06);
+    --kw-glass-br: rgba(255, 255, 255, 0.18);
+
+    /* Overlay text colour fallback (auto flips with theme below) */
+    --kw-progress-overlay-fg: var(--bs-body-color);
 }
 
 :root[data-theme="dark"] {
     --kw-muted-dk: rgba(255, 255, 255, 0.65);
     --kw-border-dk: rgba(255, 255, 255, 0.18);
     --kw-chip-bg-dk: rgba(255, 255, 255, 0.06);
-
-    /* brighter in dark */
     --kw-updated-fg: rgba(255, 255, 255, 0.78);
-
-    /* Darker neutral pills so text is readable */
     --kw-chip-neutral-bg: rgba(255, 255, 255, 0.12);
-    /* darker background */
     --kw-chip-neutral-br: rgba(255, 255, 255, 0.20);
-    /* stronger border */
     --kw-chip-neutral-fg: rgba(255, 255, 255, 0.85);
-    /* brighter text */
+    --kw-glass-bg: rgba(255, 255, 255, 0.06);
+    --kw-glass-br: rgba(255, 255, 255, 0.20);
+    --kw-progress-overlay-fg: #fff;
 }
 
 :root[data-theme="light"] {
@@ -50,6 +54,9 @@
     --kw-border-dk: var(--bs-border-color);
     --kw-chip-bg-dk: var(--bs-secondary-bg);
     --kw-updated-fg: rgba(0, 0, 0, 0.65);
+    --kw-glass-bg: rgba(255, 255, 255, 0.65);
+    --kw-glass-br: rgba(0, 0, 0, 0.06);
+    --kw-progress-overlay-fg: #0b1220;
 }
 
 .kw-hex-stake-header.kw-sticky {
@@ -58,14 +65,31 @@
     z-index: 1010;
 }
 
+/* =========================
+   HEADER CARD — GLASS MODE
+   ========================= */
 .kw-hex-stake-header .kw-card {
-    background: var(--bs-card-bg);
-    border: 1px solid var(--bs-border-color-translucent, rgba(255, 255, 255, 0.1));
+    position: relative;
+    background: var(--kw-glass-bg);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid var(--kw-glass-br);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
     border-radius: 12px;
     padding: calc(var(--kw-pad) * 1.25);
+    overflow: visible !important;
+    /* prevent tooltip/overlay clipping */
 }
 
+.kw-hex-stake-header .kw-card::before,
+.kw-hex-stake-header .kw-card::after {
+    pointer-events: none !important;
+    /* overlays never eat the mouse */
+}
+
+/* =========================
+   LAYOUT
+   ========================= */
 .kw-row {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -175,6 +199,8 @@
     display: grid;
     gap: 4px;
     container-type: inline-size;
+    overflow: visible !important;
+    /* no clipping */
 }
 
 .kw-metric-label {
@@ -206,7 +232,11 @@
     line-height: 1.4;
     cursor: pointer;
 }
-.kw-yield-toggle:hover { filter: brightness(0.98); }
+
+.kw-yield-toggle:hover {
+    filter: brightness(0.98);
+}
+
 .kw-yield-toggle.active {
     background: var(--bs-info);
     border-color: var(--bs-info);
@@ -283,7 +313,6 @@
 
 /* ---------- Wallet name chip (default: PURPLE for HEX) ---------- */
 :root[data-theme="light"] {
-    /* darker, higher-contrast defaults for HEX on light theme */
     --kw-wallet-fg: #3f1fb0;
     --kw-wallet-bg: rgba(124, 58, 237, .12);
     --kw-wallet-br: rgba(124, 58, 237, .34);
@@ -320,7 +349,6 @@
     border: 1px solid rgba(136, 255, 190, .30);
 }
 
-/* eHEX page only: force wallet chip green (beats theme-specific purple) */
 .kw-wallet-chip.kw-wallet-chip--ehex {
     color: #0a6b2d !important;
     background: rgba(10, 107, 45, .08) !important;
@@ -339,7 +367,6 @@
     background: rgba(124, 58, 237, .12) !important;
     border-color: rgba(124, 58, 237, .34) !important;
     font-weight: 700;
-    /* slightly bolder for readability */
 }
 
 /* Polished table headers */
@@ -381,6 +408,7 @@
     border-top: 6px solid var(--bs-body-color);
 }
 
+/* Responsive */
 @media (max-width: 1400px) {
     .kw-metrics {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -412,6 +440,7 @@
     }
 }
 
+/* Status pill */
 .kw-status-pill {
     display: inline-flex;
     align-items: center;
@@ -421,4 +450,85 @@
     border-radius: 999px;
     font-weight: 600;
     white-space: nowrap;
+}
+
+/* ==============================
+   TABLE & TOOLTIP SAFETY NETS
+   ============================== */
+.kw-hex-stake-table,
+.kw-hex-stake-table .card,
+.kw-hex-stake-table .card-body,
+.kw-hex-stake-table .table-responsive,
+.kw-hex-stake-table .table-wrap {
+    position: relative;
+    overflow: visible !important;
+}
+
+.kw-hex-stake-table::before,
+.kw-hex-stake-table::after {
+    pointer-events: none !important;
+}
+
+.tooltip,
+.popover {
+    z-index: 1085;
+}
+
+/* ===========================================
+   UNIVERSAL PROGRESS HOVER OVERLAY (NO DOM CHANGES)
+   =========================================== */
+
+/* Progress cell is our positioning context */
+.kw-hex-stake-table td.kw-progress-cell,
+.kw-hex-stake-table td[data-col="progress"],
+.kw-hex-stake-table .kw-progress-cell {
+    position: relative;
+    overflow: visible !important;
+    z-index: 2;
+}
+
+/* Bootstrap progress: never clip, be a stacking context under the overlay */
+.kw-hex-stake-table .progress {
+    position: relative;
+    overflow: visible;
+    /* undo Bootstrap clipping */
+    z-index: 1;
+    mix-blend-mode: normal;
+    /* avoid blend weirdness over glass */
+}
+
+/* Build the overlay from the progress itself.
+   Prefer data-pct, else aria-valuenow. */
+.kw-hex-stake-table .progress::after {
+    content: attr(data-pct) "%";
+}
+
+.kw-hex-stake-table .progress:not([data-pct])::after {
+    content: attr(aria-valuenow) "%";
+}
+
+.kw-hex-stake-table .progress::after {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: .2px;
+    color: var(--kw-progress-overlay-fg);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+    pointer-events: none;
+    /* don’t block mouse */
+    opacity: 0;
+    transition: opacity 120ms ease;
+    z-index: 3;
+    /* above the filled bar */
+}
+
+/* Show on row, cell, or bar hover (covers mouseover + keyboard focus row) */
+.kw-hex-stake-table tbody tr:hover .progress::after,
+.kw-hex-stake-table td.kw-progress-cell:hover .progress::after,
+.kw-hex-stake-table .progress:hover::after {
+    opacity: 1;
 }

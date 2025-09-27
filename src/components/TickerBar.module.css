@@ -2,7 +2,7 @@
 
 /* Height token used by spacer and layout */
 :root {
-    --kw-ticker-h: 44px;
+    --kw-ticker-h: 34px;
     /* adjust if you tweak padding/font-size */
 }
 

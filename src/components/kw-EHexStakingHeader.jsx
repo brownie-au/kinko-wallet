@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Card, Button, Badge } from 'react-bootstrap';
 import YieldUnitToggle from './YieldUnitToggle.jsx';
 import '../styles/kw-hex-staking-header.css'; // reuse same styles
+import '../styles/overrides.scss'; 
 
 // ---------- utils ----------
 const nf = (v, opts = {}) =>

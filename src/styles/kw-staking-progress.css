@@ -1,23 +1,44 @@
-.kw-staking-row {
+/* Kinko Wallet – Staking row progress overlay (glass)
+   Purpose: keep progress gradients visible even when global table hover
+   sets a background in frosted-theme.scss. We:
+   - increase selector specificity under .kw-app
+   - define gradients on `background` (not background-image)
+   - re-assert full background on :hover/:focus-visible so theme hover can't wipe it
+*/
+
+.kw-app .kw-staking-row {
     position: relative;
     isolation: isolate;
     z-index: 0;
+
+    /* Controlled from React via inline style on the <tr> */
     --kw-stake-progress: 0;
     --kw-stake-progress-color: rgba(72, 135, 255, 0.28);
     --kw-stake-progress-track: rgba(255, 255, 255, 0.04);
-    background-image:
+
+    /* Layer 1: coloured progress bar
+     Layer 2: translucent track (glass) */
+    background:
         linear-gradient(90deg, var(--kw-stake-progress-color), var(--kw-stake-progress-color)),
         linear-gradient(0deg, var(--kw-stake-progress-track), var(--kw-stake-progress-track));
     background-repeat: no-repeat;
     background-position: left center, left center;
     background-size: 0 calc(100% - 8px), 0 calc(100% - 8px);
+
     border-radius: 16px;
     clip-path: inset(0 round 16px);
 }
 
-.kw-staking-row:hover,
-.kw-staking-row:focus-visible {
-    background-size: calc(var(--kw-stake-progress) * 1%) calc(100% - 8px), 100% calc(100% - 8px);
+.kw-app .kw-staking-row:hover,
+.kw-app .kw-staking-row:focus-visible {
+    /* Re-assert the full layered background on hover/focus so the generic
+     `.kw-app table tbody tr:hover { background: ... }` cannot replace it. */
+    background:
+        linear-gradient(90deg, var(--kw-stake-progress-color), var(--kw-stake-progress-color)),
+        linear-gradient(0deg, var(--kw-stake-progress-track), var(--kw-stake-progress-track)) !important;
+    background-repeat: no-repeat !important;
+    background-position: left center, left center !important;
+    background-size:
+        calc(var(--kw-stake-progress) * 1%) calc(100% - 8px),
+        100% calc(100% - 8px) !important;
 }
-
-

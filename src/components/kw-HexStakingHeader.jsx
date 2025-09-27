@@ -3,32 +3,33 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Card, Button, Badge } from 'react-bootstrap';
 import YieldUnitToggle from './YieldUnitToggle.jsx';
 import '../styles/kw-hex-staking-header.css';
+import '../styles/overrides.scss'; // keep this LAST so overrides win
 
 // ---------- utils ----------
 const nf = (v, opts = {}) =>
-    new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, ...opts }).format(Number(v || 0));
+  new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, ...opts }).format(Number(v || 0));
 
 const nfc = (v) =>
-    new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency: 'USD',
-        currencyDisplay: 'narrowSymbol', // "$" instead of "US$"
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(Number(v || 0));
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    currencyDisplay: 'narrowSymbol',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(v || 0));
 
 /** More precision for small prices (used in "HEX @ price") */
 const nfcPrice = (v) => {
-    const n = Number(v || 0);
-    const base = { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' };
-    if (n < 1) {
-        return new Intl.NumberFormat(undefined, {
-            ...base,
-            minimumFractionDigits: 4,
-            maximumFractionDigits: 6
-        }).format(n);
-    }
-    return new Intl.NumberFormat(undefined, { ...base, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const n = Number(v || 0);
+  const base = { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' };
+  if (n < 1) {
+    return new Intl.NumberFormat(undefined, {
+      ...base,
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 6
+    }).format(n);
+  }
+  return new Intl.NumberFormat(undefined, { ...base, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 };
 
 const plural = (n, s) => `${n} ${s}${Number(n) === 1 ? '' : 's'}`;
@@ -39,213 +40,197 @@ const plural = (n, s) => `${n} ${s}${Number(n) === 1 ? '' : 's'}`;
  * Returns an integer day number (>= 1).
  */
 export function getCurrentHexDayAEST(nowTs = Date.now()) {
-    // AEST (no DST in QLD), use Brisbane
-    const tz = 'Australia/Brisbane';
-
-    // Day 1 start (AEST)
-    const day1 = new Date('2019-12-03T10:00:00+10:00'); // AEST anchor
-
-    // Convert "now" into Brisbane local time by re-parsing a locale string in that TZ
-    const nowLocal = new Date(new Date(nowTs).toLocaleString('en-US', { timeZone: tz }));
-
-    // Floor difference in full 24h "HEX days", then +1 because anchor is Day 1
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const diff = nowLocal.getTime() - day1.getTime();
-    const dayIndex = Math.floor(diff / msPerDay) + 1;
-    return Math.max(1, dayIndex);
+  const tz = 'Australia/Brisbane';
+  const day1 = new Date('2019-12-03T10:00:00+10:00');
+  const nowLocal = new Date(new Date(nowTs).toLocaleString('en-US', { timeZone: tz }));
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diff = nowLocal.getTime() - day1.getTime();
+  const dayIndex = Math.floor(diff / msPerDay) + 1;
+  return Math.max(1, dayIndex);
 }
 
 /** Small hook to re-compute the day automatically, checking every 30s */
 function useHexDay() {
-    const [now, setNow] = useState(() => Date.now());
-    useEffect(() => {
-        const id = setInterval(() => setNow(Date.now()), 30_000);
-        return () => clearInterval(id);
-    }, []);
-    return useMemo(() => getCurrentHexDayAEST(now), [now]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return useMemo(() => getCurrentHexDayAEST(now), [now]);
 }
 
 // ---------- component ----------
 export default function KwHexStakingHeader({
-    // metrics
-    activeStakes = 0,
-    totalTShares = 0,
-    avgApyPct = 0,
-    nextEndInDays = 0,
-    totalPrincipalHex = 0,
-    totalYieldHex = 0,
-    avgStakeYears = 0,
-    yieldPerDay = 0,
-    yieldPerWeek = 0,
-    yieldPerMonth = 0,
-    yieldPerYear = 0,
+  // metrics
+  activeStakes = 0,
+  totalTShares = 0,
+  avgApyPct = 0,
+  nextEndInDays = 0,
+  totalPrincipalHex = 0,
+  totalYieldHex = 0,
+  avgStakeYears = 0,
+  yieldPerDay = 0,
+  yieldPerWeek = 0,
+  yieldPerMonth = 0,
+  yieldPerYear = 0,
 
-    // new price/total props from container
-    hexPriceUsd = 0,
-    totalUsd = 0,
-    totalHex = 0,
+  // new price/total props from container
+  hexPriceUsd = 0,
+  totalUsd = 0,
+  totalHex = 0,
 
-    // controls + layout
-    updatedAt,
-    onRefresh,
-    sticky = true,
-    alignControlsRight = true,
-    showUsdUnderTitle = true
+  // controls + layout
+  updatedAt,
+  onRefresh,
+  sticky = true,
+  alignControlsRight = true,
+  showUsdUnderTitle = true
 }) {
-    const [cadence, setCadence] = useState('day'); // 'day' | 'week' | 'month' | 'year'
-    const [showUsd, setShowUsd] = useState(false); // default native token
-    const hexDay = useHexDay();
+  const [cadence, setCadence] = useState('day'); // 'day' | 'week' | 'month' | 'year'
+  const [showUsd, setShowUsd] = useState(false); // default native token
+  const hexDay = useHexDay();
 
-    const cadenceHex = useMemo(() => {
-        switch (cadence) {
-            case 'day':
-                return yieldPerDay;
-            case 'week':
-                return yieldPerWeek;
-            case 'month':
-                return yieldPerMonth;
-            case 'year':
-                return yieldPerYear;
-            default:
-                return 0;
-        }
-    }, [cadence, yieldPerDay, yieldPerWeek, yieldPerMonth, yieldPerYear]);
+  const cadenceHex = useMemo(() => {
+    switch (cadence) {
+      case 'day':
+        return yieldPerDay;
+      case 'week':
+        return yieldPerWeek;
+      case 'month':
+        return yieldPerMonth;
+      case 'year':
+        return yieldPerYear;
+      default:
+        return 0;
+    }
+  }, [cadence, yieldPerDay, yieldPerWeek, yieldPerMonth, yieldPerYear]);
 
-    const updatedLabel = useMemo(() => {
-        if (!updatedAt && updatedAt !== 0) return '—';
-        const d = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
-        if (Number.isNaN(d.getTime())) return '—';
-        const hh = d.getHours().toString().padStart(2, '0');
-        const mm = d.getMinutes().toString().padStart(2, '0');
-        return `${hh}:${mm}`;
-    }, [updatedAt]);
+  const updatedLabel = useMemo(() => {
+    if (!updatedAt && updatedAt !== 0) return '—';
+    const d = updatedAt instanceof Date ? updatedAt : new Date(updatedAt);
+    if (Number.isNaN(d.getTime())) return '—';
+    const hh = d.getHours().toString().padStart(2, '0');
+    const mm = d.getMinutes().toString().padStart(2, '0');
+    return `${hh}:${mm}`;
+  }, [updatedAt]);
 
-    // Derived display bits for the USD line
-    const usdDisplay = useMemo(() => {
-        if (!showUsdUnderTitle) return null;
+  // Derived display bits for the USD line
+  const usdDisplay = useMemo(() => {
+    if (!showUsdUnderTitle) return null;
 
-        // When price missing, still show USD $0.00 to keep layout stable
-        const main = nfc(totalUsd || 0);
+    const main = nfc(totalUsd || 0);
 
-        // Small subline with HEX amount and price if available
-        const sub =
-            (totalHex > 0 || hexPriceUsd > 0)
-                ? `${nf(totalHex, { maximumFractionDigits: 0 })} HEX • ${hexPriceUsd > 0 ? `@ ${nfcPrice(hexPriceUsd)}` : 'price updating…'
-                }`
-                : null;
-
-        return (
-            <div className="kw-usd-wrap">
-                {/* Bigger & bolder price; strip any stray "US$"/"USD" from formatted string */}
-                <div
-                    className="kw-usd-title"
-                    style={{ fontSize: '2.00rem', fontWeight: 800, lineHeight: 1.1 }}
-                >
-                    USD {main.replace(/US\$|USD/g, '').trim()}
-                </div>
-                {sub && <div className="kw-usd-sub">{sub}</div>}
-            </div>
-        );
-    }, [showUsdUnderTitle, totalUsd, totalHex, hexPriceUsd]);
-
-    // Value string; toggle is rendered bottom-left of the tile via absolute positioning.
-    const yieldValueNode = useMemo(() => {
-        const valHex = cadenceHex || 0;
-        const valUsd = (hexPriceUsd > 0 ? valHex * hexPriceUsd : 0);
-        return showUsd
-            ? `USD ${nfc(valUsd).replace(/US\$|USD/g, '').trim()}`
-            : `${nf(valHex, { maximumFractionDigits: 0 })} HEX`;
-    }, [cadenceHex, hexPriceUsd, showUsd]);
+    const sub =
+      totalHex > 0 || hexPriceUsd > 0
+        ? `${nf(totalHex, { maximumFractionDigits: 0 })} HEX • ${
+            hexPriceUsd > 0 ? `@ ${nfcPrice(hexPriceUsd)}` : 'price updating…'
+          }`
+        : null;
 
     return (
-        <div className={`kw-hex-stake-header ${sticky ? 'kw-sticky' : ''}`}>
-            <Card className="kw-card">
-                {/* Header row: title + chips on left, controls on right */}
-                <div className="kw-row">
-                    <div className="kw-left">
-                        <div className="kw-title">
-                            <span>HEX Staking</span>
-                            <Badge bg="secondary" className="kw-chip">PulseChain</Badge>
-                            <Badge bg="secondary" className="kw-chip">Day {hexDay}</Badge>
-                        </div>
-
-                        {/* Big USD line sits under the title */}
-                        {usdDisplay}
-                    </div>
-
-                    {alignControlsRight && (
-                        <div className="kw-right">
-                            <span className="kw-updated fw-semibold me-2">Updated: {updatedLabel}</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Metrics grid */}
-                <div className="kw-metrics">
-                    <Metric label="Active Stakes" value={nf(activeStakes, { maximumFractionDigits: 0 })} />
-                    <Metric label="Total T-Shares" value={nf(totalTShares, { maximumFractionDigits: 0 })} />
-                    <Metric label="Average APY" value={`${nf(avgApyPct, { maximumFractionDigits: 1 })}%`} />
-                    <Metric label="Next End Stake" value={`Due in ${plural(nextEndInDays, 'day')}`} />
-                    <Metric label="Total Principal" value={`${nf(totalPrincipalHex, { maximumFractionDigits: 0 })} HEX`} />
-                    <Metric label="Total Yield" value={`${nf(totalYieldHex, { maximumFractionDigits: 0 })} HEX`} />
-                    <Metric label="Average Stake Length" value={`${nf(avgStakeYears, { maximumFractionDigits: 1 })} yrs`} />
-
-                    {/* Yield metric with cadence chips */}
-                    <Metric 
-                        label={`Yield (${labelForCadence(cadence)})`}
-                        value={yieldValueNode}
-                        accent
-                    >
-                        <div className="kw-yield-toggle-wrap">
-                            <YieldUnitToggle checked={showUsd} onChange={setShowUsd} title="Show USD value" />
-                        </div>
-                        <div className="kw-cadence-chips" role="tablist" aria-label="Yield cadence">
-                            <Chip active={cadence === 'day'} onClick={() => setCadence('day')}>D</Chip>
-                            <Chip active={cadence === 'week'} onClick={() => setCadence('week')}>W</Chip>
-                            <Chip active={cadence === 'month'} onClick={() => setCadence('month')}>M</Chip>
-                            <Chip active={cadence === 'year'} onClick={() => setCadence('year')}>Y</Chip>
-                        </div>
-                    </Metric>
-                </div>
-            </Card>
+      <div className="kw-usd-wrap">
+        <div className="kw-usd-title" style={{ fontSize: '2.00rem', fontWeight: 800, lineHeight: 1.1 }}>
+          USD {main.replace(/US\$|USD/g, '').trim()}
         </div>
+        {sub && <div className="kw-usd-sub">{sub}</div>}
+      </div>
     );
+  }, [showUsdUnderTitle, totalUsd, totalHex, hexPriceUsd]);
+
+  // Value string
+  const yieldValueNode = useMemo(() => {
+    const valHex = cadenceHex || 0;
+    const valUsd = hexPriceUsd > 0 ? valHex * hexPriceUsd : 0;
+    return showUsd ? `USD ${nfc(valUsd).replace(/US\$|USD/g, '').trim()}` : `${nf(valHex, { maximumFractionDigits: 0 })} HEX`;
+  }, [cadenceHex, hexPriceUsd, showUsd]);
+
+  return (
+    <div className={`kw-hex-stake-header ${sticky ? 'kw-sticky' : ''}`}>
+      {/* Frosted wrapper provides the glass; inner Card stays transparent */}
+      <div className="kw-frost-skin">
+        <Card className="kw-card bg-transparent border-0 shadow-0">
+          {/* Header row: title + chips on left, controls on right */}
+          <div className="kw-row">
+            <div className="kw-left">
+              <div className="kw-title">
+                <span>HEX Staking</span>
+                <Badge bg="secondary" className="kw-chip">PulseChain</Badge>
+                <Badge bg="secondary" className="kw-chip">Day {hexDay}</Badge>
+              </div>
+
+              {/* Big USD line sits under the title */}
+              {usdDisplay}
+            </div>
+
+            {alignControlsRight && (
+              <div className="kw-right">
+                <span className="kw-updated fw-semibold me-2">Updated: {updatedLabel}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Metrics grid */}
+          <div className="kw-metrics">
+            <Metric label="Active Stakes" value={nf(activeStakes, { maximumFractionDigits: 0 })} />
+            <Metric label="Total T-Shares" value={nf(totalTShares, { maximumFractionDigits: 0 })} />
+            <Metric label="Average APY" value={`${nf(avgApyPct, { maximumFractionDigits: 1 })}%`} />
+            <Metric label="Next End Stake" value={`Due in ${plural(nextEndInDays, 'day')}`} />
+            <Metric label="Total Principal" value={`${nf(totalPrincipalHex, { maximumFractionDigits: 0 })} HEX`} />
+            <Metric label="Total Yield" value={`${nf(totalYieldHex, { maximumFractionDigits: 0 })} HEX`} />
+            <Metric label="Average Stake Length" value={`${nf(avgStakeYears, { maximumFractionDigits: 1 })} yrs`} />
+
+            {/* Yield metric with cadence chips */}
+            <Metric
+              label={`Yield (${labelForCadence(cadence)})`}
+              value={yieldValueNode}
+              accent
+            >
+              <div className="kw-yield-toggle-wrap">
+                <YieldUnitToggle checked={showUsd} onChange={setShowUsd} title="Show USD value" />
+              </div>
+              <div className="kw-cadence-chips" role="tablist" aria-label="Yield cadence">
+                <Chip active={cadence === 'day'} onClick={() => setCadence('day')}>D</Chip>
+                <Chip active={cadence === 'week'} onClick={() => setCadence('week')}>W</Chip>
+                <Chip active={cadence === 'month'} onClick={() => setCadence('month')}>M</Chip>
+                <Chip active={cadence === 'year'} onClick={() => setCadence('year')}>Y</Chip>
+              </div>
+            </Metric>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
 function Metric({ label, value, accent = false, children }) {
-    return (
-        <div className={`kw-metric ${accent ? 'accent' : ''}`}>
-            {children}
-            <div className="kw-metric-label">{label}</div>
-            <div className="kw-metric-value">{value}</div>
-        </div>
-    );
+  return (
+    <div className={`kw-metric ${accent ? 'accent' : ''}`}>
+      {children}
+      <div className="kw-metric-label">{label}</div>
+      <div className="kw-metric-value">{value}</div>
+    </div>
+  );
 }
 
 function Chip({ active, onClick, children }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`kw-chip-btn ${active ? 'active' : ''}`}
-            aria-pressed={active}
-        >
-            {children}
-        </button>
-    );
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`kw-chip-btn ${active ? 'active' : ''}`}
+      aria-pressed={active}
+    >
+      {children}
+    </button>
+  );
 }
 
 function labelForCadence(c) {
-    switch (c) {
-        case 'day':
-            return 'Day';
-        case 'week':
-            return 'Week';
-        case 'month':
-            return 'Month';
-        case 'year':
-            return 'Year';
-        default:
-            return '';
-    }
+  switch (c) {
+    case 'day': return 'Day';
+    case 'week': return 'Week';
+    case 'month': return 'Month';
+    case 'year': return 'Year';
+    default: return '';
+  }
 }

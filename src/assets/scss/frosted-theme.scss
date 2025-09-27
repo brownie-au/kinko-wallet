@@ -6,18 +6,12 @@
 
 /* ---- Tokens (tweak centrally) ---- */
 :root {
-      --kw-bg-image: url('/kw-bg.png'); /* served from /public */
-  --kw-frost-blur: 12px;
-  --kw-frost-tint: rgba(20, 22, 28, 0.58);
-  --kw-frost-border: rgba(255, 255, 255, 0.08);
-  --kw-frost-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
-  --kw-frost-radius: 16px;
-  --kw-frost-sheen: rgba(255, 255, 255, 0.06);
+    --kw-bg-image: url('/kw-bg.png');
     /* served from /public */
     --kw-frost-blur: 12px;
     /* 10–12px sweet spot */
     --kw-frost-tint: rgba(20, 22, 28, 0.58);
-    /* graphite grey glaze */
+    /* graphite glaze */
     --kw-frost-border: rgba(255, 255, 255, 0.08);
     --kw-frost-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
     --kw-frost-radius: 16px;
@@ -94,12 +88,11 @@
 
 /* Card headers slightly denser for legibility */
 .kw-app .card .card-header {
-    background: color-mix(in srgb, var(--kw-frost-tint) 100%, #000 8%);
+    background: color-mix(in srgb, var(--kw-frost-tint) 100%, #45a09488 8%);
     border-bottom: 1px solid color-mix(in srgb, var(--kw-frost-border) 100%, #fff 20%);
 }
 
-/* Keep sidebar/vertical nav solid so nav stays crisp.
-   Adjust selectors to your actual sidebar classnames if needed. */
+/* ================= Sidebar (lighter, solid) ================= */
 .sidebar,
 .navbar-vertical,
 .pc-sidebar,
@@ -108,7 +101,7 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 }
-/* ================= Sidebar (lighter, solid) ================= */
+
 .kw-app .pc-sidebar {
     background: #07363a;
     /* lighter than current solid */
@@ -129,7 +122,8 @@
     background: rgba(255, 255, 255, 0.08);
     border-radius: 6px;
 }
-/* Tables: transparent base, readable header/hover */
+
+/* ================= Tables ================= */
 .kw-app table {
     background: transparent;
 }
@@ -141,10 +135,10 @@
 
 .kw-app table tbody tr:hover,
 .kw-app .table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.048);
 }
 
-/* Charts: container wrappers can inherit glass without hurting canvas */
+/* ================= Charts ================= */
 .kw-app .recharts-wrapper,
 .kw-app .chart-container {
     background: var(--kw-frost-tint);
@@ -155,7 +149,53 @@
     box-shadow: var(--kw-frost-shadow);
 }
 
-/* Performance guardrail for small screens */
+/* ================= HEX Staking summary — hard frosted override =================
+   Strong specificity + !important to beat component CSS/backdrop blockers. */
+.kw-app .kw-hex-stake-header>.card.kw-card,
+.kw-app .kw-hex-stake-header .card.kw-card,
+.kw-app .kw-hex-stake-header .card.kw-card .card-body {
+    --bs-card-bg: transparent !important;
+    background: rgba(19, 28, 37, 0.486) !important;
+    /* composite bg */
+    background-color: rgba(19, 30, 37, 0.74) !important;
+    /* in case a later rule sets only bg-color */
+    border: 1px solid var(--kw-frost-border) !important;
+    border-radius: var(--kw-frost-radius) !important;
+    backdrop-filter: blur(14px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
+    box-shadow: var(--kw-frost-shadow) !important;
+    color: #fff;
+    isolation: isolate;
+    /* ensure backdrop paints consistently */
+}
+
+/* Subtext / labels inside the header so they pop on glass */
+.kw-hex-stake-header .kw-usd-sub,
+.kw-hex-stake-header .kw-metric .kw-metric-label,
+.kw-hex-stake-header .kw-updated {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Secondary badges styled to match glass */
+.kw-hex-stake-header .kw-chip {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+/* Accessibility: reduced transparency fallback */
+@media (prefers-reduced-transparency: reduce) {
+
+    .kw-hex-stake-header .card.kw-card,
+    .kw-hex-stake-header .card.kw-card .card-body {
+        background: #15212b !important;
+        background-color: #15212b !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+}
+
+/* ================= Performance guardrail for small screens ================= */
 @media (max-width: 768px) {
     :root {
         --kw-frost-blur: 8px;

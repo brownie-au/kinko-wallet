@@ -15,7 +15,7 @@ export default function LearnMore() {
   return (
     <Container fluid className="learn-more-wrapper py-4 py-lg-5">
       <Row className="justify-content-center">
-        <Col xl={8} lg={9} md={10}>
+        <Col xl={10} lg={10} md={11}>
           <div className="glass-card">
             <div className="learn-more-header mb-4 text-center">
               <h1 className="learn-more-title">Learn More About Kinko Wallet</h1>

@@ -15,6 +15,7 @@
 @import 'assets/scss/style-preset.scss';
 @import './global.scss';
 @import 'animate.css';
+@import 'assets/scss/kw-glass-overrides';
 /* --- Privacy scrub styles (global) --- */
 body[data-privacy="on"] [data-scrub="true"] {
     filter: blur(6px);

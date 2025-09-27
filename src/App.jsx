@@ -35,6 +35,9 @@ import axios from 'axios';
 import { installAxiosBackoff } from './utils/axiosBackoff';
 import { onRateLimit, showRateLimitNotice, hideRateLimitNotice } from './utils/rateLimitNotifier';
 
+// near other global imports
+import './utils/kwProgressHoverOverlay.js';
+
 // Install global axios backoff once at module load
 installAxiosBackoff(axios);
 
