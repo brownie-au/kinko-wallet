@@ -183,7 +183,7 @@ export default function PnLCard() {
               </Badge>
             </div>
 
-            <div className="mt-2" style={{ width: '100%', height: 44 }}>
+            <div className="mt-2" style={{ width: '100%', height: 170 }}>
               <ResponsiveContainer>
                 <AreaChart data={capWeekly} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                   <defs>
@@ -218,7 +218,7 @@ export default function PnLCard() {
               </Badge>
             </div>
 
-            <div className="mt-2" style={{ width: '100%', height: 44 }}>
+            <div className="mt-2" style={{ width: '100%', height: 170 }}>
               <ResponsiveContainer>
                 <AreaChart data={volWeekly} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                   <defs>
