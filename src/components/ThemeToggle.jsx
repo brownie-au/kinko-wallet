@@ -1,4 +1,5 @@
-// src/components/ThemeToggle.jsx
+{/*
+  // src/components/ThemeToggle.jsx
 import React, { useMemo } from 'react';
 import { Button, ButtonGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { setResolvedTheme } from 'components/setResolvedTheme';
@@ -54,3 +55,4 @@ export default function ThemeToggle({
     </ButtonGroup>
   );
 }
+*/}

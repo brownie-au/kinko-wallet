@@ -75,7 +75,7 @@ body[data-pc-theme='light'] .kw-universal-refresh:disabled {
 
 /* ---- Icon glyph (Tabler CSS icon: .ti.ti-refresh) ---- */
 .kw-universal-refresh__icon i {
-  font-size: 20px;
+  font-size: 36px;
   /* match moon/gear/monitor */
   display: inline-block;
   vertical-align: middle;

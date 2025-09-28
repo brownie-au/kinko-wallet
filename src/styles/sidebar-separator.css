@@ -1,0 +1,29 @@
+/* src/styles/sidebar-separator.css */
+
+/* Match the About Kinko Wallet menu item link */
+.pc-sidebar .pc-navbar li a[href="/learn-more"] {
+    margin-top: 12px;
+    /* extra space above */
+    padding-top: 14px;
+    /* breathing room for divider */
+    position: relative;
+    display: block;
+}
+
+/* Divider line */
+.pc-sidebar .pc-navbar li a[href="/learn-more"]::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    /* visible on dark */
+}
+
+/* Light theme */
+.pc-sidebar.light .pc-navbar li a[href="/learn-more"]::before,
+body.light .pc-sidebar .pc-navbar li a[href="/learn-more"]::before {
+    background: rgba(0, 0, 0, 0.12);
+}
