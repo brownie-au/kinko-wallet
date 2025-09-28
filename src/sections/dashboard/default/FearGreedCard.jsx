@@ -7,9 +7,9 @@ import { useRefresh } from '@/contexts/RefreshContext.jsx';
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const labelFor = (v) =>
   v <= 24 ? 'Extreme Fear' :
-  v <= 44 ? 'Fear' :
-  v <= 55 ? 'Neutral' :
-  v <= 74 ? 'Greed' : 'Extreme Greed';
+    v <= 44 ? 'Fear' :
+      v <= 55 ? 'Neutral' :
+        v <= 74 ? 'Greed' : 'Extreme Greed';
 const valueToColor = (v) => {
   const hue = (clamp(v, 0, 100) * 120) / 100; // 0=red - 120=green
   return `hsl(${hue}deg 70% 45%)`;
@@ -28,7 +28,7 @@ const nearestByDays = (items, days) => {
 export default function FearGreedCard() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
-  const fetchTaskRef = useRef(async () => {});
+  const fetchTaskRef = useRef(async () => { });
   const { registerTask } = useRefresh();
 
   useEffect(() => {
@@ -94,11 +94,77 @@ export default function FearGreedCard() {
   const nowLabel = labelFor(val);
   const updated = now?.ts ? new Date(now.ts).toLocaleString() : '';
 
+  // pros/cons dictionary
+  const prosCons = {
+    'Extreme Fear': {
+      pros: [
+        'Potential bargain prices for long-term buyers',
+        'Often signals oversold conditions',
+        'Opportunities for contrarian investors'
+      ],
+      cons: [
+        'Confidence is very weak, further drops possible',
+        'High volatility likely',
+        'Short-term sentiment heavily negative'
+      ]
+    },
+    'Fear': {
+      pros: [
+        'Possible entry points at discounted prices',
+        'Cautious market can reduce overheated trades',
+        'Investors may find selective opportunities'
+      ],
+      cons: [
+        'Prices may continue to drift lower',
+        'Weak demand from hesitant buyers',
+        'Volatility risk remains elevated'
+      ]
+    },
+    'Neutral': {
+      pros: [
+        'Balanced sentiment can stabilise prices',
+        'No strong bias towards panic or greed',
+        'Room for trends to build either way'
+      ],
+      cons: [
+        'Lack of clear direction can stall momentum',
+        'Uncertainty may frustrate short-term traders',
+        'Market could swing quickly with new data'
+      ]
+    },
+    'Greed': {
+      pros: [
+        'Optimism can fuel bullish trends',
+        'Buyers actively driving prices higher',
+        'Momentum opportunities for traders'
+      ],
+      cons: [
+        'Market may become overheated',
+        'Late entries risk buying at the top',
+        'Corrections often follow excessive greed'
+      ]
+    },
+    'Extreme Greed': {
+      pros: [
+        'Strong bullish momentum in full swing',
+        'High confidence can extend rallies',
+        'Attracts more participants to the market'
+      ],
+      cons: [
+        'Signals potential market overheating',
+        'Corrections or pullbacks are common',
+        'Risk of overvaluation and bubbles'
+      ]
+    }
+  };
+
+  const current = prosCons[nowLabel] || { pros: [], cons: [] };
+
   return (
     <Card className="h-100">
-      <Card.Body>
+      <Card.Body style={{ paddingBottom: 12 /* tighten bottom buffer */ }}>
 
-        {/* HEADER ROW: left = title/value/updated; right = history pills (tight) */}
+        {/* HEADER ROW */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           {/* left */}
           <div style={{ flex: '1 1 auto', minWidth: 0 }}>
@@ -110,7 +176,7 @@ export default function FearGreedCard() {
             <div className="text-muted small mt-1">Updated: {updated}</div>
           </div>
 
-          {/* right (historical, lives in the top-right box area) */}
+          {/* right pills */}
           <div
             style={{
               display: 'flex',
@@ -128,7 +194,7 @@ export default function FearGreedCard() {
           </div>
         </div>
 
-        {/* BAR (unchanged style) */}
+        {/* BAR */}
         <div style={{ marginTop: 12, position: 'relative' }}>
           <div
             style={{
@@ -139,7 +205,6 @@ export default function FearGreedCard() {
               overflow: 'hidden'
             }}
           >
-            {/* dim unfilled right side */}
             <div
               style={{
                 position: 'absolute',
@@ -150,7 +215,6 @@ export default function FearGreedCard() {
                 background: 'rgba(0,0,0,0.25)'
               }}
             />
-            {/* standout marker */}
             <div
               style={{
                 position: 'absolute',
@@ -170,12 +234,52 @@ export default function FearGreedCard() {
           </div>
         </div>
 
+        {/* PROS & CONS */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 24,
+            marginTop: 16,
+            marginBottom: 0, // 👈 kill buffer here
+            fontSize: '0.9rem',
+            color: 'rgba(255,255,255,0.75)',
+            lineHeight: 1.4
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Pros</div>
+            <ul style={{ paddingLeft: 16, margin: 0 }}>
+              {current.pros.map((p, i) => (
+                <li
+                  key={i}
+                  style={{ marginBottom: i === current.pros.length - 1 ? 0 : 2 }}
+                >
+                  {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Cons</div>
+            <ul style={{ paddingLeft: 16, margin: 0 }}>
+              {current.cons.map((c, i) => (
+                <li
+                  key={i}
+                  style={{ marginBottom: i === current.cons.length - 1 ? 0 : 2 }}
+                >
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
       </Card.Body>
     </Card>
   );
 }
 
-// tight two-line pill used in header
+// pill component
 function MiniPill({ value, caption }) {
   const v = clamp(Number(value ?? 0), 0, 100);
   const col = valueToColor(v);
@@ -196,5 +300,3 @@ function MiniPill({ value, caption }) {
     </div>
   );
 }
-
-
