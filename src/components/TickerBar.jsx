@@ -1,5 +1,5 @@
 // src/components/TickerBar.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import styles from './TickerBar.module.css';
 
@@ -22,6 +22,8 @@ const COINS = [
     { id: 'hex', label: 'eHEX' },
     { id: 'hex-pulsechain', label: 'HEX' }
 ];
+
+const STORAGE_KEY = 'kw_ticker_cache_v1';
 
 const fmtUsd = (n) => {
     const v = Number(n) || 0;
@@ -46,6 +48,10 @@ export default function TickerBar({
 }) {
     const { pathname } = useLocation();
     const [items, setItems] = useState([]);
+    const lastGoodRef = useRef([]);
+    const backoffRef = useRef(0); // how many consecutive failures
+    const timerRef = useRef(null);
+    const abortRef = useRef(null);
 
     // Hide on specific routes
     if (HIDDEN_ON.has(pathname)) return null;
@@ -55,26 +61,51 @@ export default function TickerBar({
         return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     }, []);
 
+    // Load cached items on mount so we never render empty if we have something recent
+    useEffect(() => {
+        try {
+            const cached = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+            if (cached && Array.isArray(cached.items)) {
+                lastGoodRef.current = cached.items;
+                setItems(cached.items);
+            }
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
     useEffect(() => {
         let alive = true;
-        let t;
+
+        async function fetchWithTimeout(url, opts = {}, ms = 10_000) {
+            const controller = new AbortController();
+            abortRef.current = controller;
+            const id = setTimeout(() => controller.abort(), ms);
+            try {
+                const res = await fetch(url, { ...opts, signal: controller.signal });
+                return res;
+            } finally {
+                clearTimeout(id);
+            }
+        }
 
         async function fetchMarkets() {
-            try {
-                const ids = COINS.map((c) => c.id).join(',');
-                const url = new URL('https://api.coingecko.com/api/v3/coins/markets');
-                url.searchParams.set('vs_currency', 'usd');
-                url.searchParams.set('ids', ids);
-                url.searchParams.set('order', 'market_cap_desc');
-                url.searchParams.set('per_page', String(COINS.length));
-                url.searchParams.set('page', '1');
-                url.searchParams.set('sparkline', 'false');
-                url.searchParams.set('price_change_percentage', '24h');
+            const ids = COINS.map((c) => c.id).join(',');
+            const url = new URL('https://api.coingecko.com/api/v3/coins/markets');
+            url.searchParams.set('vs_currency', 'usd');
+            url.searchParams.set('ids', ids);
+            url.searchParams.set('order', 'market_cap_desc');
+            url.searchParams.set('per_page', String(COINS.length));
+            url.searchParams.set('page', '1');
+            url.searchParams.set('sparkline', 'false');
+            url.searchParams.set('price_change_percentage', '24h');
 
-                const res = await fetch(url.toString(), {
+            try {
+                const res = await fetchWithTimeout(url.toString(), {
                     headers: { accept: 'application/json' },
                     cache: 'no-store'
-                });
+                }, 10_000);
+
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                 const data = await res.json();
@@ -104,18 +135,59 @@ export default function TickerBar({
                     };
                 }).filter(Boolean);
 
-                if (alive) setItems(mapped);
-            } catch {
-                if (alive) setItems([]); // no demo items; stays empty
+                if (!alive) return;
+
+                // success – reset backoff and update state + cache
+                backoffRef.current = 0;
+                lastGoodRef.current = mapped;
+                setItems(mapped);
+                try {
+                    sessionStorage.setItem(
+                        STORAGE_KEY,
+                        JSON.stringify({ ts: Date.now(), items: mapped })
+                    );
+                } catch {
+                    /* ignore quota */
+                }
+            } catch (err) {
+                // Most common: 429 / 5xx / network hiccup / timeout
+                // Do NOT clear UI; keep last known good data visible
+                if (alive) {
+                    backoffRef.current = Math.min(backoffRef.current + 1, 5);
+                    // Optional: log once in dev
+                    if (process.env.NODE_ENV !== 'production') {
+                        // eslint-disable-next-line no-console
+                        console.debug('[Ticker] fetch failed; keeping previous data. Attempt:', backoffRef.current, err?.message);
+                    }
+                    if (lastGoodRef.current.length && items.length === 0) {
+                        setItems(lastGoodRef.current);
+                    }
+                }
             }
         }
 
+        function scheduleNext() {
+            // Exponential backoff: refreshMs * (2^failures), capped at 5x
+            const factor = Math.min(2 ** backoffRef.current, 5);
+            const jitter = Math.floor(Math.random() * 5000); // small jitter to avoid thundering herd
+            const delay = refreshMs * factor + jitter;
+            timerRef.current = setTimeout(async () => {
+                await fetchMarkets();
+                if (alive) scheduleNext();
+            }, delay);
+        }
+
+        // Kick off immediately, then loop with dynamic delay
         fetchMarkets();
-        t = setInterval(fetchMarkets, refreshMs);
+        scheduleNext();
+
         return () => {
             alive = false;
-            clearInterval(t);
+            if (timerRef.current) clearTimeout(timerRef.current);
+            if (abortRef.current) abortRef.current.abort();
         };
+        // Intentionally only depend on refreshMs; everything else is stable
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshMs]);
 
     const row = items.map((c) => (
@@ -127,8 +199,7 @@ export default function TickerBar({
                     }`}
                 title="24h change"
             >
-                {Number(c.change24h) >= 0 ? '▲' : '▼'}{' '}
-                {Math.abs(Number(c.change24h) || 0).toFixed(2)}%
+                {Number(c.change24h) >= 0 ? '▲' : '▼'} {Math.abs(Number(c.change24h) || 0).toFixed(2)}%
             </span>
         </div>
     ));
@@ -142,7 +213,10 @@ export default function TickerBar({
             >
                 {/* Only animate when we have data */}
                 <div
-                    className={[styles.wrap, reduceMotion || items.length === 0 ? styles.wrapStatic : '']
+                    className={[
+                        styles.wrap,
+                        (reduceMotion || items.length === 0) ? styles.wrapStatic : ''
+                    ]
                         .filter(Boolean)
                         .join(' ')}
                     style={{ animationDuration: `${speedSec}s` }}

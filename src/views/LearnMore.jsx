@@ -19,8 +19,8 @@ export default function LearnMore() {
           <div className="glass-card">
             <div className="learn-more-header mb-4 text-center">
               <h1 className="learn-more-title">Learn More About Kinko Wallet</h1>
-              <p className="learn-more-subtitle">
-                Kinko Wallet is your safe, watch-only portfolio dashboard built for clarity, simplicity, and control.
+              <p className="learn-more-subtitle text-center" style={{ margin: "0 auto" }}>
+                This is your safe, watch-only portfolio dashboard — designed for clarity, simplicity.
               </p>
             </div>
 
@@ -140,6 +140,13 @@ export default function LearnMore() {
                 <div className="faq-item">
                   <p className="faq-question"><strong>Why don’t some tokens show prices?</strong></p>
                   <p className="faq-answer">Prices come from third-party sources. Some tokens and NFTs may not have available pricing yet.</p>
+                </div>
+                <div className="faq-item">
+                  <p className="faq-question"><strong>Why do I not see some tokens/coins?</strong></p>
+                  <p className="faq-answer">
+                    To keep your dashboard clear and reliable, Kinko Wallet hides tokens flagged as spam
+                    and does not display tokens or coins valued under <strong>USD $0.02</strong>.
+                  </p>
                 </div>
               </section>
 

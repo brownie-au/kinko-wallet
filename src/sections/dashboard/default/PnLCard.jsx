@@ -42,6 +42,45 @@ const ZERO_SNAP = {
   changePct24h: 0
 };
 
+// ---- helpers ----
+function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+// Find a point ~24h earlier than the last point and compute % change.
+// Returns null if we can’t make a sensible 24h comparison.
+function computeDelta24hPct(series) {
+  if (!Array.isArray(series) || series.length < 2) return null;
+  const last = series[series.length - 1];
+  const targetAgo = 24 * 60 * 60 * 1000;
+  const maxSkew = 12 * 60 * 60 * 1000; // accept ±12h around target
+
+  // Find the point with timestamp <= (last.x - 24h) that is closest to it.
+  const targetTs = last.x - targetAgo;
+  let best = null;
+  for (let i = series.length - 2; i >= 0; i--) {
+    const p = series[i];
+    if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) continue;
+    if (p.x <= targetTs) { best = p; break; }
+  }
+  // If none earlier, try the closest overall
+  if (!best) {
+    let minGap = Infinity;
+    for (let i = series.length - 2; i >= 0; i--) {
+      const p = series[i];
+      if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) continue;
+      const gap = Math.abs(p.x - targetTs);
+      if (gap < minGap) { minGap = gap; best = p; }
+    }
+    // If the closest is too far from 24h, bail
+    if (!best || Math.abs(best.x - targetTs) > maxSkew) return null;
+  }
+
+  const prev = best;
+  if (!prev || !Number.isFinite(prev.y) || !Number.isFinite(last.y) || prev.y === 0) return null;
+  const pct = ((last.y - prev.y) / prev.y) * 100;
+  if (!Number.isFinite(pct)) return null;
+  return pct;
+}
+
 export default function PnLCard() {
   const [snap, setSnap] = useState(ZERO_SNAP);
 
@@ -51,7 +90,7 @@ export default function PnLCard() {
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
-  const fetchTaskRef = useRef(async () => {});
+  const fetchTaskRef = useRef(async () => { });
   const { registerTask } = useRefresh();
 
   useEffect(() => {
@@ -141,10 +180,19 @@ export default function PnLCard() {
     });
     return unregister;
   }, [registerTask]);
-  const capUp = (snap?.changePct24h ?? 0) >= 0;
+
+  // ---- percent chips (prefer provider; fallback to derived) ----
+  const derivedCapPct = useMemo(() => computeDelta24hPct(capWeekly), [capWeekly]);
+  const capPct = Number.isFinite(snap.changePct24h) && snap.changePct24h !== 0
+    ? snap.changePct24h
+    : (Number.isFinite(derivedCapPct) ? derivedCapPct : null);
+
+  const derivedVolPct = useMemo(() => computeDelta24hPct(volWeekly), [volWeekly]);
+
+  const capUp = (capPct ?? 0) >= 0;
   const capColour = capUp ? GREEN : RED;
-  // We don’t infer a 24h delta from weekly bins; show neutral for volume.
-  const volColour = GREEN;
+  const volUp = (derivedVolPct ?? 0) >= 0;
+  const volColour = volUp ? GREEN : RED;
 
   return (
     <Card className="h-100">
@@ -179,7 +227,7 @@ export default function PnLCard() {
             <div className="d-flex align-items-baseline flex-wrap gap-2">
               <div className="fw-semibold">{formatUsdCompact(snap.marketCapUsd)}</div>
               <Badge pill className="kw-chip" style={{ ['--kw-chip-bg']: capColour }}>
-                {capUp ? '▲' : '▼'} {Math.abs(snap.changePct24h).toFixed(1)}%
+                {capPct == null ? '—' : `${capUp ? '▲' : '▼'} ${Math.abs(capPct).toFixed(1)}%`}
               </Badge>
             </div>
 
@@ -214,7 +262,7 @@ export default function PnLCard() {
             <div className="d-flex align-items-baseline flex-wrap gap-2">
               <div className="fw-semibold">{formatUsdCompact(snap.volume24hUsd)}</div>
               <Badge pill className="kw-chip" style={{ ['--kw-chip-bg']: volColour }}>
-                ▲ 0.0%
+                {derivedVolPct == null ? '—' : `${volUp ? '▲' : '▼'} ${Math.abs(derivedVolPct).toFixed(1)}%`}
               </Badge>
             </div>
 
@@ -247,8 +295,3 @@ export default function PnLCard() {
     </Card>
   );
 }
-
-// ---- helpers ----
-function safeNum(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-
-
