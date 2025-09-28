@@ -518,18 +518,26 @@ export default function TransactionHistoryCard() {
       <Card.Header>
         <div className="d-flex align-items-center justify-content-between">
           <div>
-            <h5 className="mb-0">Transaction History {fromCache ? <span className="badge bg-secondary ms-2">cached</span> : null}</h5>
-            <small className="text-muted">Last {days} days · {summary.total} tx · {summary.last7} in last 7 days</small>
+            {/* Title row with cached pill + fetching text inline */}
+            <h5 className="mb-0 d-flex align-items-center gap-2">
+              <span>Transaction History</span>
+              {fromCache ? <span className="badge bg-secondary">cached</span> : null}
+              {netLoading ? <span className="text-muted small">Fetching updates…</span> : null}
+            </h5>
+
+            <small className="text-muted">
+              Last {days} days · {summary.total} tx · {summary.last7} in last 7 days
+            </small>
+
             <div className="text-muted small">
               Loaded from cache · Last sync: {lastSyncAt ? `${Math.max(0, Math.floor((now - lastSyncAt) / 1000))}s ago` : 'never'} · Auto-refresh: every 10 min
               {syncWarn ? <span className="ms-2 badge bg-warning text-dark">{syncWarn}</span> : null}
             </div>
-            {netLoading ? <div className="text-muted small">Fetching updates…</div> : null}
+            {/* removed the old netLoading line here */}
           </div>
+
           <div className="d-flex align-items-center gap-2">
-            {/* Removed days dropdown */}
             <ChainSelector value={chain} onChange={(v) => { setChain(v); }} />
-            {/* Refresh moved to footer */}
           </div>
         </div>
       </Card.Header>
