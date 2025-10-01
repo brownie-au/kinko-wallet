@@ -125,6 +125,8 @@ export default function DrawerContent() {
   }, [pathname, isWalletDetailRoute]);
 
   // ---------- render helpers ----------
+  const Separator = () => <div className="pc-separator" role="separator" />;
+
   const renderLeafItem = (item) => (
     <div className={`pc-item${isActive(item.url) ? ' active' : ''}`} key={item.id}>
       <Link className="pc-link" to={item.url || '#'}>
@@ -221,6 +223,15 @@ export default function DrawerContent() {
       <div className="pc-navbar">
         {topItems.map((item) => {
           const children = Array.isArray(item.children) ? item.children : [];
+          if (item.id === 'learn-more') {
+            const output = [<Separator key="learn-more-separator" />];
+            if (item.type === 'collapse' && children.length) {
+              output.push(renderCollapse(item));
+            } else {
+              output.push(renderLeafItem(item));
+            }
+            return output;
+          }
           if (item.type === 'collapse' && children.length) return renderCollapse(item);
           return renderLeafItem(item);
         })}
