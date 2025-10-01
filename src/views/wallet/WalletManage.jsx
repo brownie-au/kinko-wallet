@@ -20,6 +20,7 @@ import WelcomeModal from '../../components/WelcomeModal.jsx';
 import { clearSyncId } from '../../services/syncService.js';
 import { clearEhexStakesCaches } from '../../services/kw-ehexStakingService.js';
 import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
+import '../../styles/kw-wallet-manage.css';
 
 const SOFT = {
   success: { backgroundColor: 'rgba(25,135,84,0.12)', borderColor: 'rgba(25,135,84,0.35)', color: '#1e7e55' },
@@ -309,6 +310,7 @@ const WalletManage = () => {
                 <Form.Group controlId="walletAddress">
                   <Form.Label>Wallet Address</Form.Label>
                   <Form.Control
+                    className="kw-wallet-search-input"
                     ref={addressInputRef}
                     type="text"
                     placeholder="0x1234...abcd"
@@ -322,6 +324,7 @@ const WalletManage = () => {
                 <Form.Group controlId="walletName">
                   <Form.Label>Wallet Name</Form.Label>
                   <Form.Control
+                    className="kw-wallet-search-input"
                     type="text"
                     placeholder="My Wallet"
                     value={name}

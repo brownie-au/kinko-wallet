@@ -42,14 +42,18 @@
   /* nuke any older absolute/sticky rules */
   margin-top: auto;
   /* push to bottom */
-  padding: 12px 0 18px;
+  padding: 12px 12px 18px;
   /* lift slightly from the edge */
   display: flex;
+  align-items: center;
   justify-content: center;
   min-height: 44px;
   /* visible/tappable area */
 }
 
+.pc-sidebar .kw-sidebar-footer .kw-universal-refresh {
+  margin: 0 auto;
+}
 /* 6) Toggle row + buttons */
 .kw-theme-toggle {
   display: flex;

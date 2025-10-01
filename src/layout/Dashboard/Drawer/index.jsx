@@ -7,7 +7,6 @@ import Image from 'react-bootstrap/Image';
 
 // project-imports
 import DrawerContent from './DrawerContent';
-import SidebarThemeToggle from './SidebarThemeToggle';
 import KwUniversalRefreshButton from 'components/kw-UniversalRefreshButton.jsx';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 import { MenuOrientation } from 'config';
@@ -118,12 +117,9 @@ export default function MainDrawer() {
             />
           </div>
 
-          {/* Footer: theme toggle (keep as last child of sidebar content) */}
+          {/* Footer: refresh control (keep as last child of sidebar content) */}
           <div className="kw-sidebar-footer" data-testid="kw-sidebar-footer">
-            <div className="d-flex align-items-center gap-3">
-              <SidebarThemeToggle />
-              <KwUniversalRefreshButton />
-            </div>
+            <KwUniversalRefreshButton />
           </div>
         </div>
 

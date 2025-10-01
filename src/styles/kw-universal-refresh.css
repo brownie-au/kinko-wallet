@@ -14,6 +14,9 @@
   --kw-refresh-ring-opacity: 0;
   /* 0/1 */
 
+  /* OPTICAL CENTRE NUDGE (negative moves left, positive moves right) */
+  --kw-nudge-x: -7px;
+
   appearance: none;
   border: 0;
   background: transparent;
@@ -35,15 +38,13 @@
   opacity: 0.72;
 
   transition:
-    background-color .15s ease,
     opacity .15s ease,
     transform .15s ease;
 }
 
-/* Hover/active (dark theme) */
+/* hover: only adjust opacity (no background block) */
 .kw-universal-refresh:hover:not(:disabled) {
   opacity: 0.95;
-  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .kw-universal-refresh:active:not(:disabled) {
@@ -65,12 +66,17 @@ body[data-pc-theme='light'] .kw-universal-refresh {
 }
 
 body[data-pc-theme='light'] .kw-universal-refresh:hover:not(:disabled) {
-  background-color: rgba(169, 183, 208, 0.12);
-  /* gentle tint with same hue */
+  opacity: 1;
+  /* brighten a touch, no bg block */
 }
 
 body[data-pc-theme='light'] .kw-universal-refresh:disabled {
   opacity: 0.55;
+}
+
+/* ---- Icon wrapper (optical nudge) ---- */
+.kw-universal-refresh__icon {
+  transform: translateX(var(--kw-nudge-x));
 }
 
 /* ---- Icon glyph (Tabler CSS icon: .ti.ti-refresh) ---- */

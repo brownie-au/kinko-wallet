@@ -1,0 +1,66 @@
+/* Kinko Wallet – Manage Wallet glass inputs */
+.kw-app .kw-wallet-search-input {
+  --kw-wallet-input-bg: color-mix(in srgb, var(--kw-frost-tint, rgba(16, 24, 32, 0.68)) 82%, rgba(12, 35, 44, 0.38) 18%);
+  --kw-wallet-input-border: color-mix(in srgb, var(--kw-frost-border, rgba(255, 255, 255, 0.1)) 70%, rgba(82, 227, 240, 0.38) 30%);
+  --kw-wallet-input-shadow: 0 14px 34px -20px rgba(0, 0, 0, 0.62);
+  background: var(--kw-wallet-input-bg);
+  border: 1px solid var(--kw-wallet-input-border);
+  backdrop-filter: blur(calc(var(--kw-frost-blur, 12px) * 0.85)) saturate(125%);
+  -webkit-backdrop-filter: blur(calc(var(--kw-frost-blur, 12px) * 0.85)) saturate(125%);
+  box-shadow: var(--kw-wallet-input-shadow);
+  color: inherit;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kw-app .kw-wallet-search-input:hover,
+.kw-app .kw-wallet-search-input:focus {
+  background: color-mix(in srgb, var(--kw-wallet-input-bg) 70%, rgba(58, 213, 227, 0.22) 30%);
+  border-color: color-mix(in srgb, rgba(92, 232, 255, 0.6) 70%, var(--kw-wallet-input-border) 30%);
+  box-shadow: 0 0 0 1px rgba(92, 232, 255, 0.22), 0 20px 44px -22px rgba(0, 0, 0, 0.68);
+  color: inherit;
+  outline: 0;
+}
+
+.kw-app .kw-wallet-search-input:focus-visible {
+  outline: 0;
+}
+
+.kw-app .kw-wallet-search-input::placeholder {
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.kw-app .kw-wallet-search-input:disabled,
+.kw-app .kw-wallet-search-input[readonly] {
+  opacity: 0.85;
+}
+
+body[data-pc-theme='light'] .kw-app .kw-wallet-search-input {
+  --kw-wallet-input-bg: color-mix(in srgb, rgba(255, 255, 255, 0.94) 80%, rgba(210, 240, 252, 0.65) 20%);
+  --kw-wallet-input-border: rgba(32, 123, 156, 0.22);
+  --kw-wallet-input-shadow: 0 12px 30px -20px rgba(19, 52, 70, 0.32);
+  color: #10222c;
+}
+
+body[data-pc-theme='light'] .kw-app .kw-wallet-search-input::placeholder {
+  color: color-mix(in srgb, #10222c 50%, transparent);
+}
+
+body[data-pc-theme='light'] .kw-app .kw-wallet-search-input:hover,
+body[data-pc-theme='light'] .kw-app .kw-wallet-search-input:focus {
+  border-color: rgba(36, 176, 203, 0.4);
+  background: color-mix(in srgb, var(--kw-wallet-input-bg) 65%, rgba(36, 176, 203, 0.18) 35%);
+  box-shadow: 0 0 0 1px rgba(36, 176, 203, 0.2), 0 20px 44px -24px rgba(19, 52, 70, 0.34);
+  color: #10222c;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .kw-app .kw-wallet-search-input {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: color-mix(in srgb, rgba(18, 28, 36, 0.88) 85%, rgba(24, 40, 48, 0.6) 15%);
+  }
+
+  body[data-pc-theme='light'] .kw-app .kw-wallet-search-input {
+    background: rgba(245, 249, 253, 0.94);
+  }
+}
