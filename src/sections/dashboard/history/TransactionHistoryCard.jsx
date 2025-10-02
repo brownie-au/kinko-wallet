@@ -7,6 +7,7 @@ import { useWallets } from '../../../contexts/WalletContext.jsx';
 import { useRefresh } from '@/contexts/RefreshContext.jsx';
 import useTxHistory from '../../../hooks/useTxHistory.js';
 import { ChainSelector, ChainBadge } from '../../../components/ChainUI';
+import '../../../styles/kw-wallet-manage.css';
 import TokenLogo from '../../../components/TokenLogo';
 import DataClient from '../../../data/dataClient';
 import { startOrchestrator } from '../../../data/orchestrator';
@@ -514,7 +515,7 @@ export default function TransactionHistoryCard() {
   }, [rows]);
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm kw-tx-history-card">
       <Card.Header>
         <div className="d-flex align-items-center justify-content-between">
           <div>
@@ -545,6 +546,7 @@ export default function TransactionHistoryCard() {
         <div className="p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div className="d-flex align-items-center gap-2">
             <Form.Select
+              className="kw-wallet-search-input"
               size="sm"
               value={walletFilter}
               onChange={(e) => setWalletFilter(e.target.value)}
@@ -558,6 +560,7 @@ export default function TransactionHistoryCard() {
               ))}
             </Form.Select>
             <Form.Control
+              className="kw-wallet-search-input"
               size="sm"
               placeholder="Search token, address, hash"
               value={q}
@@ -693,6 +696,7 @@ export default function TransactionHistoryCard() {
     </Card>
   );
 }
+
 
 
 

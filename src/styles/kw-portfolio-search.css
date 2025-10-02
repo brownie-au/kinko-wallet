@@ -1,0 +1,46 @@
+/* Kinko Wallet - Portfolio search alignment */
+.kw-portfolio-controls {
+  margin: 8px 0 14px;
+  row-gap: 0;
+}
+
+.kw-portfolio-controls__search {
+  margin-bottom: 12px;
+}
+
+.kw-portfolio-search {
+  max-width: 420px;
+  width: 100%;
+  margin: 0;
+}
+
+.kw-portfolio-search .kw-wallet-search-input {
+  width: 100%;
+}
+
+.kw-portfolio-controls__actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.kw-portfolio-controls__actions .k-chain-btn,
+.kw-portfolio-controls__actions .k-chip {
+  margin-left: auto;
+}
+
+@media (min-width: 768px) {
+  .kw-portfolio-controls {
+    margin: 6px 0 12px;
+    row-gap: 0;
+  }
+
+  .kw-portfolio-controls__search {
+    margin-bottom: 0;
+  }
+
+  .kw-portfolio-controls__actions {
+    margin-top: 0;
+    justify-content: flex-end;
+  }
+}

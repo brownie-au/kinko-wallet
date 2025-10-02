@@ -64,3 +64,72 @@ body[data-pc-theme='light'] .kw-app .kw-wallet-search-input:focus {
     background: rgba(245, 249, 253, 0.94);
   }
 }
+
+.kw-app select.kw-wallet-search-input.form-select {
+  --bs-form-select-bg: var(--kw-wallet-input-bg);
+  --bs-form-select-border-color: var(--kw-wallet-input-border);
+  --bs-form-select-color: inherit;
+  --bs-form-select-indicator-color: currentColor;
+  --bs-form-select-focus-border-color: color-mix(in srgb, rgba(92, 232, 255, 0.6) 70%, var(--kw-wallet-input-border) 30%);
+  --bs-form-select-focus-box-shadow: 0 0 0 1px rgba(92, 232, 255, 0.22), 0 20px 44px -22px rgba(0, 0, 0, 0.68);
+  background-color: var(--kw-wallet-input-bg);
+  border-color: var(--kw-wallet-input-border);
+  color: inherit;
+  padding-right: 2.5rem;
+  background-position: right 0.8rem center;
+  background-size: 12px auto;
+}
+
+.kw-app select.kw-wallet-search-input.form-select:focus {
+  border-color: color-mix(in srgb, rgba(92, 232, 255, 0.6) 70%, var(--kw-wallet-input-border) 30%);
+  box-shadow: 0 0 0 1px rgba(92, 232, 255, 0.22), 0 20px 44px -22px rgba(0, 0, 0, 0.68);
+}
+
+.kw-app select.kw-wallet-search-input.form-select option {
+  background-color: #07363a;
+  color: inherit;
+}
+
+.kw-app select.kw-wallet-search-input.form-select option:checked,
+.kw-app select.kw-wallet-search-input.form-select option:hover {
+  background-color: #0b4d54;
+  color: inherit;
+}
+
+body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select {
+  --bs-form-select-bg: var(--kw-wallet-input-bg);
+  --bs-form-select-border-color: var(--kw-wallet-input-border);
+  --bs-form-select-color: #10222c;
+  --bs-form-select-indicator-color: #10222c;
+  --bs-form-select-focus-border-color: rgba(36, 176, 203, 0.4);
+  --bs-form-select-focus-box-shadow: 0 0 0 1px rgba(36, 176, 203, 0.2), 0 20px 44px -24px rgba(19, 52, 70, 0.34);
+  background-color: var(--kw-wallet-input-bg);
+  border-color: var(--kw-wallet-input-border);
+  color: #10222c;
+}
+
+body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select option,
+body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select option:hover,
+body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select option:checked {
+  background-color: #07363a;
+  color: #e6f7f7;
+}
+/* Transaction History header: align with Portfolio Top Tokens */
+.kw-app .kw-tx-history-card.card {
+  --kw-tx-header-bg: color-mix(in srgb, var(--kw-frost-tint) 100%, #45a09488 8%);
+  --kw-tx-header-border: color-mix(in srgb, var(--kw-frost-border) 100%, #fff 20%);
+  --bs-card-cap-bg: var(--kw-tx-header-bg);
+  --bs-card-cap-color: var(--bs-body-color);
+  --bs-card-border-color: var(--kw-tx-header-border);
+}
+
+.kw-app .kw-tx-history-card.card > .card-header {
+  background: var(--kw-tx-header-bg);
+  border-bottom-color: var(--kw-tx-header-border);
+  color: var(--bs-card-cap-color);
+}
+
+.kw-app .kw-tx-history-card.card > .card-header h5 {
+  font-weight: 700;
+  color: inherit;
+}

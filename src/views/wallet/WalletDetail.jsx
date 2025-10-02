@@ -37,6 +37,8 @@ import {
   setWalletNetChip
 } from '../../utils/uiState';
 import { useRefresh } from '@/contexts/RefreshContext.jsx';
+import '../../styles/kw-wallet-manage.css';
+import '../../styles/kw-portfolio-search.css';
 
 // ----------------------------- utils -----------------------------
 const fmtUSD = (n) => {
@@ -889,10 +891,11 @@ export default function WalletDetail() {
       </Row>
 
       {/* CONTROLS */}
-      <Row className="mb-3">
-        <Col md={6} className="mb-2">
-          <div className="kw-search-wrap">
+      <Row className="kw-portfolio-controls">
+        <Col md={6} className="kw-portfolio-controls__search">
+          <div className="kw-search-wrap kw-portfolio-search">
             <Form.Control
+              className="kw-wallet-search-input"
               placeholder="Search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -910,7 +913,7 @@ export default function WalletDetail() {
             )}
           </div>
         </Col>
-        <Col md={6} className="text-md-end">
+        <Col md={6} className="text-md-end kw-portfolio-controls__actions">
           {/* Use span to avoid button defaults, match View All pill */}
           <span
             role="button"
@@ -1070,5 +1073,4 @@ export default function WalletDetail() {
     </>
   );
 }
-
 
