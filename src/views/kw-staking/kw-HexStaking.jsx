@@ -657,25 +657,50 @@ export default function KwHexStaking() {
     }, [rowsEnded]);
 
     /* ---------------- Background revalidation on mount (paint first) ---------------- */
-    const refreshNow = useCallback(async () => {
-        if (!pulseAddresses.length) return;
+    const refreshNow = useCallback(async (options = {}) => {
+        if (!pulseAddresses.length) {
+            setRows([]);
+            setRowsEnded([]);
+            setCurrentDay(null);
+            setPayoutPerTShareDailyHex(null);
+            setYieldMap({});
+            setYieldMapEnded({});
+            setUpdatedAt(null);
+            setLoading(false);
+            setProgress({ done: 0, total: 0 });
+            return;
+        }
+
         setIsRefreshing(true);
-        setProgress({ done: 0, total: pulseAddresses.length });
         setSetupError('');
 
+        const total = pulseAddresses.length;
+        const prefetched = options?.prefetched ?? null;
+        if (prefetched) {
+            setProgress({ done: total, total });
+        } else {
+            setProgress({ done: 0, total });
+        }
+
+        let payload = prefetched;
+
         try {
-            const payload = await refreshHexStakesAndCache(
-                pulseAddresses,
-                (done, total) => setProgress({ done, total })
-            );
+            if (!payload) {
+                payload = await refreshHexStakesAndCache(
+                    pulseAddresses,
+                    (done, totalCount) => setProgress({ done, total: totalCount })
+                );
+            }
+
+            if (!payload) return;
 
             setRows(payload.rows || []);
             setRowsEnded(payload.rowsEnded || []);
             setCurrentDay(payload.currentDay ?? null);
             setPayoutPerTShareDailyHex(payload.payoutPerTShareDailyHex ?? null);
             setUpdatedAt(new Date());
-
             // HDS assist + yield maps + price fallback
+
             try {
                 const hdsRows = await fetchHdsPls({ force: false });
                 const { pps, currentDay: hdsDay } = extractPpsAndDay(hdsRows);
@@ -732,7 +757,9 @@ export default function KwHexStaking() {
                 // ignore HDS/price assist errors
             }
         } catch (e) {
-            setSetupError(e?.message || String(e));
+            if (!prefetched) {
+                setSetupError(e?.message || String(e));
+            }
         } finally {
             setIsRefreshing(false);
             setLoading(false); // ensure UI is visible even on first load
@@ -771,12 +798,15 @@ export default function KwHexStaking() {
     }, [pulseAddresses, refreshNow]);
 
     useEffect(() => {
-        const unregister = registerTask('staking:hex', async () => {
-            await refreshNow();
+        const unregister = registerTask('staking:hex', async (ctx) => {
+            if (ctx?.reason === 'global-refresh') {
+                await refreshNow({ prefetched: ctx?.payload });
+            } else {
+                await refreshNow();
+            }
         });
         return unregister;
     }, [refreshNow, registerTask]);
-
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
     useEffect(() => {
         if (!pulseAddresses.length) return;

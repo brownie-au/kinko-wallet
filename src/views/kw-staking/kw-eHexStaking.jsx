@@ -623,7 +623,7 @@ export default function KwEhexStaking({ config }) {
     }, [rowsEnded]);
 
     /* ---------------- Background revalidation (no blanking) ---------------- */
-    const refreshNow = useCallback(async () => {
+    const refreshNow = useCallback(async (options = {}) => {
         if (!ethAddresses.length) {
             // No wallets → hard reset UI and totals, do not paint stale cache
             setRows([]);
@@ -634,11 +634,18 @@ export default function KwEhexStaking({ config }) {
             setYieldMapEnded({});
             setUpdatedAt(null);
             setLoading(false);
+            setProgress({ done: 0, total: 0 });
             return;
         }
         setIsRefreshing(true);
         setSetupError('');
-        setProgress({ done: 0, total: ethAddresses.length });
+        const total = ethAddresses.length;
+        const prefetched = options?.prefetched ?? null;
+        if (prefetched) {
+            setProgress({ done: total, total });
+        } else {
+            setProgress({ done: 0, total });
+        }
 
         const onProgress = (a, b) => {
             let done = 0, total = ethAddresses.length || 0;
@@ -649,7 +656,10 @@ export default function KwEhexStaking({ config }) {
         };
 
         try {
-            const payload = await refreshEthSafe(ethAddresses, onProgress);
+            let payload = prefetched;
+            if (!payload) {
+                payload = await refreshEthSafe(ethAddresses, onProgress);
+            }
 
             if (payload?.rows || payload?.rowsEnded) {
                 setRows(payload.rows || []);
@@ -714,7 +724,9 @@ export default function KwEhexStaking({ config }) {
                 // ignore HDS/price assist errors
             }
         } catch (e) {
-            setSetupError(e?.message || String(e));
+            if (!prefetched) {
+                setSetupError(e?.message || String(e));
+            }
         } finally {
             setIsRefreshing(false);
             setLoading(false);
@@ -748,12 +760,15 @@ export default function KwEhexStaking({ config }) {
     }, [refreshNow]);
 
     useEffect(() => {
-        const unregister = registerTask('staking:ehex', async () => {
-            await refreshNow();
+        const unregister = registerTask('staking:ehex', async (ctx) => {
+            if (ctx?.reason === 'global-refresh') {
+                await refreshNow({ prefetched: ctx?.payload });
+            } else {
+                await refreshNow();
+            }
         });
         return unregister;
     }, [refreshNow, registerTask]);
-
     /* ---------------- Periodic auto-refresh (every 10 minutes) ---------------- */
     useEffect(() => {
         if (!ethAddresses.length) return;

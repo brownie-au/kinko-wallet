@@ -868,14 +868,19 @@ export default function Portfolio() {
     }
   }
 
-  refreshTaskRef.current = async () => {
+  refreshTaskRef.current = async (ctx) => {
+    if (ctx?.reason === 'global-refresh') {
+      memCacheRef.current.clear();
+      await load(false);
+      return;
+    }
     await load(true);
   };
 
   useEffect(() => {
-    const unregister = registerTask('portfolio-overview', async () => {
+    const unregister = registerTask('portfolio-overview', async (ctx) => {
       if (typeof refreshTaskRef.current === 'function') {
-        await refreshTaskRef.current();
+        await refreshTaskRef.current(ctx);
       }
     });
     return unregister;
@@ -1060,9 +1065,7 @@ export default function Portfolio() {
           </div>
         </Col>
         <Col md={6} className="text-md-end kw-portfolio-controls__actions">
-          <button type="button" className="k-chain-btn" onClick={() => load(true)} title="Refresh">
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          {/* Refresh button removed – use sidebar refresh */}
         </Col>
       </Row>
 
@@ -1227,7 +1230,4 @@ export default function Portfolio() {
     </>
   );
 }
-
-
-
 

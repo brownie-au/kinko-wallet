@@ -8,19 +8,18 @@ export default function KwUniversalRefreshButton() {
   const [pulseActive, setPulseActive] = useState(false);
   const pulseTimerRef = useRef(null);
 
+  const totalSteps = Number(progress?.total || 0);
+  const doneSteps = Number(progress?.done || 0);
+
   const progressRatio = useMemo(() => {
-    if (!progress?.total) return 0;
-    const ratio = progress.done / progress.total;
+    if (!totalSteps) return 0;
+    const ratio = doneSteps / totalSteps;
     if (!Number.isFinite(ratio)) return 0;
     return Math.max(0, Math.min(1, ratio));
-  }, [progress.done, progress.total]);
+  }, [doneSteps, totalSteps]);
 
   const progressDegrees = useMemo(
     () => Number((progressRatio * 360).toFixed(2)),
-    [progressRatio]
-  );
-  const progressPercent = useMemo(
-    () => Math.round(progressRatio * 100),
     [progressRatio]
   );
 
@@ -31,9 +30,13 @@ export default function KwUniversalRefreshButton() {
     []
   );
 
-  const ariaLabel = progress?.total
-    ? `Universal Refresh (updates all data) ${progress.done} of ${progress.total} (${progressPercent}%)`
+  const clampedDone = totalSteps > 0 ? Math.min(doneSteps, totalSteps) : doneSteps;
+  const progressLabel = `${clampedDone}/${totalSteps || 0}`;
+
+  const ariaLabel = isRefreshing
+    ? `Refreshing… ${progressLabel}`
     : 'Universal Refresh (updates all data)';
+  const titleText = isRefreshing ? 'Refreshing…' : 'Universal Refresh (updates all data)';
 
   const handleClick = async () => {
     if (isRefreshing) return;
@@ -50,7 +53,7 @@ export default function KwUniversalRefreshButton() {
 
   const style = {
     '--kw-refresh-progress': `${progressDegrees}`,
-    '--kw-refresh-ring-opacity': isRefreshing && progress?.total ? '1' : '0'
+    '--kw-refresh-ring-opacity': isRefreshing && totalSteps ? '1' : '0'
   };
 
   const classNames = ['kw-universal-refresh'];
@@ -64,7 +67,7 @@ export default function KwUniversalRefreshButton() {
       disabled={isRefreshing}
       aria-label={ariaLabel}
       aria-busy={isRefreshing ? 'true' : 'false'}
-      title="Universal Refresh (updates all data)"
+      title={titleText}
       style={style}
     >
       {/* subtle pulse on tap/click */}
@@ -79,3 +82,4 @@ export default function KwUniversalRefreshButton() {
     </button>
   );
 }
+

@@ -572,10 +572,6 @@ export default function TransactionHistoryCard() {
             <Button size="sm" variant="outline-secondary" onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
               Export CSV
             </Button>
-            {/* Refresh in footer */}
-            <Button size="sm" variant="outline-secondary" onClick={() => setDeltaBump((n) => n + 1)} disabled={netLoading}>
-              Refresh
-            </Button>
           </div>
         </div>
 
@@ -696,8 +692,4 @@ export default function TransactionHistoryCard() {
     </Card>
   );
 }
-
-
-
-
 

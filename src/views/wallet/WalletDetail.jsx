@@ -825,26 +825,29 @@ export default function WalletDetail() {
 
   const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'bsc' ? 'BSC' : c === 'polygon' ? 'Polygon' : c === 'base' ? 'Base' : 'ETH');
 
-  // Manual refresh: clear caches for this wallet and refetch
-  const onRefresh = () => {
+  // Trigger refresh (global or manual). Only clear caches when invoked manually.
+  const onRefresh = (ctx = {}) => {
     if (!address) return;
-    if (activeChain === 'all') {
-      clearWalletPrefix(address);
-    } else {
-      clearWalletCache(`${address}:${activeChain}`);
+    const isGlobal = ctx?.reason === 'global-refresh';
+    if (!isGlobal) {
+      if (activeChain === 'all') {
+        clearWalletPrefix(address);
+      } else {
+        clearWalletCache(`${address}:${activeChain}`);
+      }
     }
     setRefreshBump((n) => n + 1);
   };
 
-  refreshTaskRef.current = async () => {
-    onRefresh();
+  refreshTaskRef.current = async (ctx) => {
+    onRefresh(ctx);
   };
 
   useEffect(() => {
     const key = address ? `wallet-detail:${address.toLowerCase()}` : 'wallet-detail';
-    const unregister = registerTask(key, async () => {
-      if (typeof refreshTaskRef.current === "function") {
-        await refreshTaskRef.current();
+    const unregister = registerTask(key, async (ctx) => {
+      if (typeof refreshTaskRef.current === 'function') {
+        await refreshTaskRef.current(ctx);
       }
     });
     return unregister;
@@ -914,17 +917,7 @@ export default function WalletDetail() {
           </div>
         </Col>
         <Col md={6} className="text-md-end kw-portfolio-controls__actions">
-          {/* Use span to avoid button defaults, match View All pill */}
-          <span
-            role="button"
-            tabIndex={0}
-            className="k-chip k-chip-ghost"
-            onClick={onRefresh}
-            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onRefresh()}
-            title="Refresh"
-          >
-            Refresh
-          </span>
+          {/* Refresh button removed – use sidebar refresh */}
         </Col>
       </Row>
 
