@@ -581,7 +581,7 @@ export default function TransactionHistoryCard() {
 
         <div className="table-responsive">
           <table className="table table-hover mb-0 align-middle">
-            <thead className="sticky-top" style={{ position: 'sticky', top: 0 }}>
+            <thead className="sticky-top kw-tx-history-head" style={{ position: 'sticky', top: 0 }}>
               <tr>
                 <th style={{ width: '18%' }}>Date</th>
                 <th style={{ width: '10%' }}>Type</th>
@@ -696,6 +696,7 @@ export default function TransactionHistoryCard() {
     </Card>
   );
 }
+
 
 
 

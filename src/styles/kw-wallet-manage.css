@@ -133,3 +133,14 @@ body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select op
   font-weight: 700;
   color: inherit;
 }
+.kw-app .kw-tx-history-card .kw-tx-history-head {
+  background: color-mix(in srgb, var(--kw-frost-tint) 92%, rgba(6, 18, 24, 0.78) 8%);
+  backdrop-filter: blur(calc(var(--kw-frost-blur, 12px) * 0.75)) saturate(120%);
+  -webkit-backdrop-filter: blur(calc(var(--kw-frost-blur, 12px) * 0.75)) saturate(120%);
+  border-bottom: 1px solid color-mix(in srgb, var(--kw-frost-border) 85%, rgba(0, 0, 0, 0.35) 15%);
+}
+
+.kw-app .kw-tx-history-card .kw-tx-history-head th {
+  background: transparent;
+  border-color: transparent;
+}
