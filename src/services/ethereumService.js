@@ -27,6 +27,82 @@ const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 6
 const DEBUG = !!import.meta.env.DEV;
 const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
 
+// ---- env diagnostics & status publishing ----
+const ETH_STATUS_STORAGE_KEY = 'kw:ethConfigStatus';
+const PROVIDERS = [
+  { id: 'quicknode', key: 'VITE_QUICKNODE_HTTP', label: 'QuickNode HTTPS RPC', required: true, value: QN_URL },
+  { id: 'moralis', key: 'VITE_MORALIS_API_KEY', label: 'Moralis API Key', required: false, value: MORALIS_KEY },
+  { id: 'etherscan', key: 'VITE_ETHERSCAN_KEY', label: 'Etherscan API Key', required: false, value: ETHERSCAN_KEY }
+];
+const envWarnedKeys = new Set();
+let lastStatusPayload = '';
+
+function providerState() {
+  return PROVIDERS.reduce((acc, p) => {
+    acc[p.id] = Boolean(p.value);
+    return acc;
+  }, {});
+}
+
+function listMissingEnvKeys() {
+  return PROVIDERS.filter((p) => !p.value).map((p) => p.key);
+}
+
+function warnMissingEnv(key, label) {
+  if (envWarnedKeys.has(key)) return;
+  envWarnedKeys.add(key);
+  console.warn(`[ETH] Missing ${label} (${key}). Add it to your Vite env / hosting config to re-enable Ethereum balances.`);
+}
+
+function dispatchStorageEvent(key, value) {
+  if (typeof window === 'undefined' || typeof StorageEvent === 'undefined') return;
+  try {
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: value }));
+  } catch { /* no-op */ }
+}
+
+function publishEthConfigStatus({ disabled, reason = null } = {}) {
+  if (typeof window === 'undefined') return;
+  const payload = {
+    disabled: Boolean(disabled),
+    reason: disabled ? reason : null,
+    missingKeys: listMissingEnvKeys(),
+    providers: providerState(),
+    updatedAt: Date.now()
+  };
+  const next = JSON.stringify(payload);
+  if (next === lastStatusPayload) return;
+  lastStatusPayload = next;
+  window.__kinko = Object.assign(window.__kinko || {}, { ethConfigStatus: payload });
+  try {
+    localStorage.setItem(ETH_STATUS_STORAGE_KEY, next);
+  } catch { /* storage unavailable */ }
+  dispatchStorageEvent(ETH_STATUS_STORAGE_KEY, next);
+}
+
+function ensureQuickNodeConfigured() {
+  if (QN_URL) return true;
+  const missingKeys = listMissingEnvKeys();
+  warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
+  publishEthConfigStatus({ disabled: true, reason: 'QuickNode RPC missing (set VITE_QUICKNODE_HTTP).' });
+  if (missingKeys.length && DEBUG) {
+    log('Missing env keys detected:', missingKeys.join(', '));
+  }
+  return false;
+}
+
+if (DEBUG) {
+  try {
+    const keys = Object.keys(import.meta?.env || {}).filter((k) => k.startsWith('VITE_')).sort();
+    log('Vite env keys available:', keys.length ? keys.join(', ') : '(none)');
+  } catch {
+    log('Vite env inspection failed.');
+  }
+}
+
+// Publish initial status once at module load so the Portfolio view can surface it immediately.
+publishEthConfigStatus({ disabled: !QN_URL, reason: QN_URL ? null : 'QuickNode RPC missing (set VITE_QUICKNODE_HTTP).' });
+
 // ---- spam controls (edit via .env without code changes) ----
 const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0); // e.g. 0.01
 const ENV_BLOCKLIST = new Set(
@@ -264,6 +340,10 @@ async function ethCall(to, data) {
 
 // -------- native ETH --------
 async function fetchNativeETH(address) {
+  if (!QN_URL) {
+    warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
+    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
+  }
   try {
     const hex = await rpc('eth_getBalance', [address, 'latest']);
     const eth = weiToEth(toBN(hex)); // precision-safe
@@ -348,7 +428,10 @@ async function fetchERC20sFromQuickNode(address) {
 
 // Moralis fallback
 async function fetchERC20sFromMoralis(address) {
-  if (!MORALIS_KEY) return [];
+  if (!MORALIS_KEY) {
+    warnMissingEnv('VITE_MORALIS_API_KEY', 'Moralis API Key');
+    return [];
+  }
   try {
     const url = `${MORALIS_BASE}/${address}/erc20?chain=eth`;
     const { data } = await axios.get(url, { headers: { 'X-API-Key': MORALIS_KEY }, timeout: READ_TIMEOUT });
@@ -372,7 +455,10 @@ async function fetchERC20sFromMoralis(address) {
 
 // Etherscan discovery + on-chain reads
 async function fetchERC20sFromEtherscan(address) {
-  if (!ETHERSCAN_KEY) return [];
+  if (!ETHERSCAN_KEY) {
+    warnMissingEnv('VITE_ETHERSCAN_KEY', 'Etherscan API Key');
+    return [];
+  }
   try {
     const url =
       `${ETHERSCAN_BASE}?module=account&action=tokentx&address=${address}` +
@@ -454,11 +540,12 @@ async function fetchERC20sFromEthplorer(address) {
 // ---------- public ----------
 export async function fetchEthereumTokens(address, { force = false } = {}) {
   const key = `eth:tokens:${(address || '').toLowerCase()}`;
+  let cachedArr = null;
 
   // Cached path — normalise old shapes {tokens: []} → []
   if (!force) {
     const cachedRaw = getCachedJSON(key, CACHE_TTL_MS)?.data;
-    const cachedArr = Array.isArray(cachedRaw)
+    cachedArr = Array.isArray(cachedRaw)
       ? cachedRaw
       : Array.isArray(cachedRaw?.tokens)
         ? cachedRaw.tokens
@@ -472,6 +559,13 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
       return cleaned;
     }
   }
+
+  if (!ensureQuickNodeConfigured()) {
+    // Surface cached snapshot (if any) so the UI can display the warning without crashing the view.
+    return cachedArr || [];
+  }
+
+  publishEthConfigStatus({ disabled: false });
 
   const [nativeRow, qnErc20] = await Promise.all([
     fetchNativeETH(address),
