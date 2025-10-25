@@ -264,6 +264,44 @@ const TokenCellStyles = () => (
   `}</style>
 );
 
+/* ---- wallet header glass treatment ---- */
+const WalletHeaderStyles = () => (
+  <style>{`
+    .kw-wallet-glass-header {
+      background: linear-gradient(135deg, rgba(11, 18, 31, .82), rgba(8, 20, 33, .78));
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03), 0 12px 32px rgba(2,12,27,.45);
+      z-index: 3;
+    }
+    .kw-wallet-glass-header th {
+      background: transparent;
+      color: rgba(236,245,255,.85);
+    }
+    .kw-wallet-glass-header th .btn-link {
+      color: inherit;
+    }
+    .kw-wallet-glass-header th .btn-link:hover,
+    .kw-wallet-glass-header th .btn-link:focus {
+      color: #ffffff;
+      text-decoration: none;
+    }
+    html[data-theme='light'] .kw-wallet-glass-header {
+      background: linear-gradient(135deg, rgba(34, 48, 70, .86), rgba(22, 33, 52, .78));
+      border-bottom-color: rgba(15,23,42,.18);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 12px 24px rgba(15,23,42,.18);
+    }
+    html[data-theme='light'] .kw-wallet-glass-header th {
+      color: rgba(17,24,39,.82);
+    }
+    html[data-theme='light'] .kw-wallet-glass-header th .btn-link:hover,
+    html[data-theme='light'] .kw-wallet-glass-header th .btn-link:focus {
+      color: rgba(17,24,39,.95);
+    }
+  `}</style>
+);
+
 const LoadingRow = ({ label = 'Loading…', colSpan = 5 }) => (
   <tr>
     <td colSpan={colSpan} className="px-3 py-3">
@@ -859,6 +897,7 @@ export default function WalletDetail() {
       <LoadingStyles /> {/* inject shimmer CSS */}
       <ChipStyles />    {/* chip styles */}
       <TokenCellStyles /> {/* token cell styles */}
+      <WalletHeaderStyles /> {/* dark glass table head */}
 
       {/* HEADER */}
       <Row className="mb-4">
@@ -940,7 +979,7 @@ export default function WalletDetail() {
             <Card.Body className="p-0">
               <div className="table-responsive">
                 <table className="table table-hover mb-0 align-middle">
-                  <thead className="sticky-top" style={{ position: 'sticky', top: 0 }}>
+                  <thead className="sticky-top kw-wallet-glass-header" style={{ position: 'sticky', top: 0 }}>
                     <tr>
                       <th style={{ width: '38%' }}>
                         <button
