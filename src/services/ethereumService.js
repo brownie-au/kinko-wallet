@@ -1,5 +1,5 @@
 // Ethereum balance + token discovery using free public APIs (no QuickNode, no Moralis)
-// Now includes authenticated Blockscout + fallback to Ethplorer + AllOrigins CORS recovery.
+// Now powered entirely by FreeCryptoAPI — clean, fast, and CORS-safe.
 
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
@@ -8,10 +8,10 @@ import { enrichErc20Prices } from './ethErc20PriceService';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
 // ----------------- CONFIG -----------------
-const ETHPLORER = 'https://api.ethplorer.io';
-const ETHPLORER_KEY = import.meta.env.VITE_ETHPLORER_KEY || 'freekey';
-const BLOCKSCOUT_V2 = import.meta.env.VITE_ETH_BLOCKSCOUT_V2 || 'https://eth.blockscout.com/api/v2';
-const BLOCKSCOUT_KEY = import.meta.env.VITE_ETH_BLOCKSCOUT_KEY || ''; // new key
+const FREECRYPTO_BASE = 'https://api.freecryptoapi.com/v1';
+const FREECRYPTO_KEY = import.meta.env.VITE_FREECRYPTO_KEY || '';
+
+const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || 'https://eth.llamarpc.com';
 
 const PAPRIKA_BASE = 'https://api.coinpaprika.com/v1';
 const PAPRIKA_ETH_ID = 'eth-ethereum';
@@ -126,14 +126,13 @@ async function enrichAllPrices(tokens) {
 // ---------- Native ETH ----------
 export async function fetchNativeETH(address) {
   try {
-    const rpcUrl = 'https://eth.llamarpc.com';
     const body = {
       jsonrpc: '2.0',
       id: 1,
       method: 'eth_getBalance',
       params: [address, 'latest']
     };
-    const { data } = await axios.post(rpcUrl, body);
+    const { data } = await axios.post(ETH_RPC_URL, body, { timeout: 10000 });
     const wei = BigInt(data.result);
     const eth = Number(wei) / 1e18;
     return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
@@ -143,80 +142,32 @@ export async function fetchNativeETH(address) {
   }
 }
 
-// ---------- ERC-20 discovery (Blockscout + Ethplorer fallback + AllOrigins proxy) ----------
+// ---------- ERC-20 discovery (FreeCryptoAPI only) ----------
 export async function fetchERC20Tokens(address) {
-  const baseUrl = BLOCKSCOUT_V2.startsWith('http')
-    ? BLOCKSCOUT_V2
-    : 'https://eth.blockscout.com/api/v2';
-  const fullUrl = `${baseUrl}/addresses/${address}/tokens?limit=100`;
-  const proxyUrl = `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
-  const headers = BLOCKSCOUT_KEY ? { 'x-api-key': BLOCKSCOUT_KEY } : {};
-
-  // Primary: Blockscout direct
   try {
-    const { data } = await axios.get(fullUrl, { headers, timeout: 10000 });
-    const tokens = data?.items || [];
-    if (tokens.length > 0) {
+    const url = `${FREECRYPTO_BASE}/ethereum/address/${address}/tokens?apikey=${FREECRYPTO_KEY}`;
+    const { data } = await axios.get(url, { timeout: 12000 });
+    const tokens = data?.data || [];
+    if (Array.isArray(tokens) && tokens.length > 0) {
+      log('[ETH] FreeCryptoAPI:', tokens.length, 'tokens');
       return tokens
         .map((t) =>
           row({
-            address: t.token?.address,
-            symbol: t.token?.symbol,
-            name: t.token?.name,
-            decimals: Number(t.token?.decimals ?? 18),
-            balance: Number(t.value) / 10 ** Number(t.token?.decimals ?? 18)
+            address: t.contract_address,
+            symbol: t.symbol,
+            name: t.name,
+            decimals: Number(t.decimals ?? 18),
+            balance: Number(t.balance ?? 0),
+            priceUSD: Number(t.usd_value ?? 0),
+            usd: Number(t.usd_value ?? 0)
           })
         )
         .filter((t) => t.balance > 0);
     }
   } catch (err) {
-    console.warn('[ETH] Blockscout direct failed:', err?.message);
+    console.error('[ETH] FreeCryptoAPI failed:', err?.message);
   }
-
-  // Fallback: AllOrigins proxy (for CORS/rate-limit)
-  try {
-    console.warn('[ETH] Using AllOrigins proxy fallback');
-    const { data } = await axios.get(proxyUrl, { timeout: 10000 });
-    const parsed = JSON.parse(data?.contents || '{}');
-    const tokens = parsed?.items || [];
-    if (tokens.length > 0) {
-      return tokens
-        .map((t) =>
-          row({
-            address: t.token?.address,
-            symbol: t.token?.symbol,
-            name: t.token?.name,
-            decimals: Number(t.token?.decimals ?? 18),
-            balance: Number(t.value) / 10 ** Number(t.token?.decimals ?? 18)
-          })
-        )
-        .filter((t) => t.balance > 0);
-    }
-  } catch (err) {
-    console.warn('[ETH] AllOrigins fallback failed:', err?.message);
-  }
-
-  // Final fallback: Ethplorer
-  try {
-    const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
-    const { data } = await axios.get(url, { timeout: 10000 });
-    const tokens = data?.tokens || [];
-    if (tokens.length === 0) return [];
-    return tokens
-      .map((t) =>
-        row({
-          address: t.tokenInfo.address,
-          symbol: t.tokenInfo.symbol,
-          name: t.tokenInfo.name,
-          decimals: Number(t.tokenInfo.decimals ?? 18),
-          balance: Number(t.balance) / 10 ** Number(t.tokenInfo.decimals ?? 18)
-        })
-      )
-      .filter((t) => t.balance > 0);
-  } catch (err) {
-    console.error('[ETH] Ethplorer fallback failed:', err?.message);
-    return [];
-  }
+  return [];
 }
 
 // ---------- Public API ----------
