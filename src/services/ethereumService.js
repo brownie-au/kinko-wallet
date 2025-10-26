@@ -1,7 +1,5 @@
 // src/services/ethereumService.js
-// Ethereum balances via backend proxy to QuickNode.
-// Keeps API keys private (no VITE_QUICKNODE_HTTP in client bundle).
-// Same behaviour as before, but routes all RPCs through /api/ethproxy.
+// Ethereum balance + token discovery using public free APIs (no QuickNode, no Moralis)
 
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
@@ -12,21 +10,14 @@ import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 // ----------------- CONFIG -----------------
 const ETHPLORER = 'https://api.ethplorer.io';
 const ETHPLORER_KEY = import.meta.env.VITE_ETHPLORER_KEY || 'freekey';
-const ETHERSCAN_BASE = 'https://api.etherscan.io/api';
-const ETHERSCAN_KEY = import.meta.env.VITE_ETHERSCAN_KEY || '';
-const MORALIS_BASE = import.meta.env.VITE_MORALIS_API_BASE || 'https://deep-index.moralis.io/api/v2';
-const MORALIS_KEY = import.meta.env.VITE_MORALIS_API_KEY || '';
+const BLOCKSCOUT_V2 = import.meta.env.VITE_ETH_BLOCKSCOUT_V2 || 'https://eth.blockscout.com/api/v2';
 
 const PAPRIKA_BASE = 'https://api.coinpaprika.com/v1';
 const PAPRIKA_ETH_ID = 'eth-ethereum';
 const PRICE_CACHE_TTL_MS = Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60) * 1000;
-
 const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
 const DEBUG = !!import.meta.env.DEV;
 const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
-
-const QUICKNODE_PROXY = import.meta.env.VITE_ETH_PROXY_URL || '/api/ethproxy';
-const QUICKNODE_WARNING_REASON = 'QuickNode RPC proxy missing (set VITE_ETH_PROXY_URL) - using public RPC/API fallbacks for Ethereum.';
 
 // Spam + blocklist
 const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0);
@@ -39,66 +30,8 @@ const ENV_BLOCKLIST = new Set(
 const STATIC_BLOCKLIST = new Set([]);
 
 // ---------- utils ----------
-const toBN = (hex) => {
-  if (!hex) return 0n;
-  const s = String(hex);
-  return s.startsWith('0x') ? BigInt(s) : BigInt(`0x${s}`);
-};
-const POW10N = (d) => 10n ** BigInt(d);
-function bigIntToDecimal(bi, decimals) {
-  try {
-    const base = POW10N(decimals);
-    const whole = bi / base;
-    const frac = bi % base;
-    const keep = Math.min(9, Math.max(0, decimals));
-    const scale = POW10N(decimals - keep);
-    const fracScaled = Number(frac / scale);
-    return Number(whole) + fracScaled / 10 ** keep;
-  } catch { return 0; }
-}
-function toDecimal(raw, decimals = 18) {
-  try {
-    if (raw == null) return 0;
-    if (typeof raw === 'bigint') return bigIntToDecimal(raw, decimals);
-    const s = String(raw);
-    if (/^\d+$/.test(s)) return bigIntToDecimal(BigInt(s), decimals);
-    const n = Number(raw);
-    return Number.isFinite(n) ? (decimals ? n / 10 ** decimals : n) : 0;
-  } catch { return 0; }
-}
-const weiToEth = (weiBig) => {
-  try {
-    const w = typeof weiBig === 'bigint' ? weiBig : BigInt(weiBig ?? 0);
-    return bigIntToDecimal(w, 18);
-  } catch { return 0; }
-};
 const toNum = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
-const SIG = {
-  balanceOf: '0x70a08231',
-  decimals: '0x313ce567',
-  symbol: '0x95d89b41',
-  name: '0x06fdde03'
-};
-function encodeBalanceOfData(address) {
-  const a = address.toLowerCase().replace(/^0x/, '');
-  const padded = a.padStart(64, '0');
-  return SIG.balanceOf + padded;
-}
-function tryDecodeString(hex) {
-  if (!hex || hex === '0x') return '';
-  try {
-    const data = hex.replace(/^0x/, '');
-    const offset = parseInt(data.slice(0, 64), 16);
-    if (offset >= 64 && data.length >= offset + 64) {
-      const len = parseInt(data.slice(offset, offset + 64), 16);
-      const strHex = data.slice(offset + 64, offset + 64 + len * 2);
-      const bytes = strHex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || [];
-      return new TextDecoder().decode(new Uint8Array(bytes)).replace(/\u0000/g, '').trim();
-    }
-  } catch { }
-  return '';
-}
 const row = ({ address, symbol, name, decimals, balance }) => ({
   chain: 'eth',
   address: address ? String(address).toLowerCase() : 'native',
@@ -115,8 +48,8 @@ const row = ({ address, symbol, name, decimals, balance }) => ({
 const EHEX_CONTRACT = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
 const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const KNOWN_TOKENS = {
-  [EHEX_CONTRACT]: { symbol: 'eHEX', name: 'HEX (Ethereum)', decimals: 8 },
-  [USDC_CONTRACT]: { symbol: 'USDC', name: 'USD Coin', decimals: 6 }
+  [EHEX_CONTRACT.toLowerCase()]: { symbol: 'eHEX', name: 'HEX (Ethereum)', decimals: 8 },
+  [USDC_CONTRACT.toLowerCase()]: { symbol: 'USDC', name: 'USD Coin', decimals: 6 }
 };
 function applyKnownTokenFixes(list = []) {
   for (const t of list) {
@@ -167,7 +100,9 @@ async function getEthUsdPricePrimary() {
   try {
     const f = await getEthUsdPriceFallback();
     return Number(f) || 0;
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
 async function enrichEthPrice(tokens) {
   try {
@@ -188,28 +123,19 @@ async function enrichAllPrices(tokens) {
   return tokens;
 }
 
-// ---------- Backend Proxy ----------
-async function rpcProxy(method, params, id = 1) {
-  const body = { jsonrpc: '2.0', id, method, params };
-  const r = await fetch(QUICKNODE_PROXY, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error('Proxy RPC failed');
-  const data = await r.json();
-  if (data?.error) throw new Error(data.error?.message || 'RPC error');
-  return data?.result;
-}
-async function ethCall(to, data) {
-  return rpcProxy('eth_call', [{ to, data }, 'latest']);
-}
-
 // ---------- Native ETH ----------
-async function fetchNativeETH(address) {
+export async function fetchNativeETH(address) {
   try {
-    const hex = await rpcProxy('eth_getBalance', [address, 'latest']);
-    const eth = weiToEth(toBN(hex));
+    const rpcUrl = 'https://eth.llamarpc.com';
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_getBalance',
+      params: [address, 'latest']
+    };
+    const { data } = await axios.post(rpcUrl, body);
+    const wei = BigInt(data.result);
+    const eth = Number(wei) / 1e18;
     return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
   } catch (e) {
     console.error('[ETH] native balance error:', e?.message);
@@ -217,21 +143,23 @@ async function fetchNativeETH(address) {
   }
 }
 
-// ---------- ERC-20 discovery ----------
-async function fetchERC20sFromQuickNode(address) {
+// ---------- ERC-20 discovery (Ethplorer) ----------
+export async function fetchERC20Tokens(address) {
   try {
-    const res = await rpcProxy('qn_getTokenBalances', [address]);
-    const arr = res?.assets || res || [];
-    return arr.map((t) =>
+    const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
+    const { data } = await axios.get(url, { timeout: 10000 });
+    const tokens = data.tokens || [];
+    return tokens.map((t) =>
       row({
-        address: t?.contractAddress,
-        symbol: t?.symbol,
-        name: t?.name,
-        decimals: Number(t?.decimals ?? 18),
-        balance: toDecimal(t?.balance ?? 0, Number(t?.decimals ?? 18))
+        address: t.tokenInfo.address,
+        symbol: t.tokenInfo.symbol,
+        name: t.tokenInfo.name,
+        decimals: Number(t.tokenInfo.decimals ?? 18),
+        balance: Number(t.balance) / 10 ** Number(t.tokenInfo.decimals ?? 18)
       })
     ).filter((t) => t.balance > 0);
-  } catch {
+  } catch (e) {
+    console.error('[ETH] ERC20 fetch error:', e?.message);
     return [];
   }
 }
@@ -256,14 +184,7 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     }
   }
 
-  const [nativeRow, qnErc20] = await Promise.all([
-    fetchNativeETH(address),
-    fetchERC20sFromQuickNode(address)
-  ]);
-
-  let erc20 = qnErc20;
-  if (!erc20.length) erc20 = await fetchERC20sFromQuickNode(address); // retry proxy
-
+  const [nativeRow, erc20] = await Promise.all([fetchNativeETH(address), fetchERC20Tokens(address)]);
   const baseList = [nativeRow, ...erc20];
   applyKnownTokenFixes(baseList);
   const result = await enrichAllPrices(baseList);
