@@ -1,5 +1,6 @@
 // src/services/ethereumService.js
-// Ethereum balance + token discovery using public free APIs (no QuickNode, no Moralis)
+// Ethereum balance + token discovery using free public APIs (no QuickNode, no Moralis)
+// Now includes automatic Blockscout fallback for production reliability.
 
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
@@ -73,8 +74,7 @@ function filterEthSpam(tokens) {
     if (ETH_HIDE_MIN_USD > 0 && Number(t.usd || 0) < ETH_HIDE_MIN_USD) return false;
     const hasPrice = Number(t.price || t.priceUSD || 0) > 0;
     const hasMeta = Boolean((t.symbol || '').trim()) || Boolean((t.name || '').trim());
-    if (!hasPrice && !hasMeta) return false;
-    return true;
+    return hasPrice || hasMeta;
   });
 }
 
@@ -143,23 +143,49 @@ export async function fetchNativeETH(address) {
   }
 }
 
-// ---------- ERC-20 discovery (Ethplorer) ----------
+// ---------- ERC-20 discovery (Ethplorer + Blockscout fallback) ----------
 export async function fetchERC20Tokens(address) {
+  // Primary: Ethplorer
   try {
     const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
     const { data } = await axios.get(url, { timeout: 10000 });
-    const tokens = data.tokens || [];
-    return tokens.map((t) =>
-      row({
-        address: t.tokenInfo.address,
-        symbol: t.tokenInfo.symbol,
-        name: t.tokenInfo.name,
-        decimals: Number(t.tokenInfo.decimals ?? 18),
-        balance: Number(t.balance) / 10 ** Number(t.tokenInfo.decimals ?? 18)
-      })
-    ).filter((t) => t.balance > 0);
-  } catch (e) {
-    console.error('[ETH] ERC20 fetch error:', e?.message);
+    const tokens = data?.tokens || [];
+    if (tokens.length > 0) {
+      return tokens
+        .map((t) =>
+          row({
+            address: t.tokenInfo.address,
+            symbol: t.tokenInfo.symbol,
+            name: t.tokenInfo.name,
+            decimals: Number(t.tokenInfo.decimals ?? 18),
+            balance: Number(t.balance) / 10 ** Number(t.tokenInfo.decimals ?? 18)
+          })
+        )
+        .filter((t) => t.balance > 0);
+    }
+  } catch (err) {
+    console.warn('[ETH] Ethplorer failed, falling back to Blockscout');
+  }
+
+  // Fallback: Blockscout (public, unlimited)
+  try {
+    const url = `${BLOCKSCOUT_V2}/addresses/${address}/tokens?limit=100`;
+    const { data } = await axios.get(url, { timeout: 10000 });
+    const tokens = data?.items || [];
+    if (tokens.length === 0) return [];
+    return tokens
+      .map((t) =>
+        row({
+          address: t.token?.address,
+          symbol: t.token?.symbol,
+          name: t.token?.name,
+          decimals: Number(t.token?.decimals ?? 18),
+          balance: Number(t.value) / 10 ** Number(t.token?.decimals ?? 18)
+        })
+      )
+      .filter((t) => t.balance > 0);
+  } catch (err) {
+    console.error('[ETH] Blockscout fallback failed:', err?.message);
     return [];
   }
 }
