@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // Allow preflight OPTIONS
     if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -15,16 +14,10 @@ export default async function handler(req, res) {
         const response = await fetch(target, {
             headers: { 'User-Agent': 'KinkoWalletProxy/1.0' },
         });
-
-        if (!response.ok) throw new Error(`Status ${response.status}`);
-
         const data = await response.json();
-
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         res.status(200).json(data);
-    } catch (error) {
-        res.status(500).json({ error: 'Proxy fetch failed', details: error.message });
+    } catch (err) {
+        res.status(500).json({ error: 'Proxy failed', details: err.message });
     }
 }
