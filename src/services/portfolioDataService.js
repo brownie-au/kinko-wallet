@@ -5,12 +5,21 @@ import { scheduledFetch } from './fetchScheduler';
 import { walletSignature } from '../utils/walletSig';
 
 import { fetchPulsechainTokens } from './pulsechainService';
-import { fetchEthereumTokens }  from './ethereumService';
 import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
 import { getBaseTokenPricesLlama, getBaseUsdPriceLlama } from './priceService';
 import { getBaseNativeBalance } from './baseRpcService';
-// --- Force Ethereum service import to stay in bundle ---
-console.debug('Ethereum service ready:', typeof fetchEthereumTokens);
+
+// --- Ethereum dynamic import (prevents tree-shaking) ---
+let fetchEthereumTokens;
+(async () => {
+  try {
+    const mod = await import('./ethereumService');
+    fetchEthereumTokens = mod.fetchEthereumTokens;
+    console.debug('Ethereum service loaded dynamically');
+  } catch (err) {
+    console.error('Failed to load Ethereum service', err);
+  }
+})();
 
 const SNAP_TTL_MS = 30 * 60_000;
 const REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
@@ -80,6 +89,18 @@ async function fetchAllChains(wallets) {
       }
 
       else if (['eth', 'ethereum', 'ether', 'ethereum mainnet'].includes(chain)) {
+        // Ensure Ethereum module is ready (lazy-load fallback)
+        if (!fetchEthereumTokens) {
+          console.warn('Ethereum service not yet ready — retrying import...');
+          try {
+            const mod = await import('./ethereumService');
+            fetchEthereumTokens = mod.fetchEthereumTokens;
+          } catch (err) {
+            console.error('Failed to dynamically import Ethereum service:', err);
+            continue; // skip wallet gracefully
+          }
+        }
+
         const list = await fetchEthereumTokens(addr);
         for (const r of list) out.push(normalizeRow(r, addr));
       }
