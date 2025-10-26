@@ -9,6 +9,8 @@ import { fetchEthereumTokens }  from './ethereumService';
 import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from './baseBlockscoutService';
 import { getBaseTokenPricesLlama, getBaseUsdPriceLlama } from './priceService';
 import { getBaseNativeBalance } from './baseRpcService';
+// --- Force Ethereum service import to stay in bundle ---
+console.debug('Ethereum service ready:', typeof fetchEthereumTokens);
 
 const SNAP_TTL_MS = 30 * 60_000;
 const REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
