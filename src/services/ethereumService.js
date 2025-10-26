@@ -1,6 +1,7 @@
 // src/services/ethereumService.js
-// Ethereum balances via QuickNode RPC (native ETH + token methods)
+// Ethereum balances via QuickNode RPC (native ETH + token methods) when available
 // with Moralis → Etherscan+on-chain → Ethplorer fallbacks for ERC-20s.
+// QuickNode is optional: we warn when it is missing and rotate through public RPC/API fallbacks.
 // SAFE pricing: native ETH (CoinPaprika primary → ethPriceService fallback) + ERC-20s (Dexscreener best-liquidity).
 // Includes spam filtering: blocklist + "no price & no metadata" + optional min USD.
 
@@ -26,6 +27,8 @@ const PRICE_CACHE_TTL_MS = Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60
 const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
 const DEBUG = !!import.meta.env.DEV;
 const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
+const QUICKNODE_WARNING_REASON =
+  'QuickNode RPC missing (set VITE_QUICKNODE_HTTP) - using public RPC/API fallbacks for Ethereum.';
 
 // ---- env diagnostics & status publishing ----
 const ETH_STATUS_STORAGE_KEY = 'kw:ethConfigStatus';
@@ -65,7 +68,7 @@ function publishEthConfigStatus({ disabled, reason = null } = {}) {
   if (typeof window === 'undefined') return;
   const payload = {
     disabled: Boolean(disabled),
-    reason: disabled ? reason : null,
+    reason: reason || null,
     missingKeys: listMissingEnvKeys(),
     providers: providerState(),
     updatedAt: Date.now()
@@ -80,17 +83,6 @@ function publishEthConfigStatus({ disabled, reason = null } = {}) {
   dispatchStorageEvent(ETH_STATUS_STORAGE_KEY, next);
 }
 
-function ensureQuickNodeConfigured() {
-  if (QN_URL) return true;
-  const missingKeys = listMissingEnvKeys();
-  warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
-  publishEthConfigStatus({ disabled: true, reason: 'QuickNode RPC missing (set VITE_QUICKNODE_HTTP).' });
-  if (missingKeys.length && DEBUG) {
-    log('Missing env keys detected:', missingKeys.join(', '));
-  }
-  return false;
-}
-
 if (DEBUG) {
   try {
     const keys = Object.keys(import.meta?.env || {}).filter((k) => k.startsWith('VITE_')).sort();
@@ -101,7 +93,7 @@ if (DEBUG) {
 }
 
 // Publish initial status once at module load so the Portfolio view can surface it immediately.
-publishEthConfigStatus({ disabled: !QN_URL, reason: QN_URL ? null : 'QuickNode RPC missing (set VITE_QUICKNODE_HTTP).' });
+publishEthConfigStatus({ disabled: false, reason: QN_URL ? null : QUICKNODE_WARNING_REASON });
 
 // ---- spam controls (edit via .env without code changes) ----
 const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0); // e.g. 0.01
@@ -119,6 +111,38 @@ const STATIC_BLOCKLIST = new Set([
 // Limits for Etherscan discovery to avoid huge wallets hammering RPC
 const MAX_DISCOVERED = 60;
 const READ_TIMEOUT = 12_000;
+
+function buildEthRpcUrlList() {
+  const urls = [];
+
+  if (QN_URL) urls.push(QN_URL);
+
+  const csv =
+    import.meta.env.VITE_ETH_RPC_URLS ||
+    import.meta.env.VITE_ETHEREUM_RPC_URLS ||
+    '';
+  if (csv) {
+    csv
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .forEach((u) => urls.push(u));
+  }
+
+  if (import.meta.env.VITE_ETH_RPC_URL) urls.push(import.meta.env.VITE_ETH_RPC_URL);
+
+  urls.push(
+    'https://eth.llamarpc.com',
+    'https://1rpc.io/eth',
+    'https://cloudflare-eth.com',
+    'https://rpc.ankr.com/eth'
+  );
+
+  return Array.from(new Set(urls.filter(Boolean)));
+}
+
+// Mirror kw-ehexStakingService defaults so both features share the same RPC fallbacks.
+const ETH_RPC_URL_POOL = buildEthRpcUrlList();
 
 // ---------- utils ----------
 const toBN = (hex) => {
@@ -324,15 +348,19 @@ async function enrichAllPrices(tokens) {
 }
 
 // ---------- RPC ----------
-async function rpc(method, params, id = 1) {
-  if (!QN_URL) throw new Error('QuickNode URL missing');
+async function rpcVia(url, method, params, id = 1) {
+  if (!url) throw new Error('RPC URL missing');
   const { data } = await axios.post(
-    QN_URL,
+    url,
     { jsonrpc: '2.0', id, method, params },
     { headers: { 'Content-Type': 'application/json' }, timeout: READ_TIMEOUT }
   );
   if (data?.error) throw new Error(data.error?.message || 'RPC error');
   return data?.result;
+}
+async function rpc(method, params, id = 1) {
+  if (!QN_URL) throw new Error('QuickNode URL missing');
+  return rpcVia(QN_URL, method, params, id);
 }
 async function ethCall(to, data) {
   return rpc('eth_call', [{ to, data }, 'latest']);
@@ -340,18 +368,23 @@ async function ethCall(to, data) {
 
 // -------- native ETH --------
 async function fetchNativeETH(address) {
-  if (!QN_URL) {
-    warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
+  let lastError = null;
+  for (const url of ETH_RPC_URL_POOL) {
+    try {
+      const hex = await rpcVia(url, 'eth_getBalance', [address, 'latest']);
+      const eth = weiToEth(toBN(hex)); // precision-safe
+      return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
+    } catch (e) {
+      lastError = e;
+      if (DEBUG) log(`eth_getBalance via ${url} failed:`, e?.message || e);
+    }
   }
-  try {
-    const hex = await rpc('eth_getBalance', [address, 'latest']);
-    const eth = weiToEth(toBN(hex)); // precision-safe
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
-  } catch (e) {
-    console.error('[ETH] eth_getBalance failed:', e?.message || e);
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
+
+  if (!QN_URL) warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
+  if (lastError) {
+    console.error('[ETH] eth_getBalance failed via all RPC URLs:', lastError?.message || lastError);
   }
+  return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
 }
 
 // ---------- ERC-20 discovery/fetchers ----------
@@ -560,16 +593,16 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     }
   }
 
-  if (!ensureQuickNodeConfigured()) {
-    // Surface cached snapshot (if any) so the UI can display the warning without crashing the view.
-    return cachedArr || [];
+  const hasQuickNode = Boolean(QN_URL);
+  if (!hasQuickNode) {
+    warnMissingEnv('VITE_QUICKNODE_HTTP', 'QuickNode HTTPS RPC');
   }
 
-  publishEthConfigStatus({ disabled: false });
+  publishEthConfigStatus({ disabled: false, reason: hasQuickNode ? null : QUICKNODE_WARNING_REASON });
 
   const [nativeRow, qnErc20] = await Promise.all([
     fetchNativeETH(address),
-    fetchERC20sFromQuickNode(address)
+    hasQuickNode ? fetchERC20sFromQuickNode(address) : Promise.resolve([])
   ]);
 
   let erc20 = qnErc20;
