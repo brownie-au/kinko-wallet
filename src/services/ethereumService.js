@@ -1,5 +1,5 @@
 // Ethereum balance + token discovery using free public APIs (no QuickNode, no Moralis)
-// Now includes authenticated Blockscout + fallback to Ethplorer.
+// Now includes authenticated Blockscout + fallback to Ethplorer + AllOrigins CORS recovery.
 
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
@@ -143,13 +143,18 @@ export async function fetchNativeETH(address) {
   }
 }
 
-// ---------- ERC-20 discovery (Blockscout + Ethplorer fallback) ----------
+// ---------- ERC-20 discovery (Blockscout + Ethplorer fallback + AllOrigins proxy) ----------
 export async function fetchERC20Tokens(address) {
-  // Primary: Blockscout (with key header)
+  const baseUrl = BLOCKSCOUT_V2.startsWith('http')
+    ? BLOCKSCOUT_V2
+    : 'https://eth.blockscout.com/api/v2';
+  const fullUrl = `${baseUrl}/addresses/${address}/tokens?limit=100`;
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(fullUrl)}`;
+  const headers = BLOCKSCOUT_KEY ? { 'x-api-key': BLOCKSCOUT_KEY } : {};
+
+  // Primary: Blockscout direct
   try {
-    const url = `${BLOCKSCOUT_V2}/addresses/${address}/tokens?limit=100`;
-    const headers = BLOCKSCOUT_KEY ? { 'x-api-key': BLOCKSCOUT_KEY } : {};
-    const { data } = await axios.get(url, { headers, timeout: 10000 });
+    const { data } = await axios.get(fullUrl, { headers, timeout: 10000 });
     const tokens = data?.items || [];
     if (tokens.length > 0) {
       return tokens
@@ -165,10 +170,33 @@ export async function fetchERC20Tokens(address) {
         .filter((t) => t.balance > 0);
     }
   } catch (err) {
-    console.warn('[ETH] Blockscout failed, falling back to Ethplorer:', err?.message);
+    console.warn('[ETH] Blockscout direct failed:', err?.message);
   }
 
-  // Fallback: Ethplorer
+  // Fallback: AllOrigins proxy (for CORS/rate-limit)
+  try {
+    console.warn('[ETH] Using AllOrigins proxy fallback');
+    const { data } = await axios.get(proxyUrl, { timeout: 10000 });
+    const parsed = JSON.parse(data?.contents || '{}');
+    const tokens = parsed?.items || [];
+    if (tokens.length > 0) {
+      return tokens
+        .map((t) =>
+          row({
+            address: t.token?.address,
+            symbol: t.token?.symbol,
+            name: t.token?.name,
+            decimals: Number(t.token?.decimals ?? 18),
+            balance: Number(t.value) / 10 ** Number(t.token?.decimals ?? 18)
+          })
+        )
+        .filter((t) => t.balance > 0);
+    }
+  } catch (err) {
+    console.warn('[ETH] AllOrigins fallback failed:', err?.message);
+  }
+
+  // Final fallback: Ethplorer
   try {
     const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
     const { data } = await axios.get(url, { timeout: 10000 });
