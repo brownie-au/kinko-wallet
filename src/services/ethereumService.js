@@ -149,7 +149,7 @@ export async function fetchERC20Tokens(address) {
     ? BLOCKSCOUT_V2
     : 'https://eth.blockscout.com/api/v2';
   const fullUrl = `${baseUrl}/addresses/${address}/tokens?limit=100`;
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(fullUrl)}`;
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(fullUrl)}`;
   const headers = BLOCKSCOUT_KEY ? { 'x-api-key': BLOCKSCOUT_KEY } : {};
 
   // Primary: Blockscout direct
