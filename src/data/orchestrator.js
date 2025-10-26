@@ -16,6 +16,7 @@ let lastSuccessAt = 0;
 let lastErrorAt = 0;
 let lastRunAt = 0;
 let inflightCount = 0;
+let currentRunPromise = null;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function jitter(base, pct = 0.2) { const j = base * pct; return base + (Math.random() * 2 - 1) * j; }
@@ -28,50 +29,64 @@ function getWalletsFromLocal() {
   } catch { return []; }
 }
 
+async function performRefresh({ force = false } = {}) {
+  const wallets = getWalletsFromLocal();
+  const addrs = wallets.map((w) => String(w.address || '').toLowerCase()).filter(Boolean);
+  const jobs = [];
+
+  // Prices per chain
+  for (const c of CHAINS) jobs.push(async () => { inflightCount++; try { await DataClient.refreshPrice(c, { force }); } finally { inflightCount--; } });
+
+  // Balances + Tx per (wallet, chain)
+  for (const addr of addrs) {
+    for (const c of CHAINS) {
+      jobs.push(async () => { inflightCount++; try { await DataClient.refreshBalances(c, addr, { force }); } finally { inflightCount--; } });
+      jobs.push(async () => { inflightCount++; try { await DataClient.refreshTxs(c, addr, 'all', { force }); } finally { inflightCount--; } });
+    }
+  }
+
+  // Stagger jobs to spread load
+  let i = 0;
+  for (const job of jobs) {
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(jitter(80 + 10 * (i++ % 7), 0.4));
+    job().catch((e) => { lastErrorAt = Date.now(); dlog('job error', e?.message || e); });
+  }
+
+  // Wait a little for trailing writes (best-effort)
+  await sleep(200);
+  lastSuccessAt = Date.now();
+  dlog('refresh completed', { wallets: addrs.length, chains: CHAINS.length });
+}
+
 async function runOnce({ force = false } = {}) {
-  if (running) return;
+  if (running) return currentRunPromise;
   running = true;
   lastRunAt = Date.now();
   inflightCount = 0;
-  try {
-    const wallets = getWalletsFromLocal();
-    const addrs = wallets.map((w) => String(w.address || '').toLowerCase()).filter(Boolean);
-    const jobs = [];
 
-    // Prices per chain
-    for (const c of CHAINS) jobs.push(async () => { inflightCount++; try { await DataClient.refreshPrice(c, { force }); } finally { inflightCount--; } });
-
-    // Balances + Tx per (wallet, chain)
-    for (const addr of addrs) {
-      for (const c of CHAINS) {
-        jobs.push(async () => { inflightCount++; try { await DataClient.refreshBalances(c, addr, { force }); } finally { inflightCount--; } });
-        jobs.push(async () => { inflightCount++; try { await DataClient.refreshTxs(c, addr, 'all', { force }); } finally { inflightCount--; } });
-      }
-    }
-
-    // Stagger jobs to spread load
-    let i = 0;
-    for (const job of jobs) {
-      // eslint-disable-next-line no-await-in-loop
-      await sleep(jitter(80 + 10 * (i++ % 7), 0.4));
-      job().catch((e) => { lastErrorAt = Date.now(); dlog('job error', e?.message || e); });
-    }
-
-    // Wait a little for trailing writes (best-effort)
-    await sleep(200);
-    lastSuccessAt = Date.now();
-    dlog('refresh completed', { wallets: addrs.length, chains: CHAINS.length });
-  } catch (e) {
-    lastErrorAt = Date.now();
-    dlog('orchestrator error', e?.message || e);
-  } finally {
-    running = false;
+  const execPromise = (async () => {
     try {
-      // update global status meta key
-      const status = { running, lastRunAt, lastSuccessAt, lastErrorAt, inflightCount };
-      await DataClient.write('meta:lastUpdated:orchestrator', { payload: status, version: 1, ttlMs: TEN_MIN });
-    } catch {}
-  }
+      await performRefresh({ force });
+    } catch (e) {
+      lastErrorAt = Date.now();
+      dlog('orchestrator error', e?.message || e);
+    } finally {
+      running = false;
+      try {
+        // update global status meta key
+        const status = { running, lastRunAt, lastSuccessAt, lastErrorAt, inflightCount };
+        await DataClient.write('meta:lastUpdated:orchestrator', { payload: status, version: 1, ttlMs: TEN_MIN });
+      } catch {}
+    }
+  })();
+
+  currentRunPromise = execPromise;
+  execPromise.finally(() => {
+    currentRunPromise = null;
+  });
+
+  return execPromise;
 }
 
 export function startOrchestrator() {
@@ -94,5 +109,14 @@ export function stopOrchestrator() {
 
 export function getOrchestratorStatus() {
   return { running, lastRunAt, lastSuccessAt, lastErrorAt, inflightCount };
+}
+
+export async function runGlobalRefresh({ force = true } = {}) {
+  if (running && currentRunPromise) {
+    try {
+      await currentRunPromise;
+    } catch {}
+  }
+  return runOnce({ force });
 }
 

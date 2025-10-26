@@ -5,6 +5,7 @@ import { clearWalletPrefix } from '@/utils/walletCache';
 import { buildPortfolioDetailed } from '@/services/portfolioAggService';
 import { refreshHexStakesAndCache } from '@/services/kw-hexPulseService';
 import { refreshEhexStakesAndCache } from '@/services/kw-ehexStakingService';
+import { runGlobalRefresh } from '@/data/orchestrator';
 
 const RefreshContext = createContext(null);
 const TASK_TIMEOUT_MS = 20000;
@@ -95,12 +96,13 @@ export function RefreshProvider({ children }) {
       name !== 'transaction-history'
     );
 
+    const globalCacheSteps = 1;
     const walletSteps = wallets.length;
     const stakingSteps = 2; // HEX + eHEX
     const portfolioSteps = 1;
     const historySteps = txTask ? 1 : 0;
     const otherSteps = otherTasks.length;
-    const totalSteps = walletSteps + stakingSteps + portfolioSteps + historySteps + otherSteps;
+    const totalSteps = globalCacheSteps + walletSteps + stakingSteps + portfolioSteps + historySteps + otherSteps;
 
     refreshingRef.current = true;
     setIsRefreshing(true);
@@ -117,6 +119,7 @@ export function RefreshProvider({ children }) {
     };
 
     const walletResults = [];
+    let globalCacheResult = null;
     let hexPayload = null;
     let ehexPayload = null;
     let portfolioPayload = null;
@@ -124,6 +127,16 @@ export function RefreshProvider({ children }) {
     let otherResults = [];
 
     try {
+      try {
+        await runGlobalRefresh({ force: true });
+        globalCacheResult = { status: 'fulfilled' };
+      } catch (error) {
+        globalCacheResult = { status: 'rejected', reason: error };
+        console.warn('[refresh] global cache refresh failed', error);
+      } finally {
+        tick();
+      }
+
       const seenGenericWalletTask = new Set();
       const walletSettled = await Promise.allSettled(
         wallets.map(async (wallet) => {
@@ -256,6 +269,7 @@ export function RefreshProvider({ children }) {
       bump();
 
       return {
+        globalCacheResult,
         walletResults,
         stakingResults: stakingSettled,
         portfolioResult: portfolioStatus,
