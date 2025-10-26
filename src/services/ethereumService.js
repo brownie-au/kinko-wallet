@@ -1,6 +1,5 @@
 // src/services/ethereumService.js
-// Ethereum balance + token discovery using free public APIs (no QuickNode, no Moralis)
-// Now includes automatic Blockscout fallback for production reliability.
+// Ethereum balance + token discovery using Blockscout API (no QuickNode, no Moralis, no Ethplorer)
 
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
@@ -9,19 +8,23 @@ import { enrichErc20Prices } from './ethErc20PriceService';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
 // ----------------- CONFIG -----------------
-const ETHPLORER = 'https://api.ethplorer.io';
-const ETHPLORER_KEY = import.meta.env.VITE_ETHPLORER_KEY || 'freekey';
-const BLOCKSCOUT_V2 = import.meta.env.VITE_ETH_BLOCKSCOUT_V2 || 'https://eth.blockscout.com/api/v2';
-
+const BLOCKSCOUT_V2 =
+  import.meta.env.VITE_ETH_BLOCKSCOUT_V2 ||
+  'https://eth.blockscout.com/api/v2';
 const PAPRIKA_BASE = 'https://api.coinpaprika.com/v1';
 const PAPRIKA_ETH_ID = 'eth-ethereum';
-const PRICE_CACHE_TTL_MS = Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60) * 1000;
-const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
+
+const PRICE_CACHE_TTL_MS =
+  Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60) * 1000;
+const CACHE_TTL_MS =
+  Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
 const DEBUG = !!import.meta.env.DEV;
 const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
 
 // Spam + blocklist
-const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0);
+const ETH_HIDE_MIN_USD = Number(
+  import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0
+);
 const ENV_BLOCKLIST = new Set(
   (import.meta.env.VITE_ETH_BLOCKLIST || '')
     .split(',')
@@ -49,9 +52,18 @@ const row = ({ address, symbol, name, decimals, balance }) => ({
 const EHEX_CONTRACT = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39';
 const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const KNOWN_TOKENS = {
-  [EHEX_CONTRACT.toLowerCase()]: { symbol: 'eHEX', name: 'HEX (Ethereum)', decimals: 8 },
-  [USDC_CONTRACT.toLowerCase()]: { symbol: 'USDC', name: 'USD Coin', decimals: 6 }
+  [EHEX_CONTRACT.toLowerCase()]: {
+    symbol: 'eHEX',
+    name: 'HEX (Ethereum)',
+    decimals: 8
+  },
+  [USDC_CONTRACT.toLowerCase()]: {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6
+  }
 };
+
 function applyKnownTokenFixes(list = []) {
   for (const t of list) {
     if (!t || t.address === 'native') continue;
@@ -65,15 +77,24 @@ function applyKnownTokenFixes(list = []) {
 function filterEthSpam(tokens) {
   const isBlocked = (addr) => {
     const a = (addr || '').toLowerCase();
-    return a && (STATIC_BLOCKLIST.has(a) || ENV_BLOCKLIST.has(a));
+    return (
+      a &&
+      (STATIC_BLOCKLIST.has(a) ||
+        ENV_BLOCKLIST.has(a) ||
+        (isTokenBlacklisted &&
+          isTokenBlacklisted({ address: a })))
+    );
   };
+
   return tokens.filter((t) => {
     if (t.address === 'native') return true;
     if (isBlocked(t.address)) return false;
-    if (isTokenBlacklisted && isTokenBlacklisted({ address: t.address, symbol: t.symbol, name: t.name })) return false;
-    if (ETH_HIDE_MIN_USD > 0 && Number(t.usd || 0) < ETH_HIDE_MIN_USD) return false;
+    if (ETH_HIDE_MIN_USD > 0 && Number(t.usd || 0) < ETH_HIDE_MIN_USD)
+      return false;
     const hasPrice = Number(t.price || t.priceUSD || 0) > 0;
-    const hasMeta = Boolean((t.symbol || '').trim()) || Boolean((t.name || '').trim());
+    const hasMeta =
+      Boolean((t.symbol || '').trim()) ||
+      Boolean((t.name || '').trim());
     return hasPrice || hasMeta;
   });
 }
@@ -83,9 +104,13 @@ async function getEthUsdFromPaprika() {
   const cacheKey = 'price:eth:usd:paprika';
   const cachedObj = getCachedJSON(cacheKey, PRICE_CACHE_TTL_MS);
   const cached = cachedObj?.data;
-  if (Number.isFinite(Number(cached)) && Number(cached) > 0) return Number(cached);
+  if (Number.isFinite(Number(cached)) && Number(cached) > 0)
+    return Number(cached);
   try {
-    const { data } = await axios.get(`${PAPRIKA_BASE}/tickers/${PAPRIKA_ETH_ID}`, { timeout: 8000 });
+    const { data } = await axios.get(
+      `${PAPRIKA_BASE}/tickers/${PAPRIKA_ETH_ID}`,
+      { timeout: 8000 }
+    );
     const price = Number(data?.quotes?.USD?.price || 0);
     if (price > 0) {
       setCachedJSON(cacheKey, price);
@@ -94,6 +119,7 @@ async function getEthUsdFromPaprika() {
   } catch { }
   return 0;
 }
+
 async function getEthUsdPricePrimary() {
   const p = await getEthUsdFromPaprika();
   if (p > 0) return p;
@@ -104,6 +130,7 @@ async function getEthUsdPricePrimary() {
     return 0;
   }
 }
+
 async function enrichEthPrice(tokens) {
   try {
     const ethUsd = await getEthUsdPricePrimary();
@@ -117,6 +144,7 @@ async function enrichEthPrice(tokens) {
   } catch { }
   return tokens;
 }
+
 async function enrichAllPrices(tokens) {
   await enrichEthPrice(tokens);
   await enrichErc20Prices(tokens);
@@ -136,43 +164,32 @@ export async function fetchNativeETH(address) {
     const { data } = await axios.post(rpcUrl, body);
     const wei = BigInt(data.result);
     const eth = Number(wei) / 1e18;
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
+    return row({
+      address: 'native',
+      symbol: 'ETH',
+      name: 'Ether',
+      decimals: 18,
+      balance: eth
+    });
   } catch (e) {
     console.error('[ETH] native balance error:', e?.message);
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
+    return row({
+      address: 'native',
+      symbol: 'ETH',
+      name: 'Ether',
+      decimals: 18,
+      balance: 0
+    });
   }
 }
 
-// ---------- ERC-20 discovery (Ethplorer + Blockscout fallback) ----------
+// ---------- ERC-20 discovery (Blockscout only, CORS-safe) ----------
 export async function fetchERC20Tokens(address) {
-  // Primary: Ethplorer
   try {
-    const url = `${ETHPLORER}/getAddressInfo/${address}?apiKey=${ETHPLORER_KEY}`;
-    const { data } = await axios.get(url, { timeout: 10000 });
-    const tokens = data?.tokens || [];
-    if (tokens.length > 0) {
-      return tokens
-        .map((t) =>
-          row({
-            address: t.tokenInfo.address,
-            symbol: t.tokenInfo.symbol,
-            name: t.tokenInfo.name,
-            decimals: Number(t.tokenInfo.decimals ?? 18),
-            balance: Number(t.balance) / 10 ** Number(t.tokenInfo.decimals ?? 18)
-          })
-        )
-        .filter((t) => t.balance > 0);
-    }
-  } catch (err) {
-    console.warn('[ETH] Ethplorer failed, falling back to Blockscout');
-  }
-
-  // Fallback: Blockscout (public, unlimited)
-  try {
-    const url = `${BLOCKSCOUT_V2}/addresses/${address}/tokens?limit=100`;
+    const url = `${BLOCKSCOUT_V2}/addresses/${address}/tokens?limit=200`;
     const { data } = await axios.get(url, { timeout: 10000 });
     const tokens = data?.items || [];
-    if (tokens.length === 0) return [];
+    if (!tokens.length) return [];
     return tokens
       .map((t) =>
         row({
@@ -185,7 +202,7 @@ export async function fetchERC20Tokens(address) {
       )
       .filter((t) => t.balance > 0);
   } catch (err) {
-    console.error('[ETH] Blockscout fallback failed:', err?.message);
+    console.error('[ETH] Blockscout token fetch failed:', err?.message);
     return [];
   }
 }
@@ -194,6 +211,7 @@ export async function fetchERC20Tokens(address) {
 export async function fetchEthereumTokens(address, { force = false } = {}) {
   const key = `eth:tokens:${(address || '').toLowerCase()}`;
   let cachedArr = null;
+
   if (!force) {
     const cachedRaw = getCachedJSON(key, CACHE_TTL_MS)?.data;
     cachedArr = Array.isArray(cachedRaw)
@@ -210,7 +228,11 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     }
   }
 
-  const [nativeRow, erc20] = await Promise.all([fetchNativeETH(address), fetchERC20Tokens(address)]);
+  const [nativeRow, erc20] = await Promise.all([
+    fetchNativeETH(address),
+    fetchERC20Tokens(address)
+  ]);
+
   const baseList = [nativeRow, ...erc20];
   applyKnownTokenFixes(baseList);
   const result = await enrichAllPrices(baseList);
