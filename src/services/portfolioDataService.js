@@ -65,48 +65,73 @@ function computeTotals(rows) {
 // -------- per-wallet fan-out --------
 async function fetchAllChains(wallets) {
   const out = [];
+
   for (const w of wallets || []) {
-    const chain = String(w.chain || '').toLowerCase();
-    const addr  = String(w.address || '').trim();
+    const chain = String(w.chain || '').toLowerCase().trim();
+    const addr = String(w.address || '').trim();
     if (!addr) continue;
 
     try {
-      if (chain === 'pulse' || chain === 'pulsechain') {
+      if (['pulse', 'pulsechain', 'pls'].includes(chain)) {
         const list = await fetchPulsechainTokens(addr);
         for (const r of list) out.push(normalizeRow(r, addr));
-      } else if (chain === 'eth' || chain === 'ethereum') {
+      }
+
+      else if (['eth', 'ethereum', 'ether', 'ethereum mainnet'].includes(chain)) {
         const list = await fetchEthereumTokens(addr);
         for (const r of list) out.push(normalizeRow(r, addr));
-      } else if (chain === 'base') {
-        // Base via Blockscout + DefiLlama
+      }
+
+      else if (chain === 'base') {
         try {
           const discovered = await getBaseTokensFromBlockscout(addr);
           const addrs = discovered.map((t) => t.address).filter(Boolean);
           const priceMap = await getBaseTokenPricesLlama(addrs);
 
-          // native
           let nativeAmount = 0;
-          try { nativeAmount = await getBaseNativeBalance(addr); } catch {}
+          try { nativeAmount = await getBaseNativeBalance(addr); } catch { }
           const nativePriceUsd = await getBaseUsdPriceLlama();
-          out.push(normalizeRow({
-            chain: 'base', address: 'native', symbol: 'ETH', name: 'Ether',
-            amount: nativeAmount, priceUsd: nativePriceUsd, totalUsd: nativeAmount * nativePriceUsd
-          }, addr));
+
+          out.push(
+            normalizeRow(
+              {
+                chain: 'base',
+                address: 'native',
+                symbol: 'ETH',
+                name: 'Ether',
+                amount: nativeAmount,
+                priceUsd: nativePriceUsd,
+                totalUsd: nativeAmount * nativePriceUsd
+              },
+              addr
+            )
+          );
 
           for (const t of discovered) {
             const amountUnits = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
             const p = priceMap.get(t.address) || 0;
-            out.push(normalizeRow({
-              chain: 'base', address: t.address, symbol: t.symbol || '', name: t.name || t.symbol || 'Token',
-              amount: amountUnits, priceUsd: p, totalUsd: p ? amountUnits * p : 0
-            }, addr));
+            out.push(
+              normalizeRow(
+                {
+                  chain: 'base',
+                  address: t.address,
+                  symbol: t.symbol || '',
+                  name: t.name || t.symbol || 'Token',
+                  amount: amountUnits,
+                  priceUsd: p,
+                  totalUsd: p ? amountUnits * p : 0
+                },
+                addr
+              )
+            );
           }
-        } catch {}
+        } catch { }
       }
-    } catch {
-      // continue other wallets
+    } catch (err) {
+      console.warn(`[PortfolioData] Skipped wallet ${addr} on ${chain}:`, err.message);
     }
   }
+
   return out;
 }
 
