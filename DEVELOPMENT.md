@@ -93,3 +93,9 @@ Validation completed: 10 automated tests pass; production build passes; changed 
 ## Mobile UI follow-up
 
 The development branch now includes a mobile presentation and accessibility pass. See [MOBILE-UX-REVIEW.md](MOBILE-UX-REVIEW.md) for the concrete changes, source-audit scope and outstanding browser acceptance matrix. This adds no signing, transaction or private-key functionality. The previous runtime spacing injectors were replaced with scoped layout CSS. Browser verification is still blocked by preview authentication and remote loopback access, so this remains a draft for review.
+
+### HEX staking configuration correction
+
+A reported screenshot exposed an empty PulseChain HEX contract after removal of tracked environment files. Both route configuration and the staking reader now use the public HEX contract default already used by the price widgets, while explicit network/address overrides remain available. `.env.example` documents those optional public values. A failed first load no longer shows a zero staking summary and offers a retry. Existing cached stakes remain visible after a refresh failure.
+
+Validation: all 12 tests pass and the production build passes. A mocked RPC regression verifies missing/empty environment defaults, explicit overrides, PulseChain chain ID 369, Ethereum chain ID 1 and invalid-address rejection. The three touched staking modules retain the same five pre-existing lint errors as their branch baseline; no new lint errors were added. This fix does not certify live wallet stake totals or change production.

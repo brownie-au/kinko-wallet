@@ -1,5 +1,6 @@
 // src/services/kw-hexPulseService.js
 import { ethers } from 'ethers';
+import { KW_STAKING_HEX_PULSE, KW_STAKING_EHEX_ETH } from '../config/kw-hex-staking-configs';
 
 /* -------------------------------------------------------------------------- */
 /* Endpoints                                                                  */
@@ -18,9 +19,9 @@ const ETH_RPC_LIST = [
     'https://eth.llamarpc.com'
 ].filter(Boolean);
 
-// Addresses (Pulse required via env; ETH has a safe default for cross‑chain reads)
-const HEX_PLS_ADDRESS = (import.meta.env.VITE_PLS_HEX_ADDRESS || '').trim();
-const HEX_ETH_ADDRESS = (import.meta.env.VITE_ETH_HEX_ADDRESS || '0x2b591e99aFe9f32eaa6214f7B7629768c40eEb39').trim();
+// Share public defaults with the route configuration; no secret env file is required.
+const HEX_PLS_ADDRESS = KW_STAKING_HEX_PULSE.hexAddress;
+const HEX_ETH_ADDRESS = KW_STAKING_EHEX_ETH.hexAddress;
 
 const DEFAULTS = { chain: 'pulse', rpcUrl: null, hexAddress: HEX_PLS_ADDRESS };
 
