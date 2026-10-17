@@ -1,18 +1,7 @@
 // src/views/wallet/WalletManage.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Card,
-  Button,
-  Form,
-  Row,
-  Col,
-  ListGroup,
-  Alert,
-  ButtonGroup,
-  InputGroup,
-  Modal
-} from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Card, Button, Form, Row, Col, ListGroup, Alert, ButtonGroup, InputGroup, Modal } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import { useWallets } from '../../contexts/WalletContext.jsx';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
@@ -21,26 +10,34 @@ import { clearSyncId } from '../../services/syncService.js';
 import { clearEhexStakesCaches } from '../../services/kw-ehexStakingService.js';
 import { usePortfolioValue, HEX_STAKING_SOURCE, EHEX_STAKING_SOURCE } from '../../contexts/PortfolioValueContext.jsx';
 import '../../styles/kw-wallet-manage.css';
+import { normalizeWallets, isWalletAddress, parseWalletBackup, NETWORKS } from '../../utils/walletRecords.js';
+import { saveManualToken, getManualTokens } from '../../services/manualTokenService.js';
 
 const SOFT = {
   success: { backgroundColor: 'rgba(25,135,84,0.12)', borderColor: 'rgba(25,135,84,0.35)', color: '#1e7e55' },
   warning: { backgroundColor: 'rgba(255,193,7,0.12)', borderColor: 'rgba(255,193,7,0.45)', color: '#996c00' },
   danger: { backgroundColor: 'rgba(220,53,69,0.12)', borderColor: 'rgba(220,53,69,0.40)', color: '#9f1c28' },
-  info:   { backgroundColor: 'rgba(13,110,253,0.12)', borderColor: 'rgba(13,110,253,0.35)', color: '#0a58ca' } // blue
+  info: { backgroundColor: 'rgba(13,110,253,0.12)', borderColor: 'rgba(13,110,253,0.35)', color: '#0a58ca' } // blue
 };
 
 const ACTION_BTN_STYLE = {
-  minWidth: 84,           // consistent width
-  padding: '3px 10px',    // slimmer
+  minWidth: 84, // consistent width
+  padding: '3px 10px', // slimmer
   lineHeight: '1.1',
   fontWeight: 600
 };
 
 const WalletManage = () => {
+  const importRef = useRef(null);
+  const [notice, setNotice] = useState('');
+  const [networks, setNetworks] = useState([...NETWORKS]);
+  const [manualChain, setManualChain] = useState('pulse');
+  const [manualAddress, setManualAddress] = useState('');
+  const [manualTokens, setManualTokens] = useState(getManualTokens);
   const { replaceWallets } = useWallets();
   // Local authoritative list for Manage page (includes hidden)
   const [wallets, setWallets] = useState([]);
-  const [_, setWalletsStateTick] = useState(0); // force re-render after edits if needed
+  const [, setWalletsStateTick] = useState(0); // force re-render after edits if needed
   const [dragIndex, setDragIndex] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragGhostRef = useRef(null);
@@ -84,10 +81,7 @@ const WalletManage = () => {
     const text = document.createElement('div');
     const name = wallet?.name || 'Unnamed';
     const addr = wallet?.address || '';
-    text.innerHTML = `
-      <div style="font-weight:700; font-family:monospace; white-space:nowrap;">${addr}</div>
-      <div style="opacity:.85; font-size:12px;">${name}</div>
-    `;
+    text.textContent = `${addr} — ${name}`;
 
     ghost.appendChild(icon);
     ghost.appendChild(text);
@@ -112,9 +106,7 @@ const WalletManage = () => {
   const totalWallets = walletList.length;
   const activeWallets = walletList.filter((w) => !w.hidden).length;
   const hiddenWallets = totalWallets - activeWallets;
-  const walletCountLabel = `${totalWallets} (${activeWallets} Active${hiddenWallets > 0 ? ` / ${hiddenWallets} Hidden` : ''})`;
 
-  const navigate = useNavigate();
   const { removeSource } = usePortfolioValue();
 
   // ---- Local storage helpers (Manage uses full list incl. hidden) ----
@@ -123,16 +115,62 @@ const WalletManage = () => {
       const raw = localStorage.getItem('wallets');
       const arr = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(arr)) return [];
-      return arr.map((w) => ({ address: (w?.address || '').trim(), name: (w?.name || '').trim(), hidden: !!w?.hidden }));
-    } catch { return []; }
+      return normalizeWallets(arr);
+    } catch {
+      return [];
+    }
   };
   const writeAll = (list) => {
-    try { localStorage.setItem('wallets', JSON.stringify(Array.isArray(list) ? list : [])); } catch {}
-    // keep app views in sync: update context with visible-only
     try {
-      const visible = (Array.isArray(list) ? list : []).filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }));
-      replaceWallets(visible);
-    } catch {}
+      const cleaned = normalizeWallets(list, { strict: true });
+      localStorage.setItem('wallets', JSON.stringify(cleaned));
+      replaceWallets(cleaned.filter((w) => !w.hidden));
+      return true;
+    } catch {
+      setError('Could not save wallets. Check browser storage and try again.');
+      return false;
+    }
+  };
+
+  const exportWallets = () => {
+    const data = JSON.stringify({ app: 'Kinko Wallet', version: 1, exportedAt: new Date().toISOString(), wallets }, null, 2);
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kinko-wallet-backup.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNotice('Wallet backup exported. Keep it private: it contains your public addresses and labels.');
+  };
+  const importWallets = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 1000000) throw new Error('Wallet backup is too large (maximum 1 MB).');
+      const imported = parseWalletBackup(await file.text());
+      const next = normalizeWallets([...wallets, ...imported], { strict: true });
+      if (writeAll(next)) {
+        setWallets(next);
+        setNotice('Backup imported. Existing wallets were retained and duplicates merged.');
+        setError('');
+      }
+    } catch (e) {
+      setError(e.message || 'Unable to import this backup.');
+    }
+    event.target.value = '';
+  };
+  const updateNetworks = (idx, chain, checked) => {
+    const current = wallets[idx].networks || NETWORKS;
+    const nextNetworks = checked ? [...new Set([...current, chain])] : current.filter((n) => n !== chain);
+    if (!nextNetworks.length) {
+      setError('Keep at least one network selected.');
+      return;
+    }
+    const next = wallets.map((w, i) => (i === idx ? { ...w, networks: nextNetworks } : w));
+    if (writeAll(next)) {
+      setWallets(next);
+      setError('');
+    }
   };
 
   // Hydrate on mount
@@ -140,7 +178,9 @@ const WalletManage = () => {
     const all = readAll();
     setWallets(all);
     // also ensure context sees visible-only
-    try { replaceWallets(all.filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }))); } catch {}
+    try {
+      replaceWallets(all.filter((w) => !w.hidden));
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -163,15 +203,23 @@ const WalletManage = () => {
     }
     setShowWelcomeModal(false);
     setTimeout(() => {
-      try { addressInputRef.current && addressInputRef.current.focus(); } catch {}
+      try {
+        addressInputRef.current && addressInputRef.current.focus();
+      } catch {}
     }, 0);
   };
-
 
   // Add
   const addWallet = (e) => {
     e.preventDefault();
-    if (!address) return;
+    if (!isWalletAddress(address)) {
+      setError('Enter a public EVM address: 0x followed by 40 hexadecimal characters.');
+      return;
+    }
+    if (!networks.length) {
+      setError('Select at least one network.');
+      return;
+    }
 
     const normalized = address.trim().toLowerCase();
     const exists = (wallets || []).some((w) => (w.address || '').trim().toLowerCase() === normalized);
@@ -180,9 +228,9 @@ const WalletManage = () => {
       return;
     }
 
-    const next = [...(wallets || []), { address: address.trim(), name, hidden: false }];
+    const next = [...(wallets || []), { address: address.trim(), name: name.trim().slice(0, 120), hidden: false, networks: [...networks] }];
+    if (!writeAll(next)) return;
     setWallets(next);
-    writeAll(next);
     setAddress('');
     setName('');
     setError('');
@@ -191,8 +239,8 @@ const WalletManage = () => {
   // Delete (confirmed)
   const deleteWallet = (idx) => {
     const next = (wallets || []).filter((_, i) => i !== idx);
+    if (!writeAll(next)) return;
     setWallets(next);
-    writeAll(next);
     setConfirmIdx(null);
   };
 
@@ -205,8 +253,8 @@ const WalletManage = () => {
   const saveEdit = (idx) => {
     const trimmed = (tempName || '').trim();
     const next = (wallets || []).map((w, i) => (i === idx ? { ...w, name: trimmed } : w));
+    if (!writeAll(next)) return;
     setWallets(next);
-    writeAll(next);
     setEditingIndex(null);
     setTempName('');
     setWalletsStateTick((x) => x + 1);
@@ -214,7 +262,9 @@ const WalletManage = () => {
 
   // ---- drag & drop reordering ----
   const onDragStart = (idx) => (e) => {
-    try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+    try {
+      e.dataTransfer.setData('text/plain', String(idx));
+    } catch {}
     e.dataTransfer.effectAllowed = 'move';
     setDragIndex(idx);
     setIsDragging(true);
@@ -232,7 +282,10 @@ const WalletManage = () => {
   const onDrop = (idx) => (e) => {
     e.preventDefault();
     let from = dragIndex;
-    try { const d = Number(e.dataTransfer.getData('text/plain')); if (!Number.isNaN(d)) from = d; } catch {}
+    try {
+      const d = Number(e.dataTransfer.getData('text/plain'));
+      if (!Number.isNaN(d)) from = d;
+    } catch {}
     setDragIndex(null);
     setIsDragging(false);
     destroyDragGhost();
@@ -240,10 +293,14 @@ const WalletManage = () => {
     const next = (wallets || []).slice();
     const [m] = next.splice(from, 1);
     next.splice(idx, 0, m);
+    if (!writeAll(next)) return;
     setWallets(next);
-    writeAll(next);
   };
-  const onDragEnd = () => { setDragIndex(null); setIsDragging(false); destroyDragGhost(); };
+  const onDragEnd = () => {
+    setDragIndex(null);
+    setIsDragging(false);
+    destroyDragGhost();
+  };
 
   const cancelEdit = () => {
     setEditingIndex(null);
@@ -260,52 +317,57 @@ const WalletManage = () => {
     }
   };
 
-  // Open
-  const openWallet = (addr) => {
-    if (!addr) return;
-    navigate(`/wallet/${addr}`);
-  };
-
   // Hide/Unhide
   const toggleHidden = (idx) => {
     const next = (wallets || []).map((w, i) => (i === idx ? { ...w, hidden: !w.hidden } : w));
+    if (!writeAll(next)) return;
     setWallets(next);
-    writeAll(next);
   };
 
   return (
-    <div>
+    <div className="kw-wallet-manage">
       <h2 className="mb-3">Manage Wallets</h2>
 
       <div className="mb-3 d-flex justify-content-start gap-2 flex-wrap">
-        <Button
-          variant="outline-secondary"
-          className="rounded-pill"
-          onClick={() => setShowUseId(true)}
-        >
+        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowUseId(true)}>
           Use Portfolio ID
         </Button>
-        <Button
-          variant="outline-secondary"
-          className="rounded-pill"
-          onClick={() => setShowCreateId(true)}
-        >
+        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowCreateId(true)}>
           Create / Update Portfolio ID
         </Button>
-        <Button
-          variant="outline-danger"
-          className="rounded-pill"
-          onClick={() => setShowLogout(true)}
-          title="Log out of this device"
-        >
+        <Button variant="outline-danger" className="rounded-pill" onClick={() => setShowLogout(true)} title="Log out of this device">
           Logout
         </Button>
       </div>
 
+      <p className="text-muted">
+        Watch-only. Your cryptocurrency stays in your existing wallets. No private keys, recovery phrases or signatures required.
+      </p>
+      <div className="d-flex gap-2 flex-wrap mb-3">
+        <Button variant="outline-secondary" onClick={exportWallets} disabled={!wallets.length}>
+          Export backup
+        </Button>
+        <Button variant="outline-secondary" onClick={() => importRef.current?.click()}>
+          Import backup
+        </Button>
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,application/json"
+          className="d-none"
+          aria-label="Import wallet backup"
+          onChange={importWallets}
+        />
+      </div>
+      {notice && (
+        <Alert variant="info" dismissible onClose={() => setNotice('')}>
+          {notice}
+        </Alert>
+      )}
       <Card className="mb-4">
         <Card.Body>
           <Form onSubmit={addWallet}>
-            <Row>
+            <Row className="g-3">
               <Col md={5}>
                 <Form.Group controlId="walletAddress">
                   <Form.Label>Wallet Address</Form.Label>
@@ -315,7 +377,10 @@ const WalletManage = () => {
                     type="text"
                     placeholder="0x1234...abcd"
                     value={address}
-                    onChange={(e) => { setAddress(e.target.value); setError(''); }}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      setError('');
+                    }}
                     required
                   />
                 </Form.Group>
@@ -326,6 +391,7 @@ const WalletManage = () => {
                   <Form.Control
                     className="kw-wallet-search-input"
                     type="text"
+                    maxLength={120}
                     placeholder="My Wallet"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -338,8 +404,30 @@ const WalletManage = () => {
                 </Button>
               </Col>
             </Row>
+            <fieldset className="mt-3">
+              <legend className="fs-6">Networks to monitor</legend>
+              <div className="d-flex flex-wrap gap-3">
+                {NETWORKS.map((c) => (
+                  <Form.Check
+                    key={c}
+                    id={`new-network-${c}`}
+                    type="checkbox"
+                    label={{ eth: 'Ethereum', pulse: 'PulseChain', bsc: 'BNB Smart Chain', polygon: 'Polygon', base: 'Base' }[c]}
+                    checked={networks.includes(c)}
+                    onChange={(e) => setNetworks(e.target.checked ? [...networks, c] : networks.filter((n) => n !== c))}
+                  />
+                ))}
+              </div>
+            </fieldset>
+            <small className="text-muted">
+              Public addresses are sent to selected blockchain and pricing providers to retrieve holdings.
+            </small>
           </Form>
-          {error && <Alert variant="danger" className="mt-3">{error}</Alert>}
+          {error && (
+            <Alert variant="danger" className="mt-3">
+              {error}
+            </Alert>
+          )}
         </Card.Body>
       </Card>
 
@@ -353,9 +441,7 @@ const WalletManage = () => {
             </span>
           </h5>
           <ListGroup>
-            {wallets.length === 0 && (
-              <ListGroup.Item>No wallets added yet.</ListGroup.Item>
-            )}
+            {wallets.length === 0 && <ListGroup.Item>No wallets added yet.</ListGroup.Item>}
 
             {(wallets || []).map((w, idx) => {
               const isEditing = editingIndex === idx;
@@ -363,7 +449,7 @@ const WalletManage = () => {
               return (
                 <ListGroup.Item
                   key={`${w.address}-${idx}`}
-                  className="d-flex justify-content-between align-items-center"
+                  className="kw-wallet-item d-flex justify-content-between align-items-center"
                   style={isHidden ? { opacity: 0.6 } : undefined}
                   onDragOver={onDragOver(idx)}
                   onDrop={onDrop(idx)}
@@ -411,11 +497,52 @@ const WalletManage = () => {
                             onKeyDown={(e) => onEditKey(e, idx)}
                             placeholder="Wallet name"
                           />
-                          <Button variant="primary" onClick={() => saveEdit(idx)}>Save</Button>
-                          <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
+                          <Button variant="primary" onClick={() => saveEdit(idx)}>
+                            Save
+                          </Button>
+                          <Button variant="secondary" onClick={cancelEdit}>
+                            Cancel
+                          </Button>
                         </InputGroup>
                       )}
                     </div>
+                    <div className="d-flex gap-2 flex-wrap mt-2" role="group" aria-label={`Networks for ${w.name || w.address}`}>
+                      {NETWORKS.map((c) => (
+                        <Form.Check
+                          key={c}
+                          id={`network-${idx}-${c}`}
+                          type="checkbox"
+                          label={
+                            c === 'pulse'
+                              ? 'PulseChain'
+                              : c === 'eth'
+                                ? 'Ethereum'
+                                : c === 'bsc'
+                                  ? 'BSC'
+                                  : c === 'polygon'
+                                    ? 'Polygon'
+                                    : 'Base'
+                          }
+                          checked={(w.networks || NETWORKS).includes(c)}
+                          onChange={(e) => updateNetworks(idx, c, e.target.checked)}
+                        />
+                      ))}
+                    </div>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="px-0"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(w.address);
+                          setNotice('Wallet address copied.');
+                        } catch {
+                          setError('Unable to copy this address.');
+                        }
+                      }}
+                    >
+                      Copy address
+                    </Button>
                   </div>
 
                   {!isEditing && (
@@ -429,7 +556,10 @@ const WalletManage = () => {
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.success }}
                         onClick={(e) => {
-                          if (isHidden) { e.preventDefault(); return; }
+                          if (isHidden) {
+                            e.preventDefault();
+                            return;
+                          }
                           e.stopPropagation();
                         }}
                         disabled={isHidden}
@@ -443,7 +573,10 @@ const WalletManage = () => {
                         size="sm"
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.warning }}
-                        onClick={(e) => { e.stopPropagation(); startEdit(idx); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEdit(idx);
+                        }}
                         disabled={isHidden}
                       >
                         Edit
@@ -455,7 +588,10 @@ const WalletManage = () => {
                         size="sm"
                         className="me-2"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.info }}
-                        onClick={(e) => { e.stopPropagation(); toggleHidden(idx); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleHidden(idx);
+                        }}
                       >
                         {isHidden ? 'Unhide' : 'Hide'}
                       </Button>
@@ -465,7 +601,10 @@ const WalletManage = () => {
                         variant="outline-danger"
                         size="sm"
                         style={{ ...ACTION_BTN_STYLE, ...SOFT.danger }}
-                        onClick={(e) => { e.stopPropagation(); setConfirmIdx(idx); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmIdx(idx);
+                        }}
                         disabled={isHidden}
                       >
                         Delete
@@ -479,20 +618,73 @@ const WalletManage = () => {
         </Card.Body>
       </Card>
 
+      <Card className="mt-4">
+        <Card.Body>
+          <h5>Track a token contract</h5>
+          <p className="text-muted">
+            Use this when discovery misses a token. A contract is tracked on its selected network only. BSC currently uses manual contracts
+            for token coverage.
+          </p>
+          <Form
+            onSubmit={(e) => {
+              e.preventDefault();
+              try {
+                saveManualToken(manualChain, manualAddress);
+                setManualTokens(getManualTokens());
+                setManualAddress('');
+                setNotice('Token contract saved. Refresh your portfolio to read its balance.');
+                setError('');
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+          >
+            <Row className="g-2">
+              <Col sm={3}>
+                <Form.Select aria-label="Token network" value={manualChain} onChange={(e) => setManualChain(e.target.value)}>
+                  {NETWORKS.map((c) => (
+                    <option key={c} value={c}>
+                      {c === 'pulse'
+                        ? 'PulseChain'
+                        : c === 'eth'
+                          ? 'Ethereum'
+                          : c === 'bsc'
+                            ? 'BNB Smart Chain'
+                            : c === 'polygon'
+                              ? 'Polygon'
+                              : 'Base'}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col sm={6}>
+                <Form.Control
+                  aria-label="Token contract address"
+                  placeholder="Token contract: 0x…"
+                  value={manualAddress}
+                  onChange={(e) => setManualAddress(e.target.value)}
+                  required
+                />
+              </Col>
+              <Col sm={3}>
+                <Button type="submit" className="w-100">
+                  Track token
+                </Button>
+              </Col>
+            </Row>
+          </Form>
+          <small className="text-muted">
+            {manualTokens.length} manual contract{manualTokens.length === 1 ? '' : 's'} saved in this browser.
+          </small>
+        </Card.Body>
+      </Card>
+
       {/* Delete confirmation modal */}
-      <Modal
-        show={confirmIdx !== null}
-        onHide={() => setConfirmIdx(null)}
-        centered
-        backdrop="static"
-        keyboard
-      >
+      <Modal show={confirmIdx !== null} onHide={() => setConfirmIdx(null)} centered backdrop="static" keyboard>
         <Modal.Header closeButton>
           <Modal.Title>Are you sure?</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          Deleting this wallet removes it from your local list. Keys are never stored by Kinko Wallet.
-        </Modal.Body>
+        <Modal.Body>Deleting this wallet removes it from your local list. Keys are never stored by Kinko Wallet.</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setConfirmIdx(null)}>
             Cancel
@@ -504,18 +696,13 @@ const WalletManage = () => {
       </Modal>
 
       {/* Logout confirmation */}
-      <Modal
-        show={showLogout}
-        onHide={() => setShowLogout(false)}
-        centered
-        backdrop="static"
-        keyboard
-      >
+      <Modal show={showLogout} onHide={() => setShowLogout(false)} centered backdrop="static" keyboard>
         <Modal.Header closeButton>
           <Modal.Title>Log out?</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you wish to view these tokens again or on another device. Are you sure you want to log out?
+          Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you wish to
+          view these tokens again or on another device. Are you sure you want to log out?
         </Modal.Body>
         <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowLogout(false)}>
@@ -524,24 +711,54 @@ const WalletManage = () => {
           <Button
             variant="danger"
             onClick={() => {
-              try { replaceWallets([]); } catch {}
-              try { localStorage.removeItem('wallets'); } catch {}
-              try { clearSyncId(); } catch {}
-              try { clearEhexStakesCaches(); } catch {}
+              try {
+                replaceWallets([]);
+              } catch {}
+              try {
+                localStorage.removeItem('wallets');
+              } catch {}
+              try {
+                clearSyncId();
+              } catch {}
+              try {
+                clearEhexStakesCaches();
+              } catch {}
               // Clear staking summary fallbacks used by the dashboard tile
-              try { localStorage.removeItem('kw:staking:hex:summary'); } catch {}
-              try { localStorage.removeItem('kw:staking:ehex:summary'); } catch {}
+              try {
+                localStorage.removeItem('kw:staking:hex:summary');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:staking:ehex:summary');
+              } catch {}
               // Clear persisted context cache for portfolio sources entirely
-              try { localStorage.removeItem('kw:portfolioValueSources:v1'); } catch {}
+              try {
+                localStorage.removeItem('kw:portfolioValueSources:v1');
+              } catch {}
               // Clear Dashboard Top Tokens + sticky totals
-              try { localStorage.removeItem('kw:lastTopTokens'); } catch {}
-              try { localStorage.removeItem('kw:lastTopTokensAt'); } catch {}
-              try { localStorage.removeItem('kw:lastTotalUsd'); } catch {}
-              try { localStorage.removeItem('kw:lastChangePct24h'); } catch {}
-              try { localStorage.removeItem('kw:lastChangePct24hMeta'); } catch {}
-              try { localStorage.removeItem('kw:portfolio:firstSeenAt'); } catch {}
-              try { localStorage.removeItem('kw:portfolio:snap:24h'); } catch {}
-              try { localStorage.removeItem('kw:lastTotalUpdatedAt'); } catch {}
+              try {
+                localStorage.removeItem('kw:lastTopTokens');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:lastTopTokensAt');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:lastTotalUsd');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:lastChangePct24h');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:lastChangePct24hMeta');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:portfolio:firstSeenAt');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:portfolio:snap:24h');
+              } catch {}
+              try {
+                localStorage.removeItem('kw:lastTotalUpdatedAt');
+              } catch {}
               // Remove all per-wallet chain totals (legacy and namespaced)
               try {
                 const prefix = 'kw:chainTotalsUsd:v1';
@@ -553,10 +770,18 @@ const WalletManage = () => {
                 toRemove.forEach((k) => localStorage.removeItem(k));
               } catch {}
               // Nudge any listeners in the same tab to refresh
-              try { window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTopTokens', newValue: '[]' })); } catch {}
-              try { window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTotalUsd', newValue: '0' })); } catch {}
-              try { removeSource && removeSource(HEX_STAKING_SOURCE); } catch {}
-              try { removeSource && removeSource(EHEX_STAKING_SOURCE); } catch {}
+              try {
+                window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTopTokens', newValue: '[]' }));
+              } catch {}
+              try {
+                window.dispatchEvent(new StorageEvent('storage', { key: 'kw:lastTotalUsd', newValue: '0' }));
+              } catch {}
+              try {
+                removeSource && removeSource(HEX_STAKING_SOURCE);
+              } catch {}
+              try {
+                removeSource && removeSource(EHEX_STAKING_SOURCE);
+              } catch {}
               setShowLogout(false);
               navigate('/', { replace: true });
             }}
@@ -567,16 +792,15 @@ const WalletManage = () => {
       </Modal>
 
       {/* Modals */}
-      <WelcomeModal
-        show={showWelcomeModal}
-        onHide={handleWelcomeModalHide}
-      />
+      <WelcomeModal show={showWelcomeModal} onHide={handleWelcomeModalHide} />
 
       <PortfolioIdModal
         show={showUseId}
         onHide={() => setShowUseId(false)}
         onSuccess={() => {
-          try { setWallets(readAll()); } catch {}
+          try {
+            setWallets(readAll());
+          } catch {}
         }}
       />
       <CreatePortfolioIdModal show={showCreateId} onHide={() => setShowCreateId(false)} />
@@ -585,4 +809,3 @@ const WalletManage = () => {
 };
 
 export default WalletManage;
-

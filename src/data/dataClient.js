@@ -14,35 +14,29 @@
 import { idbGet, idbSet } from './idb';
 
 const TEN_MIN = 10 * 60 * 1000;
-const DEBUG_CACHE = String(import.meta?.env?.VITE_DEBUG_CACHE || '').toLowerCase() === 'true' ||
-  (typeof localStorage !== 'undefined' && (localStorage.getItem('DEBUG_CACHE') === 'true'));
-const dlog = (...a) => { if (DEBUG_CACHE) console.log('%c[CACHE]', 'color:#6cf', ...a); };
+const DEBUG_CACHE =
+  String(import.meta?.env?.VITE_DEBUG_CACHE || '').toLowerCase() === 'true' ||
+  (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_CACHE') === 'true');
+const dlog = (...a) => {
+  if (DEBUG_CACHE) console.log('%c[CACHE]', 'color:#6cf', ...a);
+};
 
 const inflight = new Map(); // key -> { promise, controller, startedAt }
 
 // Broadcast for cross-tab dedupe and update events
 let bc;
-try { bc = new BroadcastChannel('kinko-data'); } catch { bc = null; }
+try {
+  bc = new BroadcastChannel('kinko-data');
+} catch {
+  bc = null;
+}
 
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function jitter(base, pct = 0.2) { const j = base * pct; return base + (Math.random() * 2 - 1) * j; }
-
-async function probeAndClaim(key) {
-  if (!bc) return true; // no cross-tab, claim
-  let seenClaim = false;
-  const onMsg = (e) => {
-    if (e?.data?.type === 'claim' && e?.data?.key === key) seenClaim = true;
-  };
-  bc.addEventListener('message', onMsg, { once: false });
-  try {
-    bc.postMessage({ type: 'probe', key });
-    await sleep(150);
-  } finally {
-    bc.removeEventListener('message', onMsg);
-  }
-  if (seenClaim) return false;
-  try { bc.postMessage({ type: 'claim', key }); } catch {}
-  return true;
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function jitter(base, pct = 0.2) {
+  const j = base * pct;
+  return base + (Math.random() * 2 - 1) * j;
 }
 
 function backoffDelays(retries, base = 600) {
@@ -56,7 +50,11 @@ async function withBackoff(fn, { signal, retries = 3 } = {}) {
   let lastErr;
   for (let i = 0; i <= retries; i++) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    try { return await fn(); } catch (e) { lastErr = e; }
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+    }
     if (i < delays.length) await sleep(delays[i]);
   }
   throw lastErr;
@@ -80,78 +78,42 @@ async function readCached(key, { ttlMs = TEN_MIN } = {}) {
 
 async function writeCached(key, { payload, version = 1, ttlMs = TEN_MIN }) {
   await idbSet(key, { version, fetchedAt: Date.now(), ttlMs, payload });
-  try { bc?.postMessage({ type: 'updated', key, at: Date.now() }); } catch {}
-  try { await idbSet(`meta:lastUpdated:${key}`, { payload: Date.now(), version, fetchedAt: Date.now(), ttlMs: TEN_MIN }); } catch {}
+  try {
+    bc?.postMessage({ type: 'updated', key, at: Date.now() });
+  } catch {}
+  try {
+    await idbSet(`meta:lastUpdated:${key}`, { payload: Date.now(), version, fetchedAt: Date.now(), ttlMs: TEN_MIN });
+  } catch {}
 }
 
 async function fetchAndCache(key, fetcher, { ttlMs = TEN_MIN, version = 1, force = false } = {}) {
-  // TTL short-circuit when not forced
-  if (!force) {
-    const rec = await idbGet(key);
-    if (isFresh(rec, ttlMs)) return rec?.payload ?? null; // already fresh
-  }
-
-  // In-memory dedupe
+  // Reserve the in-flight job before the first await so concurrent callers share it.
   if (inflight.has(key)) return inflight.get(key).promise;
-
-  // Cross-tab dedupe
-  const canClaim = await probeAndClaim(key);
-  if (!canClaim) {
-    // Wait for an update event, then return latest cache
-    const payload = await new Promise((resolve) => {
-      let t;
-      const onMsg = async (e) => {
-        if (e?.data?.type === 'updated' && e?.data?.key === key) {
-          bc?.removeEventListener('message', onMsg);
-          clearTimeout(t);
-          const hit = await idbGet(key);
-          resolve(hit?.payload ?? null);
-        }
-      };
-      if (bc) bc.addEventListener('message', onMsg);
-      // Guard: if no update comes back after some time, resolve to cache
-      t = setTimeout(async () => {
-        if (bc) bc.removeEventListener('message', onMsg);
-        const hit = await idbGet(key);
-        resolve(hit?.payload ?? null);
-      }, 5000);
-    });
-    return payload;
-  }
-
   const controller = new AbortController();
-  // Abort any existing in this tab
-  const prev = inflight.get(key);
-  try { prev?.controller?.abort(); } catch {}
-
-  const promise = (async () => {
-    try {
-      const payload = await withBackoff(() => fetcher({ signal: controller.signal }), { signal: controller.signal });
-      await writeCached(key, { payload, version, ttlMs });
-      dlog('WROTE', key, { size: Array.isArray(payload) ? payload.length : typeof payload });
-      return payload;
-    } finally {
-      inflight.delete(key);
-    }
-  })();
-
+  const run = async () => {
+    const rec = await idbGet(key);
+    if (!force && isFresh(rec, ttlMs) && rec.version === version) return rec.payload;
+    const payload = await withBackoff(() => fetcher({ signal: controller.signal }), { signal: controller.signal });
+    await writeCached(key, { payload, version, ttlMs });
+    return payload;
+  };
+  const promise = Promise.resolve()
+    .then(() => {
+      // Browser locks serialize matching resources across tabs; the lock holder rechecks TTL.
+      if (typeof navigator !== 'undefined' && navigator.locks?.request) return navigator.locks.request(`kinko:${key}`, run);
+      return run();
+    })
+    .finally(() => inflight.delete(key));
   inflight.set(key, { promise, controller, startedAt: Date.now() });
   return promise;
 }
 
 // -------------- High-level API --------------
 
-const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
-const toFiniteNumber = (value) => { const n = Number(value); return Number.isFinite(n) ? n : null; };
-const normalizePriceMeta = (meta, fallbackSource = 'defillama') => {
-  if (meta && typeof meta === 'object') {
-    const price = Number(meta.price ?? meta.usd ?? meta.value ?? 0) || 0;
-    return { price, change24hPct: toFiniteNumber(meta.change24hPct ?? meta.pctChange24h ?? meta.change24h), source: meta.source || fallbackSource };
-  }
-  const price = Number(meta) || 0;
-  return { price, change24hPct: null, source: fallbackSource };
+const toFiniteNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 };
-
 // Chain helpers: normalize to canonical chain id in our keys
 function normChain(c) {
   const s = String(c || '').toLowerCase();
@@ -164,191 +126,14 @@ function normChain(c) {
 }
 
 // Network fetchers (reuse existing service APIs — no new external APIs)
-import { fetchPulsechainTokens } from '../services/pulsechainService';
-import { fetchEthereumTokens } from '../services/ethereumService';
-import { getBaseTokensFromBlockscout, toUnits as toUnitsBase } from '../services/baseBlockscoutService';
-import { getBaseTokenPricesLlama, getBaseUsdPriceLlama, getBscTokenPricesLlama, getBscUsdPriceLlama, getPolygonTokenPricesLlama, getPolygonUsdPriceLlama, getEthTokenPricesLlama, getEthUsdPriceLlama } from '../services/priceService';
-import { getBaseNativeBalance } from '../services/baseRpcService';
-import { getPolygonTokensFromBlockscout, toUnits as toUnitsPolygon } from '../services/polygonBlockscoutService';
-import { getPolygonNativeBalance } from '../services/polygonRpcService';
-import { getBscTokensFromNodereal, toUnitsBsc } from '../services/bscNoderealService';
-import { getBscNativeBalance } from '../services/bscRpcService';
+import { getBaseUsdPriceLlama, getBscUsdPriceLlama, getPolygonUsdPriceLlama, getEthUsdPriceLlama } from '../services/priceService';
 
-async function fetchBalancesLive(chain, address) {
-  const c = normChain(chain);
-  const addr = String(address || '').toLowerCase();
-  if (!addr) return [];
-  if (c === 'pulse') return (await fetchPulsechainTokens(addr)).map((t) => ({ ...t, chain: 'pulse' }));
-  if (c === 'eth') {
-    // Keep it simple: reuse existing service for ETH
-    return await fetchEthereumTokens(addr);
-  }
-  if (c === 'base') {
-    try {
-      const discovered = await getBaseTokensFromBlockscout(addr);
-      const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMapRaw = await getBaseTokenPricesLlama(addrs);
-      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
-      const priceMap = new Map();
-      for (const [key, meta] of srcMap.entries()) {
-        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
-      }
-      const nativeMeta = normalizePriceMeta(await getBaseUsdPriceLlama(), 'defillama');
-      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
-      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
-      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
-      let nativeAmount = 0;
-      try { nativeAmount = await getBaseNativeBalance(addr); } catch {}
-      const native = {
-        chain: 'base',
-        address: 'native',
-        symbol: 'ETH',
-        name: 'Ether',
-        amount: nativeAmount,
-        priceUsd: nativePrice,
-        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
-        change24hPct: nativePct,
-        pctChange24h: nativePct,
-        priceSource: nativeSource,
-        changeSource: nativeSource
-      };
-      const erc20 = discovered.map((t) => {
-        const amount = toUnitsBase(t.balanceRaw, Number(t.decimals ?? 18));
-        const meta = priceMap.get((t.address || '').toLowerCase());
-        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
-        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
-        const source = meta?.source || 'defillama';
-        const priceSource = price > 0 ? source : 'none';
-        const changeSource = source;
-        return {
-          chain: 'base',
-          address: t.address,
-          symbol: t.symbol || '',
-          name: t.name || t.symbol || 'Token',
-          decimals: Number(t.decimals ?? 18),
-          amount,
-          priceUsd: price,
-          valueUsd: price ? amount * price : 0,
-          change24hPct: pct,
-          pctChange24h: pct,
-          priceSource,
-          changeSource
-        };
-      });
-      return [native, ...erc20];
-    } catch { return []; }
-  }
-  if (c === 'polygon') {
-    try {
-      const discovered = await getPolygonTokensFromBlockscout(addr);
-      const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMapRaw = await getPolygonTokenPricesLlama(addrs);
-      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
-      const priceMap = new Map();
-      for (const [key, meta] of srcMap.entries()) {
-        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
-      }
-      const nativeMeta = normalizePriceMeta(await getPolygonUsdPriceLlama(), 'defillama');
-      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
-      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
-      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
-      let nativeAmount = 0;
-      try { nativeAmount = await getPolygonNativeBalance(addr); } catch {}
-      const native = {
-        chain: 'polygon',
-        address: 'native',
-        symbol: 'MATIC',
-        name: 'Polygon',
-        amount: nativeAmount,
-        priceUsd: nativePrice,
-        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
-        change24hPct: nativePct,
-        pctChange24h: nativePct,
-        priceSource: nativeSource,
-        changeSource: nativeSource
-      };
-      const erc20 = discovered.map((t) => {
-        const amount = toUnitsPolygon(t.balanceRaw, Number(t.decimals ?? 18));
-        const meta = priceMap.get((t.address || '').toLowerCase());
-        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
-        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
-        const source = meta?.source || 'defillama';
-        const priceSource = price > 0 ? source : 'none';
-        const changeSource = source;
-        return {
-          chain: 'polygon',
-          address: t.address,
-          symbol: t.symbol || '',
-          name: t.name || t.symbol || 'Token',
-          decimals: Number(t.decimals ?? 18),
-          amount,
-          priceUsd: price,
-          valueUsd: price ? amount * price : 0,
-          change24hPct: pct,
-          pctChange24h: pct,
-          priceSource,
-          changeSource
-        };
-      });
-      return [native, ...erc20];
-    } catch { return []; }
-  }
-  if (c === 'bsc') {
-    try {
-      const discovered = await getBscTokensFromNodereal(addr);
-      const addrs = discovered.map((t) => t.address).filter(Boolean);
-      const priceMapRaw = await getBscTokenPricesLlama(addrs);
-      const srcMap = priceMapRaw instanceof Map ? priceMapRaw : new Map(priceMapRaw || []);
-      const priceMap = new Map();
-      for (const [key, meta] of srcMap.entries()) {
-        priceMap.set(key, normalizePriceMeta(meta, 'defillama'));
-      }
-      const nativeMeta = normalizePriceMeta(await getBscUsdPriceLlama(), 'defillama');
-      const nativePrice = toFiniteNumber(nativeMeta.price) || 0;
-      const nativePct = toFiniteNumber(nativeMeta.change24hPct);
-      const nativeSource = nativePrice > 0 ? (nativeMeta.source || 'defillama') : 'none';
-      let nativeAmount = 0;
-      try { nativeAmount = await getBscNativeBalance(addr); } catch {}
-      const native = {
-        chain: 'bsc',
-        address: 'native',
-        symbol: 'BNB',
-        name: 'BNB',
-        amount: nativeAmount,
-        priceUsd: nativePrice,
-        valueUsd: nativePrice ? nativeAmount * nativePrice : 0,
-        change24hPct: nativePct,
-        pctChange24h: nativePct,
-        priceSource: nativeSource,
-        changeSource: nativeSource
-      };
-      const erc20 = discovered.map((t) => {
-        const amount = toUnitsBsc(t.balanceRaw, Number(t.decimals ?? 18));
-        const meta = priceMap.get((t.address || '').toLowerCase());
-        const price = meta ? toFiniteNumber(meta.price) || 0 : 0;
-        const pct = meta ? toFiniteNumber(meta.change24hPct) : null;
-        const source = meta?.source || 'defillama';
-        const priceSource = price > 0 ? source : 'none';
-        const changeSource = source;
-        return {
-          chain: 'bsc',
-          address: t.address,
-          symbol: t.symbol || '',
-          name: t.name || t.symbol || 'Token',
-          decimals: Number(t.decimals ?? 18),
-          amount,
-          priceUsd: price,
-          valueUsd: price ? amount * price : 0,
-          change24hPct: pct,
-          pctChange24h: pct,
-          priceSource,
-          changeSource
-        };
-      });
-      return [native, ...erc20];
-    } catch { return []; }
-  }
-  return [];
+async function fetchBalancesLive(chain, address, force = false) {
+  const { getChainHoldings } = await import('../services/chainHoldingsService.js');
+  const result = await getChainHoldings(normChain(chain), address, { force });
+  // Never overwrite an existing complete cache entry with a failed partial refresh.
+  if (result.issues.length && !result.rows.length) throw new Error('Balance refresh unavailable');
+  return result.rows;
 }
 
 async function fetchPriceLive(chain) {
@@ -396,13 +181,19 @@ function getExplorerKey(chain) {
 function explorerBase(chain) {
   const c = normChain(chain);
   switch (c) {
-    case 'eth': return 'https://etherscan.io';
-    case 'bsc': return 'https://bscscan.com';
-    case 'polygon': return 'https://polygonscan.com';
-    case 'base': return 'https://basescan.org';
+    case 'eth':
+      return 'https://etherscan.io';
+    case 'bsc':
+      return 'https://bscscan.com';
+    case 'polygon':
+      return 'https://polygonscan.com';
+    case 'base':
+      return 'https://basescan.org';
     // Update PulseChain explorer host per request
-    case 'pulse': return 'https://scan.9mm.pro';
-    default: return '';
+    case 'pulse':
+      return 'https://scan.9mm.pro';
+    default:
+      return '';
   }
 }
 
@@ -420,7 +211,8 @@ async function fetchTxViaExplorer(chain, address) {
   const base = bases[c];
   if (!base) throw new Error(`No explorer base for ${c}`);
 
-  const mk = (action) => `${base}?module=account&action=${action}&address=${addr}&page=1&offset=50&sort=desc${key ? `&apikey=${encodeURIComponent(key)}` : ''}`;
+  const mk = (action) =>
+    `${base}?module=account&action=${action}&address=${addr}&page=1&offset=50&sort=desc${key ? `&apikey=${encodeURIComponent(key)}` : ''}`;
   const host = explorerBase(c);
 
   const items = [];
@@ -439,7 +231,13 @@ async function fetchTxViaExplorer(chain, address) {
         from: t.from,
         to: t.to,
         amount: Number(t.value || 0) / 1e18,
-        feeWei: (() => { try { return String((BigInt(t.gasUsed||0) * BigInt(t.gasPrice||0))); } catch { return '0'; } })(),
+        feeWei: (() => {
+          try {
+            return String(BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0));
+          } catch {
+            return '0';
+          }
+        })(),
         explorer: host ? `${host}/tx/${t.hash}` : undefined
       });
     }
@@ -452,7 +250,7 @@ async function fetchTxViaExplorer(chain, address) {
     const list = Array.isArray(j?.result) ? j.result : [];
     for (const t of list) {
       const dec = Number(t.tokenDecimal || 18);
-      const amt = Number(t.value || 0) / (10 ** (Number.isFinite(dec) ? dec : 18));
+      const amt = Number(t.value || 0) / 10 ** (Number.isFinite(dec) ? dec : 18);
       items.push({
         chain: c,
         kind: 'erc20',
@@ -468,7 +266,7 @@ async function fetchTxViaExplorer(chain, address) {
   } catch {}
 
   // Desc sort
-  items.sort((a,b) => (b.timeStamp||0) - (a.timeStamp||0));
+  items.sort((a, b) => (b.timeStamp || 0) - (a.timeStamp || 0));
   return { items };
 }
 
@@ -494,7 +292,7 @@ async function fetchTxLive(chain, address, type) {
     // Fallback: direct explorer call (requires key; some allow no-key but rate-limited)
     try {
       return await fetchTxViaExplorer(chain, address);
-    } catch (e2) {
+    } catch {
       // surface original error
       throw e;
     }
@@ -508,12 +306,12 @@ export const DataClient = {
   // SWR get-or-refresh
   async getBalances(chain, address, { ttlMs = TEN_MIN, force = false } = {}) {
     const key = `balances:${normChain(chain)}:${String(address || '').toLowerCase()}`;
-    const { payload } = await readCached(key, { ttlMs });
-    return payload;
+    const { payload, meta } = await readCached(key, { ttlMs });
+    return meta?.version === 2 ? payload : null;
   },
   async refreshBalances(chain, address, { ttlMs = TEN_MIN, force = false } = {}) {
     const key = `balances:${normChain(chain)}:${String(address || '').toLowerCase()}`;
-    return fetchAndCache(key, () => fetchBalancesLive(chain, address), { ttlMs, force });
+    return fetchAndCache(key, () => fetchBalancesLive(chain, address, force), { ttlMs, force, version: 2 });
   },
   async getPrice(chain, { ttlMs = TEN_MIN } = {}) {
     const key = `prices:${normChain(chain)}`;
@@ -536,15 +334,3 @@ export const DataClient = {
 };
 
 export default DataClient;
-
-
-
-
-
-
-
-
-
-
-
-

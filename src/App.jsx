@@ -44,9 +44,11 @@ installAxiosBackoff(axios);
 function RateLimitToast() {
   const [state, setState] = useState({ show: false, text: '' });
   useEffect(() => onRateLimit((show, text) => setState({ show, text })), []);
+  if (!state.show) return null;
   return (
     <div
       className={`kw-toast rl ${state.show ? 'show' : ''}`}
+      hidden={!state.show}
       role="status"
       aria-live="polite"
       aria-atomic="true"

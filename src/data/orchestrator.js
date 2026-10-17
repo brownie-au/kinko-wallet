@@ -1,14 +1,17 @@
+import { normalizeWallets } from '../utils/walletRecords.js';
 // src/data/orchestrator.js
 // Background refresh orchestrator: on mount and every 10 minutes, refreshes
 // balances, prices and tx history for all wallets across supported chains.
 import DataClient from './dataClient';
 
 const TEN_MIN = 10 * 60 * 1000;
-const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
 
-const DEBUG_CACHE = String(import.meta?.env?.VITE_DEBUG_CACHE || '').toLowerCase() === 'true' ||
-  (typeof localStorage !== 'undefined' && (localStorage.getItem('DEBUG_CACHE') === 'true'));
-const dlog = (...a) => { if (DEBUG_CACHE) console.log('%c[ORCH]', 'color:#c6f', ...a); };
+const DEBUG_CACHE =
+  String(import.meta?.env?.VITE_DEBUG_CACHE || '').toLowerCase() === 'true' ||
+  (typeof localStorage !== 'undefined' && localStorage.getItem('DEBUG_CACHE') === 'true');
+const dlog = (...a) => {
+  if (DEBUG_CACHE) console.log('%c[ORCH]', 'color:#c6f', ...a);
+};
 
 let intervalId = null;
 let running = false;
@@ -17,46 +20,78 @@ let lastErrorAt = 0;
 let lastRunAt = 0;
 let inflightCount = 0;
 let currentRunPromise = null;
-
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-function jitter(base, pct = 0.2) { const j = base * pct; return base + (Math.random() * 2 - 1) * j; }
+let visibilityListener = null;
+let onlineListener = null;
 
 function getWalletsFromLocal() {
   try {
     const raw = localStorage.getItem('wallets');
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+    return normalizeWallets(Array.isArray(arr) ? arr : []).filter((w) => !w.hidden);
+  } catch {
+    return [];
+  }
 }
 
 async function performRefresh({ force = false } = {}) {
   const wallets = getWalletsFromLocal();
-  const addrs = wallets.map((w) => String(w.address || '').toLowerCase()).filter(Boolean);
+  const addrs = wallets.map((w) => w.address.toLowerCase());
+  const activeChains = [...new Set(wallets.flatMap((w) => w.networks))];
   const jobs = [];
 
   // Prices per chain
-  for (const c of CHAINS) jobs.push(async () => { inflightCount++; try { await DataClient.refreshPrice(c, { force }); } finally { inflightCount--; } });
+  for (const c of activeChains)
+    jobs.push(async () => {
+      inflightCount++;
+      try {
+        await DataClient.refreshPrice(c, { force });
+      } finally {
+        inflightCount--;
+      }
+    });
 
   // Balances + Tx per (wallet, chain)
-  for (const addr of addrs) {
-    for (const c of CHAINS) {
-      jobs.push(async () => { inflightCount++; try { await DataClient.refreshBalances(c, addr, { force }); } finally { inflightCount--; } });
-      jobs.push(async () => { inflightCount++; try { await DataClient.refreshTxs(c, addr, 'all', { force }); } finally { inflightCount--; } });
+  for (const wallet of wallets) {
+    const addr = wallet.address.toLowerCase();
+    for (const c of wallet.networks) {
+      jobs.push(async () => {
+        inflightCount++;
+        try {
+          await DataClient.refreshBalances(c, addr, { force });
+        } finally {
+          inflightCount--;
+        }
+      });
+      jobs.push(async () => {
+        inflightCount++;
+        try {
+          await DataClient.refreshTxs(c, addr, 'all', { force });
+        } finally {
+          inflightCount--;
+        }
+      });
     }
   }
 
-  // Stagger jobs to spread load
-  let i = 0;
-  for (const job of jobs) {
-    // eslint-disable-next-line no-await-in-loop
-    await sleep(jitter(80 + 10 * (i++ % 7), 0.4));
-    job().catch((e) => { lastErrorAt = Date.now(); dlog('job error', e?.message || e); });
-  }
-
-  // Wait a little for trailing writes (best-effort)
-  await sleep(200);
-  lastSuccessAt = Date.now();
-  dlog('refresh completed', { wallets: addrs.length, chains: CHAINS.length });
+  // Await actual completion and bound concurrent provider calls.
+  let cursor = 0,
+    failures = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(3, jobs.length) }, async () => {
+      while (cursor < jobs.length) {
+        const job = jobs[cursor++];
+        try {
+          await job();
+        } catch (e) {
+          failures++;
+          lastErrorAt = Date.now();
+          dlog('job error', e?.message);
+        }
+      }
+    })
+  );
+  if (!failures) lastSuccessAt = Date.now();
+  dlog('refresh completed', { wallets: addrs.length, chains: activeChains.length });
 }
 
 async function runOnce({ force = false } = {}) {
@@ -96,8 +131,12 @@ export function startOrchestrator() {
   intervalId = setInterval(() => runOnce({ force: false }), TEN_MIN);
 
   // visibility/online triggers
-  const onVis = () => { if (document.visibilityState === 'visible') runOnce({ force: false }); };
+  const onVis = () => {
+    if (document.visibilityState === 'visible') runOnce({ force: false });
+  };
   const onOnline = () => runOnce({ force: false });
+  visibilityListener = onVis;
+  onlineListener = onOnline;
   document.addEventListener('visibilitychange', onVis);
   window.addEventListener('online', onOnline);
 }
@@ -105,6 +144,10 @@ export function startOrchestrator() {
 export function stopOrchestrator() {
   if (intervalId) clearInterval(intervalId);
   intervalId = null;
+  if (visibilityListener) document.removeEventListener('visibilitychange', visibilityListener);
+  if (onlineListener) window.removeEventListener('online', onlineListener);
+  visibilityListener = null;
+  onlineListener = null;
 }
 
 export function getOrchestratorStatus() {
@@ -119,4 +162,3 @@ export async function runGlobalRefresh({ force = true } = {}) {
   }
   return runOnce({ force });
 }
-

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { normalizeWallets, isWalletAddress } from '../utils/walletRecords.js';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { buildPortfolioDetailedFromCache as buildPortfolioDetailed } from '../services/portfolioAggService';
 
 const WalletContext = createContext();
@@ -12,7 +13,7 @@ export const WalletProvider = ({ children }) => {
       const raw = localStorage.getItem('wallets');
       const arr = raw ? JSON.parse(raw) : [];
       const list = Array.isArray(arr) ? arr : [];
-      return list.filter((w) => !w?.hidden).map(({ address, name }) => ({ address, name }));
+      return normalizeWallets(list).filter((w) => !w.hidden);
     } catch {
       return [];
     }
@@ -23,16 +24,13 @@ export const WalletProvider = ({ children }) => {
 
   const addWallet = (address, name) => {
     const addr = String(address || '').trim();
-    if (!addr) return;
-    setWallets((prev) =>
-      prev.find((w) => w.address === addr) ? prev : [...prev, { address: addr, name }]
-    );
+    if (!isWalletAddress(addr)) return;
+    setWallets((prev) => (prev.find((w) => w.address.toLowerCase() === addr.toLowerCase()) ? prev : [...prev, { address: addr, name }]));
   };
 
-  const deleteWallet = (address) =>
-    setWallets((prev) => prev.filter((w) => w.address !== address));
+  const deleteWallet = (address) => setWallets((prev) => prev.filter((w) => w.address !== address));
 
-  const replaceWallets = (arr) => setWallets(Array.isArray(arr) ? arr : []);
+  const replaceWallets = (arr) => setWallets(normalizeWallets(Array.isArray(arr) ? arr : []).filter((w) => !w.hidden));
 
   // ---- portfolio aggregate (NEW) ----
   const [portfolio, setPortfolio] = useState({
@@ -44,31 +42,40 @@ export const WalletProvider = ({ children }) => {
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState('');
 
-  const refreshPortfolio = useCallback(async (opts = {}) => {
-    try {
-      setPortfolioLoading(true);
-      setPortfolioError('');
-      // buildPortfolioDetailed expects list of wallets; we pass your objects array
-      const result = await buildPortfolioDetailed(wallets, opts);
-      // Ensure shape
-      const safe = {
-        totalUsd: Number(result?.totalUsd || 0),
-        changePct24h: Number(result?.changePct24h || 0),
-        tokens: result?.tokens || [],
-        breakdown: result?.breakdown || []
-      };
-      setPortfolio(safe);
-    } catch (e) {
-      setPortfolioError(e?.message || String(e));
-      setPortfolio((p) => ({ ...p, totalUsd: 0 }));
-    } finally {
-      setPortfolioLoading(false);
-    }
-  }, [wallets]);
+  const requestRef = useRef(0);
+  const refreshPortfolio = useCallback(
+    async (opts = {}) => {
+      const requestId = ++requestRef.current;
+      try {
+        setPortfolioLoading(true);
+        setPortfolioError('');
+        // buildPortfolioDetailed expects list of wallets; we pass your objects array
+        const result = await buildPortfolioDetailed(wallets, opts);
+        // Ensure shape
+        const safe = {
+          totalUsd: Number(result?.totalUsd || 0),
+          changePct24h: Number(result?.changePct24h || 0),
+          tokens: result?.tokens || [],
+          breakdown: result?.breakdown || []
+        };
+        if (requestId === requestRef.current) {
+          setPortfolio(safe);
+          setPortfolioError(result?.issues?.length ? 'Some network data is unavailable or stale.' : '');
+        }
+      } catch (e) {
+        if (requestId === requestRef.current) setPortfolioError(e?.message || 'Portfolio refresh unavailable.');
+      } finally {
+        if (requestId === requestRef.current) setPortfolioLoading(false);
+      }
+    },
+    [wallets]
+  );
 
   // Recompute when wallet list changes
   useEffect(() => {
     if (!wallets || wallets.length === 0) {
+      requestRef.current++;
+      setPortfolioLoading(false);
       setPortfolio({ totalUsd: 0, changePct24h: 0, tokens: [], breakdown: [] });
       return;
     }

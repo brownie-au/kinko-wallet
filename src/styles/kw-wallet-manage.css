@@ -144,3 +144,14 @@ body[data-pc-theme='light'] .kw-app select.kw-wallet-search-input.form-select op
   background: transparent;
   border-color: transparent;
 }
+
+/* Keep wallet actions reachable at narrow mobile widths. */
+.kw-wallet-manage .kw-wallet-item { gap: 12px; flex-wrap: wrap; }
+.kw-wallet-manage .kw-wallet-item .btn-group { flex-wrap: wrap; gap: 6px; }
+.kw-wallet-manage .btn { min-height: 40px; }
+@media (max-width: 575.98px) {
+  .kw-wallet-manage .kw-wallet-item { align-items: flex-start !important; }
+  .kw-wallet-manage .kw-wallet-item > div { width: 100%; margin-right: 0 !important; }
+  .kw-wallet-manage .kw-wallet-item .btn-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kw-wallet-manage .kw-wallet-item .btn { min-width: 0 !important; margin: 0 !important; border-radius: 6px !important; min-height: 44px; }
+}

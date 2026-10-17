@@ -1,4 +1,3 @@
-/* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
@@ -8,7 +7,6 @@ import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
 // ETH: align with View All (Blockscout discovery + DefiLlama prices)
 import { buildPortfolioDetailed } from '../../services/portfolioAggService';
 // PulseChain stays on Blockscout + Dexscreener
-import { fetchPulsechainTokens } from '../../services/pulsechainService.js';
 
 // Shared, theme-aware chain UI
 import { ChainSelector, ChainChip } from '../../components/ChainUI';
@@ -19,23 +17,10 @@ import TokenLogo from '../../components/TokenLogo';
 import { fmtPriceUSD } from '../../utils/priceFormat';
 
 import { isTokenBlacklisted } from '../../data/tokenBlocklist';
-import {
-  setWalletCache,
-  getWalletCache,
-  clearWalletCache,
-  clearWalletPrefix,
-  WALLET_CACHE_DEFAULT_TTL
-} from '../../utils/walletCache';
+import { setWalletCache, getWalletCache, clearWalletCache, clearWalletPrefix, WALLET_CACHE_DEFAULT_TTL } from '../../utils/walletCache';
 import { getCachedJSON } from '../../utils/kinkoCache';
 
-import {
-  getLastSection,
-  setLastSection,
-  getGlobalNetChip,
-  setGlobalNetChip,
-  getWalletNetChip,
-  setWalletNetChip
-} from '../../utils/uiState';
+import { setLastSection, getGlobalNetChip, setGlobalNetChip, getWalletNetChip, setWalletNetChip } from '../../utils/uiState';
 import { useRefresh } from '@/contexts/RefreshContext.jsx';
 import '../../styles/kw-wallet-manage.css';
 import '../../styles/kw-portfolio-search.css';
@@ -49,8 +34,7 @@ const fmtUSD = (n) => {
   return `USD $${amt}`;
 };
 
-const fmtNum = (n) =>
-  (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
+const fmtNum = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
 
@@ -65,13 +49,18 @@ const addrStyle = {
 // helper to translate chain code -> numeric chainId for TokenLogo
 const chainIdOf = (chain) => {
   switch (String(chain || '').toLowerCase()) {
-    case 'pulse': return 369;
-    case 'bsc': return 56;
-    case 'polygon': return 137;
-    case 'base': return 8453;
+    case 'pulse':
+      return 369;
+    case 'bsc':
+      return 56;
+    case 'polygon':
+      return 137;
+    case 'base':
+      return 8453;
     case 'eth':
     case 'ethereum':
-    default: return 1;
+    default:
+      return 1;
   }
 };
 
@@ -80,9 +69,7 @@ function findByAddrLoose(arr, addrLower) {
   const array = Array.isArray(arr) ? arr : [];
   const addrFields = ['address', 'addr', 'account', 'publicKey', 'public_key', 'hash', 'id', 'wallet'];
 
-  let item = array.find((w) =>
-    addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower)
-  );
+  let item = array.find((w) => addrFields.some((f) => (w?.[f] || '').toLowerCase() === addrLower));
   if (item) return item;
 
   item = array.find((w) => {
@@ -104,7 +91,9 @@ function findAnyWalletRecord(addressLower) {
       if (Array.isArray(parsed)) groups.push(parsed);
       else if (parsed && typeof parsed === 'object') {
         groups.push([parsed]);
-        Object.values(parsed).forEach((v) => { if (Array.isArray(v)) groups.push(v); });
+        Object.values(parsed).forEach((v) => {
+          if (Array.isArray(v)) groups.push(v);
+        });
       }
 
       for (const g of groups) {
@@ -112,18 +101,11 @@ function findAnyWalletRecord(addressLower) {
         if (hit) return hit;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
-}
-
-function normalizeChain(x) {
-  const s = (x ?? '').toString().toLowerCase();
-  if (s.includes('pulse') || s === '369') return 'pulse';
-  if (s.includes('bsc') || s.includes('binance') || s === '56') return 'bsc';
-  if (s.includes('polygon') || s === '137' || s === 'matic' || s === 'pol') return 'polygon';
-  if (s.includes('base') || s === '8453') return 'base';
-  return 'eth';
 }
 
 function resolveWalletName(address) {
@@ -135,16 +117,7 @@ function resolveWalletName(address) {
 
 function resolveGroupId(address) {
   const rec = findAnyWalletRecord((address || '').toLowerCase()) || {};
-  return (
-    rec.group ||
-    rec.grp ||
-    rec.collection ||
-    rec.folder ||
-    rec.section ||
-    rec.category ||
-    rec.groupId ||
-    'default'
-  );
+  return rec.group || rec.grp || rec.collection || rec.folder || rec.section || rec.category || rec.groupId || 'default';
 }
 
 // -------- tiny icon button --------
@@ -161,8 +134,16 @@ const IconButton = ({ title, onClick, children }) => (
 );
 
 const CopyIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
@@ -318,10 +299,13 @@ export default function WalletDetail() {
   const walletName = useMemo(() => resolveWalletName(address), [address]);
   const { registerTask } = useRefresh();
 
-  useEffect(() => { setLastSection('wallets'); }, []);
+  useEffect(() => {
+    setLastSection('wallets');
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [coverageIssues, setCoverageIssues] = useState([]);
   const [native, setNative] = useState(null);
   const [tokens, setTokens] = useState([]);
   const [q, setQ] = useState('');
@@ -348,8 +332,12 @@ export default function WalletDetail() {
   const onChipChange = (code) => {
     setActiveChain(code);
     // persist both globally and per-group for backward compatibility
-    try { setGlobalNetChip(code); } catch { }
-    try { setWalletNetChip(groupId, code); } catch { }
+    try {
+      setGlobalNetChip(code);
+    } catch {}
+    try {
+      setWalletNetChip(groupId, code);
+    } catch {}
   };
 
   // Normalise any token for cache format
@@ -358,290 +346,58 @@ export default function WalletDetail() {
     const amount = Number(t.amount ?? 0);
     const valueUsd = Number(t.valueUsd ?? t.value ?? amount * priceUsd);
     return {
-      symbol: (t.symbol || t.ticker || (t.name || 'TOKEN')).toUpperCase(),
+      symbol: (t.symbol || t.ticker || t.name || 'TOKEN').toUpperCase(),
       name: t.name || t.symbol || 'Token',
-      amount, priceUsd, valueUsd,
+      amount,
+      amountExact: t.amountExact,
+      priceUsd,
+      valueUsd,
+      unpriced: t.unpriced || t.priceUsd == null,
+      stale: t.stale,
       contract: t.contract || t.address || null,
       logo: t.logo || t.iconUrl || null,
       chain: t.chain ?? chainHint
     };
   };
 
-  // ---- adapt Pulse -> UI (ensure priceUsd/valueUsd) ----
-  const adaptPulseTokens = (rows) => {
-    const list = Array.isArray(rows) ? rows.slice() : [];
-    const plsIdx = list.findIndex(
-      (r) => r.address === 'PLS' || r.symbol === 'PLS' || r.address === 'native'
-    );
-    const pls = plsIdx >= 0 ? list.splice(plsIdx, 1)[0] : null;
-
-    const nat = pls
-      ? {
-        name: 'PulseChain',
-        symbol: 'PLS',
-        amount: Number(pls.balance || 0),
-        price: Number(pls.price || 0),
-        priceUsd: Number(pls.price || 0),
-        value: Number(pls.value || 0),
-        valueUsd: Number(pls.value || 0),
-        contract: 'native',
-        logo: pls.iconUrl || null,
-        chain: 'pulse'
-      }
-      : null;
-
-    const toks = list.map((r) => {
-      const price = Number(r.price || r.priceUsd || 0);
-      const amount = Number(r.balance || r.amount || 0);
-      const value = Number(r.value || r.valueUsd || amount * price);
-      return {
-        name: r.name || r.symbol || 'Token',
-        symbol: r.symbol || '',
-        amount,
-        price,
-        priceUsd: price,
-        value,
-        valueUsd: value,
-        contract: r.address || null,
-        logo: r.iconUrl || null,
-        chain: 'pulse'
-      };
-    });
-
-    const totalUSD = (nat ? nat.valueUsd : 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0);
-    return { native: nat, tokens: toks, totalUSD };
-  };
-
-  // ---- adapt ETH list (ethereumService -> UI) ----
-  const adaptEthFromList = (rows) => {
-    const list = Array.isArray(rows)
-      ? rows.slice()
-      : Array.isArray(rows?.tokens)
-        ? rows.tokens.slice()
-        : [];
-
-    const natIdx = list.findIndex((r) => (r.symbol === 'ETH') || (r.address === 'native'));
-    const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
-
-    const nat = natRow ? {
-      name: 'Ethereum',
-      symbol: 'ETH',
-      amount: Number(natRow.balance || 0),
-      // price may be set as price or priceUSD in the service
-      price: Number(natRow.price || natRow.priceUsd || 0),
-      priceUsd: Number(natRow.price || natRow.priceUsd || 0),
-      // value in service is stored as `usd`; fall back to amount * price when absent
-      value: (function(){
-        const p = Number(natRow.price || natRow.priceUsd || 0);
-        const a = Number(natRow.balance || 0);
-        const v = Number(natRow.value || natRow.valueUsd || natRow.usd || 0);
-        return v > 0 ? v : (a * p);
-      })(),
-      valueUsd: (function(){
-        const p = Number(natRow.price || natRow.priceUsd || 0);
-        const a = Number(natRow.balance || 0);
-        const v = Number(natRow.value || natRow.valueUsd || natRow.usd || 0);
-        return v > 0 ? v : (a * p);
-      })(),
-      contract: 'native',
-      logo: natRow.iconUrl || null,
-      chain: 'eth'
-    } : null;
-
-    const toks = list.map((r) => {
-      const price = Number(r.price || r.priceUsd || 0);
-      const amount = Number(r.balance || r.amount || 0);
-      const value = Number(r.value || r.valueUsd || amount * price);
-      return {
-        name: r.name || r.symbol || 'Token',
-        symbol: r.symbol || '',
-        amount,
-        price,
-        priceUsd: price,
-        value,
-        valueUsd: value,
-        contract: r.address || null,
-        logo: r.iconUrl || null,
-        chain: 'eth'
-      };
-    });
-
-    const totalUSD = (nat ? nat.valueUsd : 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0);
-    return { native: nat, tokens: toks, totalUSD };
-  };
-
-  // Fetch one chain and tag rows with chain
+  // Use the same read-only pipeline and coverage reporting as the combined portfolio.
   async function fetchOneChain(chainCode) {
-    if (chainCode === 'pulse') {
-      const rows = await fetchPulsechainTokens(address);
-      return adaptPulseTokens(rows);
-    }
-    if (chainCode === 'eth') {
-      // Use the same aggregator path as /portfolio for parity
-      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'eth' });
-      const list = Array.isArray(tokens) ? tokens.slice() : [];
-      const natIdx = list.findIndex((t) => t.address === 'native');
-      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
-
-      const nat = natRow ? {
-        name: 'Ethereum',
-        symbol: 'ETH',
-        amount: Number(natRow.amount || 0),
-        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        contract: 'native',
-        logo: natRow.logo || null,
-        chain: 'eth'
-      } : null;
-
-      const toks = list.map((r) => {
-        const price = Number(r.priceUsd ?? r.price ?? 0);
-        const amount = Number(r.amount ?? 0);
-        const value = Number(r.valueUsd ?? r.value ?? amount * price);
-        return {
-          name: r.name || r.symbol || 'Token',
-          symbol: r.symbol || '',
-          amount,
-          price,
-          priceUsd: price,
-          value,
-          valueUsd: value,
-          contract: r.address || null,
-          logo: r.logo || null,
-          chain: 'eth'
-        };
-      });
-
-      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
-    }
-    // Base via aggregator to stay consistent with /portfolio
-    if (chainCode === 'base') {
-      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'base' });
-      const list = Array.isArray(tokens) ? tokens.slice() : [];
-      const natIdx = list.findIndex((t) => t.address === 'native');
-      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
-
-      const nat = natRow ? {
-        name: 'Ethereum',
-        symbol: 'ETH',
-        amount: Number(natRow.amount || 0),
-        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        contract: 'native',
-        logo: natRow.logo || null,
-        chain: 'base'
-      } : null;
-
-      const toks = list.map((r) => {
-        const price = Number(r.priceUsd ?? r.price ?? 0);
-        const amount = Number(r.amount ?? 0);
-        const value = Number(r.valueUsd ?? r.value ?? amount * price);
-        return {
-          name: r.name || r.symbol || 'Token',
-          symbol: r.symbol || '',
-          amount,
-          price,
-          priceUsd: price,
-          value,
-          valueUsd: value,
-          contract: r.address || null,
-          logo: r.logo || null,
-          chain: 'base'
-        };
-      });
-
-      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
-    }
-    // BSC via aggregator (NodeReal discovery under the hood)
-    if (chainCode === 'bsc') {
-      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'bsc' });
-      const list = Array.isArray(tokens) ? tokens.slice() : [];
-      const natIdx = list.findIndex((t) => t.address === 'native');
-      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
-
-      const nat = natRow ? {
-        name: 'BNB',
-        symbol: 'BNB',
-        amount: Number(natRow.amount || 0),
-        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        contract: 'native',
-        logo: natRow.logo || null,
-        chain: 'bsc'
-      } : null;
-
-      const toks = list.map((r) => {
-        const price = Number(r.priceUsd ?? r.price ?? 0);
-        const amount = Number(r.amount ?? 0);
-        const value = Number(r.valueUsd ?? r.value ?? amount * price);
-        return {
-          name: r.name || r.symbol || 'Token',
-          symbol: r.symbol || '',
-          amount,
-          price,
-          priceUsd: price,
-          value,
-          valueUsd: value,
-          contract: r.address || null,
-          logo: r.logo || null,
-          chain: 'bsc'
-        };
-      });
-
-      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
-    }
-    // Polygon via aggregator
-    if (chainCode === 'polygon') {
-      const { totalUsd, tokens } = await buildPortfolioDetailed([{ address }], { only: 'polygon' });
-      const list = Array.isArray(tokens) ? tokens.slice() : [];
-      const natIdx = list.findIndex((t) => t.address === 'native');
-      const natRow = natIdx >= 0 ? list.splice(natIdx, 1)[0] : null;
-
-      const nat = natRow ? {
-        name: 'Polygon',
-        symbol: 'MATIC',
-        amount: Number(natRow.amount || 0),
-        price: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        priceUsd: Number(natRow.priceUsd ?? natRow.price ?? 0),
-        value: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        valueUsd: Number(natRow.valueUsd ?? natRow.value ?? 0),
-        contract: 'native',
-        logo: natRow.logo || null,
-        chain: 'polygon'
-      } : null;
-
-      const toks = list.map((r) => {
-        const price = Number(r.priceUsd ?? r.price ?? 0);
-        const amount = Number(r.amount ?? 0);
-        const value = Number(r.valueUsd ?? r.value ?? amount * price);
-        return {
-          name: r.name || r.symbol || 'Token',
-          symbol: r.symbol || '',
-          amount,
-          price,
-          priceUsd: price,
-          value,
-          valueUsd: value,
-          contract: r.address || null,
-          logo: r.logo || null,
-          chain: 'polygon'
-        };
-      });
-
-      return { native: nat, tokens: toks, totalUSD: Number(totalUsd || (nat?.valueUsd || 0) + toks.reduce((s, t) => s + (t.valueUsd || 0), 0)) };
-    }
+    const result = await buildPortfolioDetailed([{ address }], { only: chainCode, force: refreshBump > 0 });
+    const map = (t) => ({
+      ...t,
+      price: t.priceUsd,
+      value: t.valueUsd,
+      contract: t.address || 'native',
+      logo: t.iconUrl || null,
+      unpriced: t.priceUsd == null
+    });
+    const native = result.tokens.find((t) => !t.address || t.address === 'native');
+    return {
+      native: native ? map(native) : null,
+      tokens: result.tokens.filter((t) => t.address && t.address !== 'native').map(map),
+      totalUSD: result.totalUsd,
+      issues: result.issues
+    };
   }
 
   // --------- caching helpers ----------
-  const CHAINS_FOR_ALL = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
+  const CHAINS_FOR_ALL = (() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem('wallets') || '[]').find((w) => w.address?.toLowerCase() === address.toLowerCase())?.networks || [
+          'eth',
+          'pulse',
+          'bsc',
+          'polygon',
+          'base'
+        ]
+      );
+    } catch {
+      return ['eth', 'pulse', 'bsc', 'polygon', 'base'];
+    }
+  })();
   // bump cache version to avoid stale entries from older ETH path
-  const CACHE_VER = 'v2';
+  const CACHE_VER = 'v3';
   const cacheKey = (chain) => `${address}:${chain}:${CACHE_VER}`;
 
   function tryHydrateFromCache(chain) {
@@ -664,18 +420,26 @@ export default function WalletDetail() {
       // Provider-level cache fallback (ETH + Pulse) for instant hydrate
       if (!had) {
         try {
-          const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
-          const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
+          const ethC = getCachedJSON(`eth:tokens:v2:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
+          const plsC = getCachedJSON(`pls:tokens:v2:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
           const add = [];
           const pushList = (arr, chainCode) => {
             if (!Array.isArray(arr)) return;
             arr.forEach((t) => {
-              const mapped = mapTokenForCache({
-                symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
-                priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
-                contract: t.contract || t.address, logo: t.logo || t.iconUrl
-              }, chainCode);
-              if (!isTokenBlacklisted({ address: mapped.contract, symbol: mapped.symbol, name: mapped.name })) add.push({ ...mapped, chain: chainCode });
+              const mapped = mapTokenForCache(
+                {
+                  symbol: t.symbol,
+                  name: t.name,
+                  amount: t.amount ?? t.balance,
+                  priceUsd: t.priceUsd ?? t.price,
+                  valueUsd: t.valueUsd ?? t.value,
+                  contract: t.contract || t.address,
+                  logo: t.logo || t.iconUrl
+                },
+                chainCode
+              );
+              if (!isTokenBlacklisted({ address: mapped.contract, symbol: mapped.symbol, name: mapped.name }))
+                add.push({ ...mapped, chain: chainCode });
             });
           };
           pushList(Array.isArray(ethC) ? ethC : ethC?.tokens, 'eth');
@@ -683,9 +447,10 @@ export default function WalletDetail() {
           if (add.length) {
             mergedTokens = mergedTokens.concat(add);
             totalUsd += add.reduce((s, t) => s + (t.valueUsd || 0), 0);
-            had = true; stale = true;
+            had = true;
+            stale = true;
           }
-        } catch { }
+        } catch {}
       }
       if (had) {
         setNative(null);
@@ -704,38 +469,64 @@ export default function WalletDetail() {
       document.title = `Kinko Wallet - ${walletName} - ${fmtUSD(Number(snap.totalUsd || 0))}`;
       setLoading(false);
       // if ETH cache looks suspiciously small, force a refresh in background
-      const suspectSmallEth = (chain === 'eth' && cleaned.length <= 2);
-      return { hadCache: true, anyStale: (!!snap.stale) || suspectSmallEth };
+      const suspectSmallEth = chain === 'eth' && cleaned.length <= 2;
+      return { hadCache: true, anyStale: !!snap.stale || suspectSmallEth };
     }
     // Provider-level single-chain fallback
     try {
       if (chain === 'eth') {
-        const ethC = getCachedJSON(`eth:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
+        const ethC = getCachedJSON(`eth:tokens:v2:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
         const arr = Array.isArray(ethC) ? ethC : ethC?.tokens;
         if (Array.isArray(arr) && arr.length) {
-          const mapped = arr.map((t) => mapTokenForCache({
-            symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
-            priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
-            contract: t.contract || t.address, logo: t.logo || t.iconUrl
-          }, 'eth')).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
-          setNative(null); setTokens(mapped); setLoading(false);
+          const mapped = arr
+            .map((t) =>
+              mapTokenForCache(
+                {
+                  symbol: t.symbol,
+                  name: t.name,
+                  amount: t.amount ?? t.balance,
+                  priceUsd: t.priceUsd ?? t.price,
+                  valueUsd: t.valueUsd ?? t.value,
+                  contract: t.contract || t.address,
+                  logo: t.logo || t.iconUrl
+                },
+                'eth'
+              )
+            )
+            .filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
+          setNative(null);
+          setTokens(mapped);
+          setLoading(false);
           return { hadCache: true, anyStale: true };
         }
       }
       if (chain === 'pulse') {
-        const plsC = getCachedJSON(`pls:tokens:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
+        const plsC = getCachedJSON(`pls:tokens:v2:${address.toLowerCase()}`, 10 * 60 * 1000)?.data;
         const arr = Array.isArray(plsC) ? plsC : plsC?.tokens;
         if (Array.isArray(arr) && arr.length) {
-          const mapped = arr.map((t) => mapTokenForCache({
-            symbol: t.symbol, name: t.name, amount: t.amount ?? t.balance,
-            priceUsd: t.priceUsd ?? t.price, valueUsd: t.valueUsd ?? t.value,
-            contract: t.contract || t.address, logo: t.logo || t.iconUrl
-          }, 'pulse')).filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
-          setNative(null); setTokens(mapped); setLoading(false);
+          const mapped = arr
+            .map((t) =>
+              mapTokenForCache(
+                {
+                  symbol: t.symbol,
+                  name: t.name,
+                  amount: t.amount ?? t.balance,
+                  priceUsd: t.priceUsd ?? t.price,
+                  valueUsd: t.valueUsd ?? t.value,
+                  contract: t.contract || t.address,
+                  logo: t.logo || t.iconUrl
+                },
+                'pulse'
+              )
+            )
+            .filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
+          setNative(null);
+          setTokens(mapped);
+          setLoading(false);
           return { hadCache: true, anyStale: true };
         }
       }
-    } catch { }
+    } catch {}
     return { hadCache: false, anyStale: false };
   }
 
@@ -743,7 +534,7 @@ export default function WalletDetail() {
     const { tokens: tok, native: nat } = result || { tokens: [], native: null };
     const cachedTokensRaw = [
       ...(nat ? [mapTokenForCache({ ...nat, name: nat.name || nat.symbol || 'Native' }, chain)] : []),
-      ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : []),
+      ...(Array.isArray(tok) ? tok.map((t) => mapTokenForCache(t, chain)) : [])
     ];
     const cachedTokens = cachedTokensRaw.filter((t) => !isTokenBlacklisted({ address: t.contract, symbol: t.symbol, name: t.name }));
     const cachedTotal = Number.isFinite(result?.totalUSD)
@@ -765,34 +556,39 @@ export default function WalletDetail() {
       setErr('');
       setLoading(true);
 
-      const { hadCache, anyStale } = tryHydrateFromCache(activeChain);
+      const { hadCache } = tryHydrateFromCache(activeChain);
+      if (hadCache) setCoverageIssues([{ message: 'Showing cached holdings while refreshing.' }]);
 
       try {
-        if (!hadCache || anyStale) {
+        if (true) {
+          // Always revalidate; provider TTL prevents redundant network calls.
           let result;
           if (activeChain === 'all') {
             const parts = await Promise.allSettled(CHAINS_FOR_ALL.map(fetchOneChain));
-            const ok = parts
-              .map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null))
-              .filter(Boolean);
+            const ok = parts.map((p, i) => (p.status === 'fulfilled' ? { ...p.value, _c: CHAINS_FOR_ALL[i] } : null)).filter(Boolean);
 
             ok.forEach((r) => writeCache(r._c, r));
 
             const natRows = ok.map((r) => r.native).filter(Boolean);
             const tokRows = ok.flatMap((r) => r.tokens || []);
-            const cleaned = tokRows.filter((t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name }));
+            const cleaned = tokRows.filter(
+              (t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name })
+            );
             const totalUSD = ok.reduce((s, r) => s + (Number(r.totalUSD) || 0), 0);
-            result = { native: null, tokens: [...natRows, ...cleaned], totalUSD };
+            result = { native: null, tokens: [...natRows, ...cleaned], totalUSD, issues: ok.flatMap((r) => r.issues || []) };
           } else {
             result = await fetchOneChain(activeChain);
             // apply blacklist before caching & showing
-            const cleanedTok = (result.tokens || []).filter((t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name }));
+            const cleanedTok = (result.tokens || []).filter(
+              (t) => !isTokenBlacklisted({ address: t.contract || t.address, symbol: t.symbol, name: t.name })
+            );
             result = { ...result, tokens: cleanedTok };
             writeCache(activeChain, result);
           }
 
           if (!dead) {
             const { tokens: tok, native: nat, totalUSD } = result || { tokens: [], native: null, totalUSD: 0 };
+            setCoverageIssues(result.issues || []);
             setNative(nat ? { ...nat } : null);
             setTokens(Array.isArray(tok) ? tok : []);
             document.title = `Kinko Wallet - ${walletName} - ${fmtUSD(totalUSD)}`;
@@ -806,7 +602,9 @@ export default function WalletDetail() {
     }
 
     if (address) load();
-    return () => { dead = true; };
+    return () => {
+      dead = true;
+    };
   }, [address, walletName, activeChain, refreshBump]);
 
   // ----------------------------- table data & sorting -----------------------------
@@ -815,11 +613,11 @@ export default function WalletDetail() {
     const s = (q || '').trim().toLowerCase();
     const filtered = s
       ? base.filter(
-        (t) =>
-          (t.name || '').toLowerCase().includes(s) ||
-          (t.symbol || '').toLowerCase().includes(s) ||
-          (t.contract || '').toLowerCase().includes(s)
-      )
+          (t) =>
+            (t.name || '').toLowerCase().includes(s) ||
+            (t.symbol || '').toLowerCase().includes(s) ||
+            (t.contract || '').toLowerCase().includes(s)
+        )
       : base;
 
     const cmp = (a, b) => {
@@ -846,22 +644,20 @@ export default function WalletDetail() {
     return filtered.sort(cmp);
   }, [native, tokens, q, sortKey, sortDir]);
 
-  const totalUSD = useMemo(
-    () => items.reduce((s, t) => s + (t.value ?? t.valueUsd ?? 0), 0),
-    [items]
-  );
+  const totalUSD = useMemo(() => items.reduce((s, t) => s + (t.value ?? t.valueUsd ?? 0), 0), [items]);
 
   const onSort = (k) => {
     setSortKey((prev) => {
-      if (prev !== k) { setSortDir('desc'); return k; }
+      if (prev !== k) {
+        setSortDir('desc');
+        return k;
+      }
       setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
       return k;
     });
   };
 
-  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => { });
-
-  const chainName = (c) => (c === 'pulse' ? 'Pulse' : c === 'bsc' ? 'BSC' : c === 'polygon' ? 'Polygon' : c === 'base' ? 'Base' : 'ETH');
+  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
 
   // Trigger refresh (global or manual). Only clear caches when invoked manually.
   const onRefresh = (ctx = {}) => {
@@ -895,10 +691,9 @@ export default function WalletDetail() {
   return (
     <>
       <LoadingStyles /> {/* inject shimmer CSS */}
-      <ChipStyles />    {/* chip styles */}
+      <ChipStyles /> {/* chip styles */}
       <TokenCellStyles /> {/* token cell styles */}
       <WalletHeaderStyles /> {/* dark glass table head */}
-
       {/* HEADER */}
       <Row className="mb-4">
         <Col>
@@ -931,7 +726,6 @@ export default function WalletDetail() {
           </Card>
         </Col>
       </Row>
-
       {/* CONTROLS */}
       <Row className="kw-portfolio-controls">
         <Col md={6} className="kw-portfolio-controls__search">
@@ -947,7 +741,10 @@ export default function WalletDetail() {
               <button
                 type="button"
                 className="kw-search-clear"
-                onClick={() => { setQ(''); setTimeout(() => searchRef?.current?.focus?.(), 0); }}
+                onClick={() => {
+                  setQ('');
+                  setTimeout(() => searchRef?.current?.focus?.(), 0);
+                }}
                 aria-label="Clear search"
               >
                 ×
@@ -959,7 +756,6 @@ export default function WalletDetail() {
           {/* Refresh button removed – use sidebar refresh */}
         </Col>
       </Row>
-
       {/* TABLE */}
       <Row className="mb-2">
         <Col>
@@ -972,7 +768,6 @@ export default function WalletDetail() {
           </small>
         </Col>
       </Row>
-
       <Row>
         <Col>
           <Card className="shadow-sm">
@@ -982,34 +777,22 @@ export default function WalletDetail() {
                   <thead className="sticky-top kw-wallet-glass-header" style={{ position: 'sticky', top: 0 }}>
                     <tr>
                       <th style={{ width: '38%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('name')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('name')}>
                           Token {sortKey === 'name' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('price')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('price')}>
                           Price {sortKey === 'price' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('amount')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('amount')}>
                           Amount {sortKey === 'amount' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
                       <th className="text-end" style={{ width: '18%' }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none text-reset"
-                          onClick={() => onSort('value')}
-                        >
+                        <button className="btn btn-link p-0 text-decoration-none text-reset" onClick={() => onSort('value')}>
                           Value {sortKey === 'value' && (sortDir === 'asc' ? '▲' : '▼')}
                         </button>
                       </th>
@@ -1018,63 +801,94 @@ export default function WalletDetail() {
                   </thead>
 
                   <tbody>
-                    {loading && <LoadingRow label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} colSpan={5} />}
-                    {!loading && err && <tr><td colSpan={5} className="text-danger py-4 text-center">{err}</td></tr>}
+                    {coverageIssues.length > 0 && (
+                      <tr>
+                        <td colSpan={5} role="status" className="text-warning">
+                          Partial estimate: {[...new Set(coverageIssues.map((i) => i.message))].join(' ')} Unpriced assets are excluded from
+                          totals.
+                        </td>
+                      </tr>
+                    )}
+                    {loading && (
+                      <LoadingRow
+                        label={`Loading ${activeChain === 'pulse' ? 'PRC-20' : activeChain === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`}
+                        colSpan={5}
+                      />
+                    )}
+                    {!loading && err && (
+                      <tr>
+                        <td colSpan={5} className="text-danger py-4 text-center">
+                          {err}
+                        </td>
+                      </tr>
+                    )}
                     {!loading && !err && items.length === 0 && (
-                      <tr><td colSpan={5} className="py-4 text-center">No tokens found.</td></tr>
+                      <tr>
+                        <td colSpan={5} className="py-4 text-center">
+                          No tokens found.
+                        </td>
+                      </tr>
                     )}
 
-                    {!loading && !err && items.map((t, i) => {
-                      const price = (t.price ?? t.priceUsd ?? 0);
-                      const amount = (t.amount ?? 0);
-                      const value = (t.value ?? t.valueUsd ?? (amount * price));
-                      const c = (t.chain || activeChain);
+                    {!loading &&
+                      !err &&
+                      items.map((t, i) => {
+                        const price = t.price ?? t.priceUsd ?? 0;
+                        const amount = t.amount ?? 0;
+                        const value = t.value ?? t.valueUsd ?? amount * price;
+                        const c = t.chain || activeChain;
 
-                      // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
-                      const addrForLogo = (t.contract && t.contract !== 'native') ? t.contract : null;
+                        // For TokenLogo, pass null for natives so it uses the chain proxy (WETH/WPLS)
+                        const addrForLogo = t.contract && t.contract !== 'native' ? t.contract : null;
 
-                      return (
-                        <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
-                          <td>
-                            <div className="kw-cell">
-                              <TokenLogo
-                                chainId={chainIdOf(c)}
-                                address={addrForLogo}
-                                symbol={t.symbol}
-                                logoURI={t.logo}
-                                size={28}                 // set to 36 if you want it larger
-                                className="kw-logo"
-                              />
-                              <div className="kw-name">
-                                <div className="kw-symbol">
-                                  <strong>{t.symbol || '—'}</strong>
-                                  <span className="kw-name-inline">
-                                    {' - '}{t.name || short(t.contract)}
-                                  </span>
-                                </div>
-                                <div className="kw-sub">
-                                  {activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}
+                        return (
+                          <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
+                            <td>
+                              <div className="kw-cell">
+                                <TokenLogo
+                                  chainId={chainIdOf(c)}
+                                  address={addrForLogo}
+                                  symbol={t.symbol}
+                                  logoURI={t.logo}
+                                  size={28} // set to 36 if you want it larger
+                                  className="kw-logo"
+                                />
+                                <div className="kw-name">
+                                  <div className="kw-symbol">
+                                    <strong>{t.symbol || '—'}</strong>
+                                    <span className="kw-name-inline">
+                                      {' - '}
+                                      {t.name || short(t.contract)}
+                                    </span>
+                                  </div>
+                                  <div className="kw-sub">{activeChain === 'all' && <ChainChip chain={c} style={{ marginLeft: 0 }} />}</div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
 
-                          <td className="text-end"><span className="kw-price">{fmtPriceUSD(price)}</span></td>
-                          <td className="text-end">{fmtNum(amount)}</td>
-                          <td className="text-end"><strong>{fmtUSD(value)}</strong></td>
-                          <td>
-                            <span
-                              className="badge bg-secondary"
-                              style={{ cursor: t.contract ? 'pointer' : 'default' }}
-                              title={t.contract ? 'Copy contract' : undefined}
-                              onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
-                            >
-                              {t.contract ? short(t.contract) : 'native'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <td className="text-end">
+                              <span className="kw-price">{t.unpriced ? 'Unavailable' : fmtPriceUSD(price)}</span>
+                            </td>
+                            <td className="text-end" title={t.amountExact}>
+                              {fmtNum(amount)}
+                              {t.stale && <small className="d-block text-warning">Cached</small>}
+                            </td>
+                            <td className="text-end">
+                              <strong>{t.unpriced ? 'Unavailable' : fmtUSD(value)}</strong>
+                            </td>
+                            <td>
+                              <span
+                                className="badge bg-secondary"
+                                style={{ cursor: t.contract ? 'pointer' : 'default' }}
+                                title={t.contract ? 'Copy contract' : undefined}
+                                onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
+                              >
+                                {t.contract ? short(t.contract) : 'native'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -1082,7 +896,6 @@ export default function WalletDetail() {
           </Card>
         </Col>
       </Row>
-
       {/* QR MODAL */}
       <Modal show={showQR} onHide={() => setShowQR(false)} centered>
         <Modal.Header closeButton>
@@ -1096,8 +909,16 @@ export default function WalletDetail() {
             style={{ imageRendering: 'pixelated' }}
             src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(address)}`}
           />
-          <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{address}</div>
-          <Button className="mt-3" onClick={() => { navigator.clipboard?.writeText(address); setShowQR(false); }}>
+          <div className="mt-3" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>
+            {address}
+          </div>
+          <Button
+            className="mt-3"
+            onClick={() => {
+              navigator.clipboard?.writeText(address);
+              setShowQR(false);
+            }}
+          >
             Copy Address
           </Button>
         </Modal.Body>
@@ -1105,4 +926,3 @@ export default function WalletDetail() {
     </>
   );
 }
-

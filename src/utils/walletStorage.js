@@ -1,16 +1,11 @@
-// src/utils/walletStorage.js
-
+import { normalizeWallets } from './walletRecords.js';
 export function loadWallets() {
   try {
-    const data = localStorage.getItem('wallets');
-    const arr = data ? JSON.parse(data) : [];
-    const list = Array.isArray(arr) ? arr : [];
-    return list.filter((w) => !w?.hidden);
+    return normalizeWallets(JSON.parse(localStorage.getItem('wallets') || '[]')).filter((w) => !w.hidden);
   } catch {
     return [];
   }
 }
-
 export function saveWallets(wallets) {
-  localStorage.setItem('wallets', JSON.stringify(wallets));
+  localStorage.setItem('wallets', JSON.stringify(normalizeWallets(wallets, { strict: true })));
 }
