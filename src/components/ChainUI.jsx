@@ -1,14 +1,13 @@
 // src/components/ChainUI.jsx
-import React from 'react';
 
 // Accent colours (kept soft so they work on light/dark)
 export const CHAIN_COLORS = {
-  all:   'var(--bs-primary, #0d6efd)',
-  eth:   '#2ecc71',
+  all: 'var(--bs-primary, #0d6efd)',
+  eth: '#2ecc71',
   pulse: '#cc08c6',
   // BSC brand yellow
-  bsc:   '#F3BA2F',
-  base:  '#3498db',
+  bsc: '#F3BA2F',
+  base: '#3498db',
   polygon: '#7b3fe4'
 };
 
@@ -41,9 +40,9 @@ export function ChainChip({ chain = 'eth', className = '', style }) {
   const bg = CHAIN_COLORS[key] || CHAIN_COLORS.eth;
   const baseStyle = {
     display: 'inline-block',
-    padding: '1px 6px',     // in-between padding
-    borderRadius: 6,        // subtle rounded
-    fontSize: 10,           // halfway between 8.5 and old ~12
+    padding: '1px 6px', // in-between padding
+    borderRadius: 6, // subtle rounded
+    fontSize: 10, // halfway between 8.5 and old ~12
     lineHeight: 1.2,
     fontWeight: 500,
     // BSC chip uses dark text for contrast on yellow
@@ -77,7 +76,11 @@ export function ChainBadge({ chain = 'eth', children }) {
     boxShadow: '0 1px 0 rgba(0,0,0,.15)',
     minWidth: 56
   };
-  return <span className="k-chain-badge" style={style}>{children ?? key.toUpperCase()}</span>;
+  return (
+    <span className="k-chain-badge" style={style}>
+      {children ?? key.toUpperCase()}
+    </span>
+  );
 }
 
 /** Selector pill used in headers */
@@ -85,7 +88,7 @@ export function ChainSelector({
   value = 'all',
   onChange,
   // Order: All, Ethereum, PulseChain, BSC, Base
-  options = ['all','eth','pulse','bsc','polygon','base'],
+  options = ['all', 'eth', 'pulse', 'bsc', 'polygon', 'base'],
   size = 'sm'
 }) {
   const safeValue = normalizeChain(value) === 'all' ? 'all' : normalizeChain(value);
@@ -111,21 +114,29 @@ export function ChainSelector({
   };
 
   return (
-    <div className="d-inline-flex align-items-center gap-2">
+    <div className="k-chain-selector d-inline-flex align-items-center gap-2" role="group" aria-label="Filter by network">
       {options.map((c) => {
         const canonical = normalizeChain(c) === 'all' ? 'all' : normalizeChain(c);
         const active = safeValue === canonical;
         const label =
-          canonical === 'all' ? 'All' :
-          canonical === 'eth' ? 'Ethereum' :
-          canonical === 'pulse' ? 'PulseChain' :
-          canonical === 'bsc' ? 'BSC' :
-          canonical === 'polygon' ? 'Polygon' :
-          canonical === 'base' ? 'Base' : canonical;
+          canonical === 'all'
+            ? 'All'
+            : canonical === 'eth'
+              ? 'Ethereum'
+              : canonical === 'pulse'
+                ? 'PulseChain'
+                : canonical === 'bsc'
+                  ? 'BSC'
+                  : canonical === 'polygon'
+                    ? 'Polygon'
+                    : canonical === 'base'
+                      ? 'Base'
+                      : canonical;
 
         return (
           <button
             key={canonical}
+            aria-pressed={active}
             type="button"
             className={`k-chain-btn badge ${active ? 'is-active' : ''}`}
             style={btnStyle(active, canonical)}

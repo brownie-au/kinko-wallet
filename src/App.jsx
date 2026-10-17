@@ -1,5 +1,6 @@
 // Global styles (order matters)
 import './styles/chain-ui.css';
+import './styles/kw-mobile.css';
 
 // React / Router
 import { useEffect, useRef, useState } from 'react';
@@ -17,18 +18,6 @@ import { PortfolioValueProvider } from 'contexts/PortfolioValueContext';
 
 // NEW: background snapshot prefetcher
 import { prefetchAllManaged } from './services/snapshotService';
-
-// Keep any other CSS before the hotfix
-import './styles/kw-gap-fix.css';
-
-// Keep this import LAST among CSS files (still good practice)
-import './styles/kw-spacing-hotfix.css';
-
-// Injected, always-wins gap killer
-import KwNoGap from './components/kw-NoGap';
-
-// NEW: runtime gap canceller (measures & offsets any residual gap)
-import KwGapCancel from './components/kw-GapCancel';
 
 // Rate-limit handling: axios backoff + toast
 import axios from 'axios';
@@ -130,8 +119,7 @@ function App() {
       <WalletProvider>
         <PortfolioValueProvider>
           <PreloadSnapshots />
-          <KwNoGap />
-          <KwGapCancel />
+
           <RouterProvider router={router} />
           <RateLimitToast />
         </PortfolioValueProvider>

@@ -32,23 +32,19 @@ export default function PortfolioIdModal({ show, onHide, onSuccess }) {
         const normalized = all.map((w) => ({
           address: String(w?.address || '').trim(),
           name: String(w?.name || '').trim(),
-          hidden: !!w?.hidden,
+          hidden: !!w?.hidden
         }));
         localStorage.setItem('wallets', JSON.stringify(normalized));
 
         // Update context with visible-only list for the rest of the app
-        const visible = normalized
-          .filter((w) => !w.hidden)
-          .map(({ address, name }) => ({ address, name }));
+        const visible = normalized.filter((w) => !w.hidden).map(({ address, name }) => ({ address, name }));
         replaceWallets(visible);
       } catch {
         // Fallback: still try to update context even if LS write fails
         try {
-          const visible = (Array.isArray(wallets) ? wallets : [])
-            .filter((w) => !w?.hidden)
-            .map(({ address, name }) => ({ address, name }));
+          const visible = (Array.isArray(wallets) ? wallets : []).filter((w) => !w?.hidden).map(({ address, name }) => ({ address, name }));
           replaceWallets(visible);
-        } catch { }
+        } catch {}
       }
 
       onHide?.();
@@ -69,28 +65,24 @@ export default function PortfolioIdModal({ show, onHide, onSuccess }) {
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered>
+    <Modal show={show} onHide={onHide} centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Use Portfolio ID</Modal.Title>
       </Modal.Header>
 
       <Modal.Body>
-        <Form.Group className="mb-3">
+        <Form.Group controlId="load-portfolio-id" className="mb-3">
           <Form.Label>Enter Portfolio ID</Form.Label>
-          <Form.Control
-            value={id}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            placeholder="e.g. KJ8NR4MF"
-            disabled={busy}
-          />
+          <Form.Control value={id} onChange={onChange} onKeyDown={onKeyDown} placeholder="e.g. KJ8NR4MF" disabled={busy} />
         </Form.Group>
 
-        {err && <Alert variant="danger" className="mb-0">{err}</Alert>}
+        {err && (
+          <Alert variant="danger" className="mb-0">
+            {err}
+          </Alert>
+        )}
 
-        <div className="text-muted small mt-2">
-          Loads wallets from the remote store and replaces current session.
-        </div>
+        <div className="text-muted small mt-2">Loads wallets from the remote store and replaces current session.</div>
       </Modal.Body>
 
       <Modal.Footer>
@@ -100,7 +92,8 @@ export default function PortfolioIdModal({ show, onHide, onSuccess }) {
         <Button variant="primary" onClick={submit} disabled={busy || !id.trim()}>
           {busy ? (
             <>
-              <Spinner size="sm" className="me-2" />Loading…
+              <Spinner size="sm" className="me-2" />
+              Loading…
             </>
           ) : (
             'Load'

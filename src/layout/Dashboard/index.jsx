@@ -15,6 +15,9 @@ export default function MainLayout() {
 
   return (
     <div className="kw-app">
+      <a className="kw-skip-link" href="#kw-main">
+        Skip to content
+      </a>
       <Customizer />
       <Drawer />
 
@@ -25,14 +28,14 @@ export default function MainLayout() {
 
       <Header />
 
-      <div className="pc-container">
+      <main id="kw-main" tabIndex={-1} className="pc-container">
         <div className={`pc-content ${container ? 'container' : ''}`}>
           <Breadcrumbs />
           <NavigationScroll>
             <Outlet />
           </NavigationScroll>
         </div>
-      </div>
+      </main>
 
       <Footer />
     </div>

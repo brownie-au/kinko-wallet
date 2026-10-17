@@ -89,3 +89,7 @@ Provider references used during implementation: [Blockscout account API](https:/
 This development branch is prepared for review against `main`. Production deployment requires separate owner approval. The portable delivery package also includes a review patch; it intentionally omits old credential-file contents to avoid reproducing exposed values.
 
 Validation completed: 10 automated tests pass; production build passes; changed source files have 0 ESLint errors and 12 warnings. The repaired npm lock passes `npm ci --legacy-peer-deps --ignore-scripts --dry-run`. The review patch applies cleanly to the original base commit. Browser and live-provider limitations remain as described above.
+
+## Mobile UI follow-up
+
+The development branch now includes a mobile presentation and accessibility pass. See [MOBILE-UX-REVIEW.md](MOBILE-UX-REVIEW.md) for the concrete changes, source-audit scope and outstanding browser acceptance matrix. This adds no signing, transaction or private-key functionality. The previous runtime spacing injectors were replaced with scoped layout CSS. Browser verification is still blocked by preview authentication and remote loopback access, so this remains a draft for review.

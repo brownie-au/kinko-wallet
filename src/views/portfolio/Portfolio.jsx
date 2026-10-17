@@ -1,3 +1,5 @@
+import ExactAmount from '../../components/ExactAmount';
+import { Link } from 'react-router-dom';
 import { walletSignature } from '../../utils/walletSig.js';
 // src/views/portfolio/Portfolio.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -1022,7 +1024,13 @@ export default function Portfolio() {
                     {selectedWallet === 'all' ? 'All Wallets' : walletName(selectedWallet)}
                   </div>
 
-                  <h2 className="mb-1 kw-grand-total">{fmtUSD(headerTotalUsd)}</h2>
+                  <h1 className="mb-1 kw-grand-total">
+                    {booting
+                      ? 'Loading…'
+                      : tokens.length === 0 && (error || coverageIssues.length)
+                        ? 'Unavailable'
+                        : fmtUSD(headerTotalUsd)}
+                  </h1>
 
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-1" style={{ fontSize: 12 }}>
                     {assetChips.map((r) => {
@@ -1095,7 +1103,8 @@ export default function Portfolio() {
           <div className="kw-search-wrap kw-portfolio-search">
             <Form.Control
               className="kw-wallet-search-input"
-              placeholder="Search"
+              placeholder="Search tokens or contracts"
+              aria-label="Search tokens or contracts"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               ref={searchRef}
@@ -1135,7 +1144,7 @@ export default function Portfolio() {
               <option value="name">Alphabetical</option>
             </Form.Select>
             <Button variant="outline-secondary" disabled={refreshing || booting} onClick={() => load(true)}>
-              Refresh
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           </div>
           <Form.Check
@@ -1174,11 +1183,14 @@ export default function Portfolio() {
           <Card.Body role="status">
             <strong>Partial portfolio estimate</strong>
             <div>Some balances are unavailable or cached. Unpriced assets are excluded from the estimated total.</div>
-            <ul className="mb-0">
-              {[...new Set(coverageIssues.map((i) => `${i.chain}: ${i.message}`))].map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
+            <details>
+              <summary>View network notices</summary>
+              <ul className="mb-0">
+                {[...new Set(coverageIssues.map((i) => `${i.chain}: ${i.message}`))].map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            </details>
           </Card.Body>
         </Card>
       )}
@@ -1197,14 +1209,45 @@ export default function Portfolio() {
         <Col>
           <Card className="shadow-sm kwp-scope">
             <Card.Header>
-              <strong>Top Tokens</strong>
+              <strong>Assets</strong>
             </Card.Header>
             <Card.Body>
               {booting && (
                 <LoadingBlock label={`Loading ${mode === 'pulse' ? 'PRC-20' : mode === 'all' ? 'ERC-20 & PRC-20' : 'ERC-20'}…`} />
               )}
 
-              {!booting && visibleTokens.length === 0 && <div className="text-muted">No tokens found.</div>}
+              {!booting && visibleTokens.length === 0 && (
+                <div className="kw-empty" role="status">
+                  <h3>
+                    {walletCount === 0
+                      ? 'Start with a public wallet address'
+                      : q || hideSmall
+                        ? 'No assets match these filters'
+                        : 'No holdings available'}
+                  </h3>
+                  <p>
+                    {walletCount === 0
+                      ? 'Track your holdings without connecting or signing.'
+                      : 'Try another network, clear your filters, or refresh. Check any provider notices above.'}
+                  </p>
+                  {walletCount === 0 ? (
+                    <Link className="btn btn-primary" to="/wallets/manage">
+                      Add a wallet
+                    </Link>
+                  ) : (
+                    <Button
+                      variant="outline-secondary"
+                      onClick={() => {
+                        setQ('');
+                        setHideSmall(false);
+                        localStorage.setItem('kw:hideSmall', 'false');
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {!booting &&
                 visibleTokens.map((t, i) => {
@@ -1249,7 +1292,7 @@ export default function Portfolio() {
                             </div>
                             <div className="kwp-sub d-flex align-items-center">
                               {mode === 'all' && <ChainBadge chain={t.chain}>{label}</ChainBadge>}
-                              {mode === 'all' && !!copyAddr && (
+                              {!!copyAddr && (
                                 <button
                                   type="button"
                                   className="kw-copy-btn"
@@ -1277,9 +1320,9 @@ export default function Portfolio() {
                               Amount
                             </div>
                             <div>
-                              <span title={t.amountExact}>
+                              <ExactAmount value={t.amountExact}>
                                 {fmtAmt(t.amount)} {t.symbol}
-                              </span>
+                              </ExactAmount>
                               {t.stale && <small className="text-warning ms-1">Cached</small>}
                             </div>
                           </div>
@@ -1296,15 +1339,21 @@ export default function Portfolio() {
                             <ChangeBadge pct={delta} source={changeSource} />
                           </div>
                           <div style={{ width: 'var(--kw-action)' }}>
-                            <button className="btn btn-sm btn-outline-secondary w-100" onClick={() => toggleExpand(k)}>
-                              {open ? 'Hide' : 'Expand'}
+                            <button
+                              className="btn btn-sm btn-outline-secondary w-100"
+                              aria-expanded={open}
+                              aria-controls={`holdings-${i}`}
+                              onClick={() => toggleExpand(k)}
+                            >
+                              {open ? 'Hide details' : 'Details'}
                             </button>
                           </div>
                         </div>
                       </div>
 
                       {open && (
-                        <div className="kwp-break">
+                        <div id={`holdings-${i}`} className="kwp-break">
+                          <div className="kw-full-contract">{copyAddr || 'Native asset'}</div>
                           <div className="kwp-break-hdr">
                             <div className="kwp-break-title text-muted">Balance Breakdown</div>
                             <div /> <div /> <div /> <div /> <div />
@@ -1335,14 +1384,26 @@ export default function Portfolio() {
 
                             return (
                               <div key={idx} className="kwp-break-row">
-                                <div className="kwp-break-name">{walletName(r.wallet)}</div>
+                                <div className="kwp-break-name">
+                                  {walletName(r.wallet)}
+                                  <div className="kw-full-contract">{r.wallet}</div>
+                                </div>
                                 <div></div>
                                 {/* price placeholder */}
                                 <div className="kwp-right">
-                                  {fmtAmt(r.amount)} {t.symbol}
+                                  <span className="kw-mobile-label">Amount </span>
+                                  <ExactAmount value={r.amountExact}>
+                                    {fmtAmt(r.amount)} {t.symbol}
+                                  </ExactAmount>
                                 </div>
-                                <div className="kwp-right">{fmtUSD(valNow)}</div>
-                                <div className={cls}>{deltaUsd == null ? '—' : fmtUSD(Math.abs(deltaUsd))}</div>
+                                <div className="kwp-right">
+                                  <span className="kw-mobile-label">Value </span>
+                                  {t.priceUsd == null ? 'Unavailable' : fmtUSD(valNow)}
+                                </div>
+                                <div className={cls}>
+                                  <span className="kw-mobile-label">24h change </span>
+                                  {deltaUsd == null ? '—' : fmtUSD(Math.abs(deltaUsd))}
+                                </div>
                                 <div></div>
                                 {/* action placeholder */}
                               </div>
@@ -1359,7 +1420,9 @@ export default function Portfolio() {
       </Row>
 
       {/* toast */}
-      <div className={`kw-toast ${toast.show ? 'show' : ''}`}>{toast.text}</div>
+      <div role="status" aria-live="polite" className={`kw-toast ${toast.show ? 'show' : ''}`}>
+        {toast.text}
+      </div>
     </>
   );
 }

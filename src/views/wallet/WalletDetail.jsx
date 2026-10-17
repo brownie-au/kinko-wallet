@@ -1,3 +1,4 @@
+import ExactAmount from '../../components/ExactAmount';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Row, Col, Card, Button, Form, Modal } from 'react-bootstrap';
@@ -125,8 +126,9 @@ const IconButton = ({ title, onClick, children }) => (
   <button
     type="button"
     className="btn btn-sm btn-outline-secondary p-1 d-inline-flex align-items-center justify-content-center"
-    style={{ width: 24, height: 24, borderRadius: 6 }}
+    style={{ width: 44, height: 44, borderRadius: 6 }}
     title={title}
+    aria-label={title}
     onClick={onClick}
   >
     {children}
@@ -313,6 +315,7 @@ export default function WalletDetail() {
   const refreshTaskRef = useRef(async () => {});
   const [sortKey, setSortKey] = useState('value');
   const [sortDir, setSortDir] = useState('desc');
+  const [copyNotice, setCopyNotice] = useState('');
   const [showQR, setShowQR] = useState(false);
   const [refreshBump, setRefreshBump] = useState(0); // manual refresh trigger
 
@@ -657,7 +660,14 @@ export default function WalletDetail() {
     });
   };
 
-  const copy = (txt) => navigator.clipboard?.writeText(txt).catch(() => {});
+  const copy = async (txt) => {
+    try {
+      await navigator.clipboard.writeText(txt);
+      setCopyNotice('Copied to clipboard.');
+    } catch {
+      setCopyNotice('Copy unavailable. Select the full address to copy it.');
+    }
+  };
 
   // Trigger refresh (global or manual). Only clear caches when invoked manually.
   const onRefresh = (ctx = {}) => {
@@ -706,7 +716,9 @@ export default function WalletDetail() {
                   </div>
 
                   {/* Grand USD total – unified typography */}
-                  <h2 className="mb-1 kw-grand-total">{fmtUSD(totalUSD)}</h2>
+                  <h1 className="mb-1 kw-grand-total">
+                    {loading ? 'Loading…' : !items.length && (err || coverageIssues.length) ? 'Unavailable' : fmtUSD(totalUSD)}
+                  </h1>
 
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                     <span style={addrStyle}>{short(address)}</span>
@@ -726,13 +738,17 @@ export default function WalletDetail() {
           </Card>
         </Col>
       </Row>
+      <div role="status" aria-live="polite">
+        {copyNotice}
+      </div>
       {/* CONTROLS */}
       <Row className="kw-portfolio-controls">
         <Col md={6} className="kw-portfolio-controls__search">
           <div className="kw-search-wrap kw-portfolio-search">
             <Form.Control
               className="kw-wallet-search-input"
-              placeholder="Search"
+              placeholder="Search tokens or contracts"
+              aria-label="Search tokens or contracts"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               ref={searchRef}
@@ -753,7 +769,28 @@ export default function WalletDetail() {
           </div>
         </Col>
         <Col md={6} className="text-md-end kw-portfolio-controls__actions">
-          {/* Refresh button removed – use sidebar refresh */}
+          <Button variant="outline-secondary" disabled={loading} onClick={() => onRefresh()}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Form.Select
+            className="kw-mobile-sort"
+            aria-label="Sort holdings"
+            value={`${sortKey}:${sortDir}`}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(':');
+              setSortKey(key);
+              setSortDir(dir);
+            }}
+          >
+            <option value="value:desc">Highest value</option>
+            <option value="value:asc">Lowest value</option>
+            <option value="name:asc">Name A–Z</option>
+            <option value="name:desc">Name Z–A</option>
+            <option value="amount:desc">Highest amount</option>
+            <option value="amount:asc">Lowest amount</option>
+            <option value="price:desc">Highest price</option>
+            <option value="price:asc">Lowest price</option>
+          </Form.Select>
         </Col>
       </Row>
       {/* TABLE */}
@@ -773,7 +810,7 @@ export default function WalletDetail() {
           <Card className="shadow-sm">
             <Card.Body className="p-0">
               <div className="table-responsive">
-                <table className="table table-hover mb-0 align-middle">
+                <table className="table table-hover mb-0 align-middle kw-holdings-table">
                   <thead className="sticky-top kw-wallet-glass-header" style={{ position: 'sticky', top: 0 }}>
                     <tr>
                       <th style={{ width: '38%' }}>
@@ -825,7 +862,9 @@ export default function WalletDetail() {
                     {!loading && !err && items.length === 0 && (
                       <tr>
                         <td colSpan={5} className="py-4 text-center">
-                          No tokens found.
+                          {q
+                            ? 'No tokens match your search.'
+                            : 'No holdings available for this network. Check provider notices or refresh.'}
                         </td>
                       </tr>
                     )}
@@ -842,7 +881,7 @@ export default function WalletDetail() {
                         const addrForLogo = t.contract && t.contract !== 'native' ? t.contract : null;
 
                         return (
-                          <tr key={`${t.contract || t.symbol || 'row'}-${i}`}>
+                          <tr className="kw-holding-row" key={`${t.contract || t.symbol || 'row'}-${i}`}>
                             <td>
                               <div className="kw-cell">
                                 <TokenLogo
@@ -866,25 +905,28 @@ export default function WalletDetail() {
                               </div>
                             </td>
 
-                            <td className="text-end">
+                            <td className="text-end" data-label="Price">
                               <span className="kw-price">{t.unpriced ? 'Unavailable' : fmtPriceUSD(price)}</span>
                             </td>
-                            <td className="text-end" title={t.amountExact}>
-                              {fmtNum(amount)}
+                            <td className="text-end" data-label="Amount">
+                              <ExactAmount value={t.amountExact}>{fmtNum(amount)}</ExactAmount>
                               {t.stale && <small className="d-block text-warning">Cached</small>}
                             </td>
-                            <td className="text-end">
+                            <td className="text-end" data-label="Value">
                               <strong>{t.unpriced ? 'Unavailable' : fmtUSD(value)}</strong>
                             </td>
                             <td>
-                              <span
-                                className="badge bg-secondary"
-                                style={{ cursor: t.contract ? 'pointer' : 'default' }}
-                                title={t.contract ? 'Copy contract' : undefined}
-                                onClick={() => t.contract && navigator.clipboard?.writeText(t.contract)}
-                              >
-                                {t.contract ? short(t.contract) : 'native'}
-                              </span>
+                              {t.contract && t.contract !== 'native' ? (
+                                <details className="kw-exact">
+                                  <summary>Contract</summary>
+                                  <span className="kw-exact-value">{t.contract}</span>
+                                  <Button variant="outline-secondary" size="sm" onClick={() => copy(t.contract)}>
+                                    Copy contract
+                                  </Button>
+                                </details>
+                              ) : (
+                                <span>Native asset</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -915,7 +957,7 @@ export default function WalletDetail() {
           <Button
             className="mt-3"
             onClick={() => {
-              navigator.clipboard?.writeText(address);
+              copy(address);
               setShowQR(false);
             }}
           >

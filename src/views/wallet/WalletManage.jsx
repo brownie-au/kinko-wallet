@@ -1,7 +1,7 @@
 // src/views/wallet/WalletManage.jsx
 import { useState, useEffect, useRef } from 'react';
 import { Card, Button, Form, Row, Col, ListGroup, Alert, ButtonGroup, InputGroup, Modal } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useWallets } from '../../contexts/WalletContext.jsx';
 import CreatePortfolioIdModal from '../../components/CreatePortfolioIdModal.jsx';
 import PortfolioIdModal from '../../components/PortfolioIdModal.jsx';
@@ -28,6 +28,7 @@ const ACTION_BTN_STYLE = {
 };
 
 const WalletManage = () => {
+  const navigate = useNavigate();
   const importRef = useRef(null);
   const [notice, setNotice] = useState('');
   const [networks, setNetworks] = useState([...NETWORKS]);
@@ -324,41 +325,55 @@ const WalletManage = () => {
     setWallets(next);
   };
 
+  const moveWallet = (index, direction) => {
+    const next = [...wallets];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    if (writeAll(next)) {
+      setWallets(next);
+      setNotice('Wallet order updated.');
+    }
+  };
   return (
     <div className="kw-wallet-manage">
-      <h2 className="mb-3">Manage Wallets</h2>
+      <h1 className="mb-2">Manage Wallets</h1>
+      <p className="text-muted">Watch-only tracking. Add a public address, choose networks, and view your holdings.</p>
 
-      <div className="mb-3 d-flex justify-content-start gap-2 flex-wrap">
-        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowUseId(true)}>
-          Use Portfolio ID
-        </Button>
-        <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowCreateId(true)}>
-          Create / Update Portfolio ID
-        </Button>
-        <Button variant="outline-danger" className="rounded-pill" onClick={() => setShowLogout(true)} title="Log out of this device">
-          Logout
-        </Button>
-      </div>
+      <details className="kw-wallet-tools mb-3">
+        <summary>Backups &amp; Portfolio ID</summary>
+        <div className="mb-3 d-flex justify-content-start gap-2 flex-wrap">
+          <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowUseId(true)}>
+            Use Portfolio ID
+          </Button>
+          <Button variant="outline-secondary" className="rounded-pill" onClick={() => setShowCreateId(true)}>
+            Create / Update Portfolio ID
+          </Button>
+          <Button variant="outline-danger" className="rounded-pill" onClick={() => setShowLogout(true)} title="Log out of this device">
+            Clear this device
+          </Button>
+        </div>
 
-      <p className="text-muted">
-        Watch-only. Your cryptocurrency stays in your existing wallets. No private keys, recovery phrases or signatures required.
-      </p>
-      <div className="d-flex gap-2 flex-wrap mb-3">
-        <Button variant="outline-secondary" onClick={exportWallets} disabled={!wallets.length}>
-          Export backup
-        </Button>
-        <Button variant="outline-secondary" onClick={() => importRef.current?.click()}>
-          Import backup
-        </Button>
-        <input
-          ref={importRef}
-          type="file"
-          accept=".json,application/json"
-          className="d-none"
-          aria-label="Import wallet backup"
-          onChange={importWallets}
-        />
-      </div>
+        <p className="text-muted">
+          Watch-only. Your cryptocurrency stays in your existing wallets. No private keys, recovery phrases or signatures required.
+        </p>
+        <div className="d-flex gap-2 flex-wrap mb-3">
+          <Button variant="outline-secondary" onClick={exportWallets} disabled={!wallets.length}>
+            Export backup
+          </Button>
+          <Button variant="outline-secondary" onClick={() => importRef.current?.click()}>
+            Import backup
+          </Button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json,application/json"
+            className="d-none"
+            aria-label="Import wallet backup"
+            onChange={importWallets}
+          />
+        </div>
+      </details>
       {notice && (
         <Alert variant="info" dismissible onClose={() => setNotice('')}>
           {notice}
@@ -376,6 +391,9 @@ const WalletManage = () => {
                     ref={addressInputRef}
                     type="text"
                     placeholder="0x1234...abcd"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={address}
                     onChange={(e) => {
                       setAddress(e.target.value);
@@ -424,7 +442,7 @@ const WalletManage = () => {
             </small>
           </Form>
           {error && (
-            <Alert variant="danger" className="mt-3">
+            <Alert variant="danger" role="alert" className="mt-3">
               {error}
             </Alert>
           )}
@@ -456,10 +474,9 @@ const WalletManage = () => {
                   onDragEnd={onDragEnd}
                 >
                   <div className="flex-grow-1 me-3" style={{ minWidth: 0 }}>
-                    <div className="text-truncate">
+                    <div className="kw-wallet-identity">
                       <span
-                        role="button"
-                        aria-label="Drag to reorder"
+                        aria-hidden="true"
                         title="Drag to reorder"
                         draggable
                         onDragStart={onDragStart(idx)}
@@ -481,7 +498,7 @@ const WalletManage = () => {
                         {/* standard 3-line hamburger */}
                         <span style={{ fontSize: 14, lineHeight: 1 }}>☰</span>
                       </span>
-                      <strong>{w.address}</strong>
+                      <strong className="kw-full-address">{w.address}</strong>
                       {' - '}
                       {!isEditing ? (
                         <>
@@ -496,6 +513,8 @@ const WalletManage = () => {
                             onChange={(e) => setTempName(e.target.value)}
                             onKeyDown={(e) => onEditKey(e, idx)}
                             placeholder="Wallet name"
+                            aria-label="Edit wallet name"
+                            maxLength={120}
                           />
                           <Button variant="primary" onClick={() => saveEdit(idx)}>
                             Save
@@ -543,6 +562,19 @@ const WalletManage = () => {
                     >
                       Copy address
                     </Button>
+                    <div className="d-flex gap-2" role="group" aria-label={`Reorder ${w.name || w.address}`}>
+                      <Button size="sm" variant="outline-secondary" disabled={idx === 0} onClick={() => moveWallet(idx, -1)}>
+                        Move up
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        disabled={idx === wallets.length - 1}
+                        onClick={() => moveWallet(idx, 1)}
+                      >
+                        Move down
+                      </Button>
+                    </div>
                   </div>
 
                   {!isEditing && (
@@ -680,7 +712,7 @@ const WalletManage = () => {
       </Card>
 
       {/* Delete confirmation modal */}
-      <Modal show={confirmIdx !== null} onHide={() => setConfirmIdx(null)} centered backdrop="static" keyboard>
+      <Modal show={confirmIdx !== null} onHide={() => setConfirmIdx(null)} centered scrollable backdrop="static" keyboard>
         <Modal.Header closeButton>
           <Modal.Title>Are you sure?</Modal.Title>
         </Modal.Header>
@@ -696,9 +728,9 @@ const WalletManage = () => {
       </Modal>
 
       {/* Logout confirmation */}
-      <Modal show={showLogout} onHide={() => setShowLogout(false)} centered backdrop="static" keyboard>
+      <Modal show={showLogout} onHide={() => setShowLogout(false)} centered scrollable backdrop="static" keyboard>
         <Modal.Header closeButton>
-          <Modal.Title>Log out?</Modal.Title>
+          <Modal.Title>Clear wallets from this device?</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           Logging out will remove all your wallets from this browser. Make sure you have created and copied your Portfolio ID if you wish to
@@ -786,7 +818,7 @@ const WalletManage = () => {
               navigate('/', { replace: true });
             }}
           >
-            Logout
+            Clear this device
           </Button>
         </Modal.Footer>
       </Modal>

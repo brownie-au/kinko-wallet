@@ -1,0 +1,503 @@
+/* Scoped layout replaces the competing runtime gap adjustments. */
+body .kw-app .pc-container {
+  top: 0 !important;
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+  min-height: 75vh;
+}
+body .kw-app .pc-content {
+  padding: 20px 24px !important;
+  margin-top: 0 !important;
+}
+body .kw-app .pc-content::before {
+  display: none !important;
+}
+.kw-app .pc-content > .page-header {
+  display: none;
+}
+.kw-app .kw-ticker {
+  margin-left: 264px;
+}
+.kw-app .kw-ticker > div:first-child {
+  position: relative !important;
+  width: 100%;
+}
+.kw-app .kw-ticker > div:last-child:not(:first-child) {
+  display: none;
+}
+.kw-mobile-header {
+  display: none;
+}
+.kw-app .pc-footer {
+  margin-top: 24px !important;
+}
+.kw-app .pc-footer .hstack,
+.kw-app .pc-footer .d-flex {
+  flex-wrap: wrap;
+}
+.kw-app :is(button, .btn, .form-control, .form-select, .k-chain-btn),
+.kw-mobile-drawer :is(button, .pc-link),
+.modal :is(.btn, .form-control, .form-select) {
+  min-height: 44px;
+}
+.kw-app :is(button, a, input, select, summary):focus-visible,
+.kw-mobile-drawer :is(button, a):focus-visible,
+.modal :is(button, input):focus-visible {
+  outline: 3px solid #19bca9 !important;
+  outline-offset: 3px;
+}
+.kw-app .form-control,
+.kw-app .form-select,
+.modal .form-control {
+  font-size: 16px;
+}
+.kw-app .form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding-left: 0;
+}
+.kw-app .form-check-input {
+  float: none;
+  margin: 0;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.kw-app .form-check-label {
+  padding: 10px 0;
+}
+.kw-app .k-chain-selector {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.kw-app .k-chain-btn {
+  min-width: 44px;
+  white-space: normal;
+}
+.kw-app .kw-grand-total {
+  font-size: clamp(1.7rem, 5vw, 2.6rem);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.kw-app h1:not(.kw-grand-total) {
+  font-size: clamp(1.6rem, 4vw, 2rem);
+}
+.kw-app .kw-portfolio-controls {
+  row-gap: 12px;
+  margin-bottom: 16px;
+}
+.kw-app .kw-search-clear {
+  width: 44px;
+  height: 44px;
+}
+.kw-app .kwp-left {
+  z-index: auto;
+}
+.kw-app :is(.kwp-symbol, .kw-symbol, .kwp-break-name, .kw-wallet-identity, .kwp-name-inline, .kw-name-inline) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.kw-app .kw-copy-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+.kw-full-address,
+.kw-full-contract,
+.kw-exact-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  user-select: text;
+}
+.kw-full-address {
+  display: block;
+  font-family: monospace;
+  font-size: 0.875rem;
+  margin-bottom: 6px;
+}
+.kw-full-contract {
+  font-size: 0.8rem;
+  margin: 8px 0;
+}
+.kw-exact {
+  min-width: 0;
+}
+.kw-exact summary {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  padding-block: 8px;
+  min-height: 44px;
+}
+.kw-exact-value {
+  display: block;
+  font-family: monospace;
+  font-size: 0.875rem;
+  padding: 8px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+}
+.kw-empty {
+  text-align: center;
+  padding: 28px 12px;
+}
+.kw-empty h3 {
+  font-size: 1.2rem;
+}
+.kw-mobile-label,
+.kw-mobile-sort {
+  display: none;
+}
+.kw-nav-toggle {
+  text-align: start;
+  border: 0;
+  width: 100%;
+  background: transparent;
+  color: inherit;
+}
+.kw-navigation-scroll {
+  max-height: calc(100dvh - 180px);
+}
+.kw-mobile-settings {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 12px;
+  border-top: 1px solid var(--bs-border-color);
+}
+.kw-mobile-drawer {
+  width: min(340px, 92vw) !important;
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+}
+.kw-mobile-drawer .kw-navigation-scroll {
+  max-height: none;
+}
+.kw-mobile-drawer .pc-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  color: inherit;
+  border-radius: 8px;
+  text-decoration: none;
+}
+.kw-mobile-drawer .pc-link[aria-current='page'] {
+  background: rgba(25, 188, 169, 0.18);
+  font-weight: 700;
+}
+.kw-mobile-drawer .pc-submenu {
+  padding: 0 0 0 12px;
+  list-style: none;
+}
+.kw-mobile-drawer .pc-mtext {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.kw-mobile-drawer .pc-arrow {
+  margin-left: auto;
+}
+.kw-mobile-drawer .kw-theme-toggle {
+  display: flex;
+}
+.kw-mobile-drawer .kw-theme-btn {
+  min-width: 44px;
+}
+.kw-skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 2000;
+  padding: 12px;
+  background: var(--bs-body-bg);
+}
+.kw-skip-link:focus {
+  top: 8px;
+}
+.modal-dialog,
+.modal-content {
+  max-height: calc(100dvh - 32px);
+}
+.modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.modal img {
+  max-width: 100%;
+  height: auto;
+}
+.modal-footer {
+  flex-wrap: wrap;
+}
+.kw-app .kw-toast {
+  max-width: calc(100vw - 32px);
+  white-space: normal;
+  pointer-events: none;
+}
+.kw-app .table-responsive {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+.kw-app .kw-tx-history-card .card-header > div,
+.kw-app .kw-tx-history-card h5,
+.kw-app .kw-tx-history-card .card-body > .d-flex > .d-flex {
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+.kw-app .kw-tx-history-card :is(input, select) {
+  max-width: 100%;
+}
+body[data-pc-theme='dark'] .kw-app .kwp-change-up {
+  color: #65d69d;
+}
+body[data-pc-theme='dark'] .kw-app .kwp-change-down {
+  color: #ff9299;
+}
+@media (max-width: 1400px) {
+  .kw-app .kwp-row > .d-flex {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+  .kw-app .kwp-cols {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+    gap: 12px;
+  }
+  .kw-app .kwp-cols > div {
+    width: auto !important;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 1024px) {
+  body .kw-app .pc-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  body .kw-app .pc-content {
+    padding: 16px !important;
+  }
+  .kw-app .kw-ticker {
+    margin-left: 0;
+  }
+  .kw-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+  .kw-mobile-header button,
+  .kw-mobile-header nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .kw-mobile-header a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px;
+    color: inherit;
+    border-radius: 8px;
+    text-decoration: none;
+  }
+  .kw-mobile-header a.active {
+    background: rgba(25, 188, 169, 0.18);
+    font-weight: 700;
+  }
+  .kw-app .pc-footer {
+    margin-left: 0 !important;
+    padding: 16px;
+  }
+}
+@media (max-width: 767.98px) {
+  body .kw-app .pc-content {
+    padding: 12px !important;
+  }
+  .kw-app .card-body,
+  .kw-app .card-header {
+    padding: 16px;
+  }
+  .kw-app .kwp-scope > .card-body {
+    padding: 0 12px;
+  }
+  .kw-app .kwp-row {
+    padding: 16px 0;
+  }
+  .kw-app .kwp-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kw-app .kwp-col {
+    text-align: left;
+  }
+  .kw-app .kwp-change {
+    align-items: flex-start;
+  }
+  .kw-app .kwp-cols > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .kw-app .kwp-break-hdr {
+    display: block;
+  }
+  .kw-app .kwp-break-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .kw-app .kwp-break-row > :empty {
+    display: none;
+  }
+  .kw-app .kwp-break-name {
+    grid-column: 1 / -1;
+  }
+  .kw-app .kwp-break-row .kwp-right {
+    text-align: left;
+  }
+  .kw-mobile-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+  }
+  .kw-mobile-sort {
+    display: block;
+    margin-top: 8px;
+  }
+  .kw-app .kw-portfolio-controls__actions select {
+    flex: 1 1 130px;
+    width: auto !important;
+    min-width: 0;
+  }
+  .kw-app .kw-holdings-table,
+  .kw-app .kw-holdings-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .kw-app .kw-holdings-table thead {
+    display: none;
+  }
+  .kw-app .kw-holdings-table tr {
+    display: block;
+    padding: 16px;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+  .kw-app .kw-holdings-table td {
+    display: block;
+    border: 0;
+    padding: 6px 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .kw-app .kw-holdings-table .kw-holding-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+  .kw-app .kw-holding-row td:first-child,
+  .kw-app .kw-holding-row td:last-child {
+    grid-column: 1 / -1;
+  }
+  .kw-app .kw-holding-row td.text-end {
+    text-align: left !important;
+  }
+  .kw-app .kw-holding-row td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+  }
+  .kw-app .kw-holding-row .kw-cell {
+    min-width: 0;
+  }
+  .kw-app .kw-tx-history-card .card-body > .d-flex > .d-flex {
+    width: 100%;
+  }
+  .kw-app .kw-tx-history-card .table {
+    min-width: 780px;
+  }
+  .kw-app .kw-wallet-item .btn {
+    color: var(--bs-body-color) !important;
+  }
+  .kw-app .kw-wallet-item .btn-group {
+    width: 100%;
+  }
+  .kw-app .kwt5-grid {
+    grid-template-columns: 1fr;
+  }
+  .kw-app .kwt5-card {
+    min-width: 0;
+  }
+  .kw-app .kwt5-symbol {
+    overflow-wrap: anywhere;
+  }
+  .kw-app .card-body > .d-flex > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kw-app *,
+  .kw-mobile-drawer *,
+  .modal * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Keep the ticker inside the content column rather than adding its margin to 100vw. */
+.kw-app .kw-ticker {
+  width: calc(100% - 264px);
+}
+.kw-wallet-tools > summary {
+  cursor: pointer;
+  padding: 12px 0;
+  min-height: 44px;
+  font-weight: 600;
+}
+.kw-wallet-tools[open] > summary {
+  margin-bottom: 12px;
+}
+.kw-app .kw-theme-btn {
+  min-width: 44px;
+}
+.kw-mobile-drawer .kw-theme-btn {
+  color: inherit;
+}
+.kw-app .kw-sidebar-footer {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.landing-page .btn {
+  min-height: 44px;
+}
+.landing-page :is(button, a):focus-visible {
+  outline: 3px solid #19bca9;
+  outline-offset: 3px;
+}
+@media (max-width: 1024px) {
+  .kw-app .kw-ticker {
+    width: 100%;
+  }
+}
+@media (max-width: 767.98px) {
+  .kw-app .learn-more-wrapper {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .kw-app .learn-more-wrapper .glass-card {
+    padding: 16px;
+  }
+  .landing-page .hero-pill {
+    white-space: normal;
+    max-width: 100%;
+  }
+}
