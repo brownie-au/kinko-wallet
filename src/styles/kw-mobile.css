@@ -77,7 +77,7 @@ body .kw-app .pc-content::before {
   white-space: normal;
 }
 .kw-app .kw-grand-total {
-  font-size: clamp(1.7rem, 5vw, 2.6rem);
+  font-size: clamp(1.5rem, 4.5vw, 2.1rem);
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
@@ -351,7 +351,7 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
   .kw-app .kwp-break-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 6px 12px;
   }
   .kw-app .kwp-break-row > :empty {
     display: none;
@@ -589,4 +589,20 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
   padding: 24px;
   max-width: 520px;
   margin: 24px auto;
+}
+
+/* Compact balance breakdown on desktop; retain comfortable phone tap targets. */
+@media (min-width: 1025px) and (hover: hover) and (pointer: fine) {
+  .kw-app .kwp-break-row .kw-address-disclosure summary,
+  .kw-app .kwp-break-row .kw-exact summary {
+    min-height: 30px;
+    line-height: 30px;
+    padding-block: 0;
+  }
+  .kw-app .kwp-break-row button.kw-copy-btn {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
 }
