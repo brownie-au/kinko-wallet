@@ -99,7 +99,7 @@ body .kw-app .pc-content::before {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.kw-app .kw-copy-btn {
+.kw-app button.kw-copy-btn {
   width: 44px;
   min-width: 44px;
   height: 44px;
@@ -540,7 +540,7 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
 .kw-copy-feedback:empty {
   display: none;
 }
-.kw-app .kw-copy-btn {
+.kw-app button.kw-copy-btn {
   border: 0;
   background: transparent;
   color: var(--bs-secondary-color);
@@ -549,11 +549,11 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
   padding: 0;
   flex-shrink: 0;
 }
-.kw-app .kw-copy-btn svg {
+.kw-app button.kw-copy-btn svg {
   width: 15px;
   height: 15px;
 }
-.kw-app .kw-copy-btn:hover {
+.kw-app button.kw-copy-btn:hover {
   background: var(--bs-secondary-bg);
 }
 .kw-app .kw-details-button {
