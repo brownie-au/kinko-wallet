@@ -1,3 +1,4 @@
+import WalletIdentity from '../../components/WalletIdentity';
 import ExactAmount from '../../components/ExactAmount';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -38,14 +39,6 @@ const fmtUSD = (n) => {
 const fmtNum = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 const short = (a) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || '');
-
-const addrStyle = {
-  fontFamily: 'monospace',
-  fontSize: 18,
-  lineHeight: '24px',
-  display: 'inline-block',
-  verticalAlign: 'middle'
-};
 
 // helper to translate chain code -> numeric chainId for TokenLogo
 const chainIdOf = (chain) => {
@@ -133,22 +126,6 @@ const IconButton = ({ title, onClick, children }) => (
   >
     {children}
   </button>
-);
-
-const CopyIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
 );
 
 const QrIcon = () => (
@@ -711,9 +688,7 @@ export default function WalletDetail() {
             <Card.Body>
               <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div>
-                  <div className="text-muted" style={{ fontSize: 18, fontWeight: 600 }}>
-                    {walletName}
-                  </div>
+                  <WalletIdentity name={walletName} address={address} />
 
                   {/* Grand USD total – unified typography */}
                   <h1 className="mb-1 kw-grand-total">
@@ -721,10 +696,6 @@ export default function WalletDetail() {
                   </h1>
 
                   <div className="d-inline-flex align-items-center gap-2" style={{ fontSize: 12 }}>
-                    <span style={addrStyle}>{short(address)}</span>
-                    <IconButton title="Copy address" onClick={() => copy(address)}>
-                      <CopyIcon />
-                    </IconButton>
                     <IconButton title="Show QR" onClick={() => setShowQR(true)}>
                       <QrIcon />
                     </IconButton>

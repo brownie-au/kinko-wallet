@@ -1,3 +1,4 @@
+import WalletIdentity from '../../components/WalletIdentity';
 import ExactAmount from '../../components/ExactAmount';
 import { Link } from 'react-router-dom';
 import { walletSignature } from '../../utils/walletSig.js';
@@ -1340,12 +1341,15 @@ export default function Portfolio() {
                           </div>
                           <div style={{ width: 'var(--kw-action)' }}>
                             <button
-                              className="btn btn-sm btn-outline-secondary w-100"
+                              className="kw-details-button"
+                              type="button"
                               aria-expanded={open}
                               aria-controls={`holdings-${i}`}
                               onClick={() => toggleExpand(k)}
                             >
-                              {open ? 'Hide details' : 'Details'}
+                              <span>
+                                {open ? 'Close' : 'Details'} <span aria-hidden="true">{open ? '⌃' : '⌄'}</span>
+                              </span>
                             </button>
                           </div>
                         </div>
@@ -1385,8 +1389,7 @@ export default function Portfolio() {
                             return (
                               <div key={idx} className="kwp-break-row">
                                 <div className="kwp-break-name">
-                                  {walletName(r.wallet)}
-                                  <div className="kw-full-contract">{r.wallet}</div>
+                                  <WalletIdentity name={walletName(r.wallet)} address={r.wallet} />
                                 </div>
                                 <div></div>
                                 {/* price placeholder */}

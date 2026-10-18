@@ -1,3 +1,4 @@
+import { handlerDrawerOpen } from 'api/menu';
 // src/layout/Dashboard/Drawer/DrawerContent/index.jsx
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -123,7 +124,12 @@ export default function DrawerContent() {
 
   const renderLeafItem = (item) => (
     <div className={`pc-item${isActive(item.url) ? ' active' : ''}`} key={item.id}>
-      <Link className="pc-link" aria-current={isActive(item.url) ? 'page' : undefined} to={item.url || '#'}>
+      <Link
+        onClick={() => handlerDrawerOpen(false)}
+        className="pc-link"
+        aria-current={isActive(item.url) ? 'page' : undefined}
+        to={item.url || '#'}
+      >
         <span className="pc-micon">{item.icon || null}</span>
         <span className="pc-mtext">{item.title}</span>
       </Link>
@@ -166,7 +172,12 @@ export default function DrawerContent() {
         <ul id={`nav-${item.id}`} className="pc-submenu" style={{ display: isOpen ? 'block' : 'none' }}>
           {children.map((child) => (
             <li key={child.id} className={`pc-item${isActive(child.url) ? ' active' : ''}`} style={{ position: 'relative' }}>
-              <Link className="pc-link" aria-current={isActive(child.url) ? 'page' : undefined} to={child.url || '#'}>
+              <Link
+                onClick={() => handlerDrawerOpen(false)}
+                className="pc-link"
+                aria-current={isActive(child.url) ? 'page' : undefined}
+                to={child.url || '#'}
+              >
                 {isActive(child.url) && (
                   <span
                     className="pc-dot"
