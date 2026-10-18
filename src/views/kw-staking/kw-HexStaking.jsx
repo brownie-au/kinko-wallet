@@ -1,6 +1,6 @@
 /* src/views/kw-staking/kw-HexStaking.jsx */
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Row, Col, Card, Badge, Table, Alert, Placeholder } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Table, Alert, Placeholder, Button } from 'react-bootstrap';
 import { useWallets } from '../../contexts/WalletContext';
 import { loadWallets } from '../../utils/walletStorage';
 import { readHexStakesCache, refreshHexStakesAndCache } from '../../services/kw-hexPulseService';
@@ -976,7 +976,7 @@ export default function KwHexStaking() {
         <div className="kw-staking">
             <Row className="gy-3 kw-hex-page">
                 {/* Unified header */}
-                {!loading && (
+                {!loading && (updatedAt || !pulseAddresses.length) && (
                     <Col xs={12} className="pt-0 mt-0">
                         <KwHexStakingHeaderContainer
                             stakes={gridRows}
@@ -997,7 +997,12 @@ export default function KwHexStaking() {
                 )}
 
                 <Col xs={12} className="mt-2">
-                    {setupError && <Alert variant="warning" className="mb-3">{setupError}</Alert>}
+                    {setupError && <Alert variant="warning" className="mb-3" role="alert">
+                      <strong>HEX staking data unavailable</strong>
+                      <p className="mb-2">{updatedAt ? 'Showing previously loaded stakes. The latest refresh failed.' : 'Stakes could not be loaded. No zero balance has been confirmed.'}</p>
+                      <div className="mb-2">{setupError}</div>
+                      <Button variant="outline-secondary" disabled={isRefreshing} onClick={handleRefresh}>{isRefreshing ? 'Retrying…' : 'Try again'}</Button>
+                    </Alert>}
 
                     {!pulseAddresses.length && !loading && (
                         <Card><Card.Body className="text-muted">
@@ -1005,7 +1010,7 @@ export default function KwHexStaking() {
                         </Card.Body></Card>
                     )}
 
-                    {loading && (
+                    {(loading || (isRefreshing && !updatedAt && !setupError)) && (
                         <>
                             <Card className="mb-3">
                                 <Card.Body>

@@ -4,6 +4,8 @@ import { useLocation, Link } from 'react-router-dom';
 
 // react-bootstrap
 import Image from 'react-bootstrap/Image';
+import Offcanvas from 'react-bootstrap/Offcanvas';
+import SidebarThemeToggle from './SidebarThemeToggle';
 
 // project-imports
 import DrawerContent from './DrawerContent';
@@ -22,13 +24,13 @@ export default function MainDrawer() {
   const { menuMaster } = useGetMenuMaster();
   const drawerOpen = menuMaster?.isDashboardDrawerOpened;
   const [selectedItems, setSelectedItems] = useState();
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1025);
   const overlayRef = useRef(null);
   const { menuOrientation, sidebarTheme } = useConfig();
   const location = useLocation();
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 1024);
+    const handleResize = () => setIsMobile(window.innerWidth < 1025);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -92,18 +94,47 @@ export default function MainDrawer() {
     }
   }, [menuOrientation, isLargeScreen, location.pathname]);
 
+  useEffect(() => {
+    handlerDrawerOpen(false);
+  }, [location.pathname]);
+
+  const contents = (
+    <>
+      <DrawerContent selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
+      <div className="kw-mobile-settings">
+        <span>Appearance</span>
+        <SidebarThemeToggle />
+        <span>Refresh all data</span>
+        <KwUniversalRefreshButton />
+      </div>
+    </>
+  );
+  if (isMobile)
+    return (
+      <Offcanvas
+        id="kw-mobile-navigation"
+        className="kw-mobile-drawer"
+        show={!!drawerOpen}
+        onHide={() => handlerDrawerOpen(false)}
+        aria-labelledby="kw-navigation-title"
+        placement="start"
+      >
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title id="kw-navigation-title">Kinko Wallet</Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          <nav aria-label="Main navigation">{contents}</nav>
+        </Offcanvas.Body>
+      </Offcanvas>
+    );
+
   return (
     <nav id="pc-sidebar" className={`pc-sidebar ${drawerOpen ? 'pc-sidebar-hide mob-sidebar-active' : ''}`}>
       <div className="navbar-wrapper">
         <div className="m-header">
           {/* Brand - home */}
           <Link to="/" className="b-brand text-primary" aria-label="Go to Kinko Wallet home">
-            <Image
-              src={sidebarTheme === true ? DarkLogo : logo}
-              fluid
-              className="logo logo-lg"
-              alt="Kinko Wallet"
-            />
+            <Image src={sidebarTheme === true ? DarkLogo : logo} fluid className="logo logo-lg" alt="Kinko Wallet" />
           </Link>
         </div>
 
@@ -111,22 +142,18 @@ export default function MainDrawer() {
         <div className={menuOrientation === MenuOrientation.TAB ? 'tab-container' : 'navbar-content'}>
           {/* Menu tree */}
           <div className="drawer-content">
-            <DrawerContent
-              selectedItems={selectedItems}
-              setSelectedItems={setSelectedItems}
-            />
+            <DrawerContent selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
           </div>
 
           {/* Footer: refresh control (keep as last child of sidebar content) */}
           <div className="kw-sidebar-footer" data-testid="kw-sidebar-footer">
+            <SidebarThemeToggle />
             <KwUniversalRefreshButton />
           </div>
         </div>
-
       </div>
 
       {drawerOpen && isMobile && <div className="pc-menu-overlay" ref={overlayRef} />}
     </nav>
   );
 }
-

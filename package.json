@@ -10,7 +10,8 @@
     "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
     "lint:fix": "eslint --fix \"src/**/*.{js,jsx,ts,tsx}\"",
     "prettier": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@ckeditor/ckeditor5-react": "9.5.0",
@@ -122,6 +123,7 @@
     "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "^10.4.21",
     "env-cmd": "10.1.0",
+    "esbuild": "^0.24.2",
     "eslint": "9.15.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-plugin-jsx-a11y": "6.10.2",

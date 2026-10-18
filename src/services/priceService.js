@@ -14,7 +14,7 @@ async function fetchJsonDedup(url) {
   if (inflight.has(url)) return inflight.get(url);
   const p = (async () => {
     try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } finally {
@@ -39,14 +39,16 @@ const lsGet = (k, maxAgeMs) => {
 const lsSet = (k, data) => {
   try {
     localStorage.setItem(k, JSON.stringify({ ts: Date.now(), data }));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 };
 
 function normalizeMetaValue(meta) {
   if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
     const price = Number(meta.price ?? meta.usd ?? meta.value ?? 0) || 0;
     const pctRaw = meta.change24hPct ?? meta.pctChange24h ?? meta.change24h ?? null;
-    const pct = Number.isFinite(Number(pctRaw)) ? Number(pctRaw) : null;
+    const pct = pctRaw != null && Number.isFinite(Number(pctRaw)) ? Number(pctRaw) : null;
     return { price, change24hPct: pct };
   }
   const price = Number(meta) || 0;
@@ -84,6 +86,14 @@ function uniqueAddresses(addresses = []) {
 async function getTokenMetaFromLlama(prefix, addresses) {
   const uniq = uniqueAddresses(addresses);
   if (!uniq.length) return new Map();
+  if (uniq.length > 30) {
+    const out = new Map();
+    for (let i = 0; i < uniq.length; i += 30) {
+      const part = await getTokenMetaFromLlama(prefix, uniq.slice(i, i + 30));
+      for (const [address, meta] of part) out.set(address, meta);
+    }
+    return out;
+  }
 
   const sorted = [...uniq].sort();
   const cacheKey = `kw:llama:${prefix}:${sorted.join(',')}`;
@@ -99,10 +109,7 @@ async function getTokenMetaFromLlama(prefix, addresses) {
   let nowJson;
   let histJson;
   try {
-    const [nowRes, histRes] = await Promise.all([
-      fetchJsonDedup(nowUrl),
-      fetchJsonDedup(histUrl)
-    ]);
+    const [nowRes, histRes] = await Promise.all([fetchJsonDedup(nowUrl), fetchJsonDedup(histUrl).catch(() => ({ coins: {} }))]);
     nowJson = nowRes?.coins || {};
     histJson = histRes?.coins || {};
   } catch (e) {
@@ -150,10 +157,7 @@ async function getNativeMetaFromLlama(cacheKey, llamaId) {
   const histUrl = `${LLAMA_HISTORICAL_BASE}/${ts}/${encodeURIComponent(llamaId)}`;
 
   try {
-    const [nowRes, histRes] = await Promise.all([
-      fetchJsonDedup(nowUrl),
-      fetchJsonDedup(histUrl)
-    ]);
+    const [nowRes, histRes] = await Promise.all([fetchJsonDedup(nowUrl), fetchJsonDedup(histUrl).catch(() => ({ coins: {} }))]);
     const nowPrice = Number(nowRes?.coins?.[llamaId]?.price ?? 0) || 0;
     const oldPrice = Number(histRes?.coins?.[llamaId]?.price ?? 0) || 0;
     let pct = null;
@@ -195,7 +199,7 @@ export async function getBaseTokenPricesLlama(addresses) {
 
 // Base native coin is ETH - use DefiLlama base id for native meta
 export async function getBaseUsdPriceLlama() {
-  return getNativeMetaFromLlama('kw:llama:base:native', 'coingecko:base');
+  return getNativeMetaFromLlama('kw:llama:base:native:v2', 'coingecko:ethereum');
 }
 
 /**
@@ -219,5 +223,5 @@ export async function getPolygonTokenPricesLlama(addresses) {
 
 // Polygon native (MATIC) price via coingecko id
 export async function getPolygonUsdPriceLlama() {
-  return getNativeMetaFromLlama('kw:llama:polygon:native', 'coingecko:matic-network');
+  return getNativeMetaFromLlama('kw:llama:polygon:native:v2', 'coingecko:polygon-ecosystem-token');
 }

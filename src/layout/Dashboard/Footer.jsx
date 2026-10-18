@@ -33,12 +33,7 @@ export default function Footer() {
           <Col xs="auto" className="my-1">
             <p className="m-0">
               {branding.brandName} ♥ PulseChain{' '}
-              <a
-                href="https://x.com/kinkowallet"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary"
-              >
+              <a href="https://x.com/kinkowallet" target="_blank" rel="noopener noreferrer" className="text-primary">
                 X
               </a>
             </p>
@@ -57,23 +52,21 @@ export default function Footer() {
                   className="text-reset text-decoration-none"
                   style={{ fontSize: 'inherit' }}
                 >
-                  {donationAddress}
+                  {donationAddress.slice(0, 8)}…{donationAddress.slice(-6)}
                 </a>
-                <FaRegCopy
-                  role="button"
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  aria-label="Copy donation address"
                   onClick={handleCopy}
                   style={{ cursor: 'pointer' }}
                   title="Copy to clipboard"
-                />
+                >
+                  <FaRegCopy aria-hidden="true" />
+                </button>
               </div>
 
-              <Nav.Link
-                className="p-0"
-                as="a"
-                href="mailto:kinkowallet@gmail.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <Nav.Link className="p-0" as="a" href="mailto:kinkowallet@gmail.com" target="_blank" rel="noopener noreferrer">
                 Suggestions
               </Nav.Link>
             </Stack>

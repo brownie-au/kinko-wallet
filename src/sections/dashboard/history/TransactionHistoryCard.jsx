@@ -1,5 +1,4 @@
 // src/sections/dashboard/history/TransactionHistoryCard.jsx
-/* eslint-disable import/no-relative-parent-imports */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Form, Button } from 'react-bootstrap';
 
@@ -11,17 +10,22 @@ import '../../../styles/kw-wallet-manage.css';
 import TokenLogo from '../../../components/TokenLogo';
 import DataClient from '../../../data/dataClient';
 import { startOrchestrator } from '../../../data/orchestrator';
-import { getSnapshot, putSnapshot, getMeta, putMeta, mergeRows, getPriceCached, putPriceCached } from '../../../utils/txCache';
+import { getSnapshot, putSnapshot, getMeta, mergeRows, getPriceCached, putPriceCached } from '../../../utils/txCache';
 
 const chainIdOf = (chain) => {
   switch (String(chain || '').toLowerCase()) {
-    case 'pulse': return 369;
-    case 'bsc': return 56;
-    case 'polygon': return 137;
-    case 'base': return 8453;
+    case 'pulse':
+      return 369;
+    case 'bsc':
+      return 56;
+    case 'polygon':
+      return 137;
+    case 'base':
+      return 8453;
     case 'eth':
     case 'ethereum':
-    default: return 1;
+    default:
+      return 1;
   }
 };
 
@@ -32,9 +36,13 @@ function fmtDate(val) {
     if (!Number.isNaN(t)) return new Date(t).toLocaleString();
     const n = Number(val);
     return new Date((Number.isFinite(n) ? n : 0) * 1000).toLocaleString();
-  } catch { return '-'; }
+  } catch {
+    return '-';
+  }
 }
-function shortAddr(a) { return a ? `${a.slice(0, 6)}...${a.slice(-4)}` : ''; }
+function shortAddr(a) {
+  return a ? `${a.slice(0, 6)}...${a.slice(-4)}` : '';
+}
 function toUsd(n) {
   const x = Number(n) || 0;
   return `USD $${x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -45,7 +53,9 @@ function feeNative(chain, feeWeiLike) {
     const n = BigInt(feeWeiLike || '0');
     const whole = Number(n) / 1e18;
     return `${whole.toFixed(6)} ${sym}`;
-  } catch { return ''; }
+  } catch {
+    return '';
+  }
 }
 
 function exportCsv(rows) {
@@ -53,11 +63,14 @@ function exportCsv(rows) {
   const lines = [hdr.join(',')];
   for (const r of rows) {
     const date = fmtDate(r.timeStamp).replace(/,/g, '');
-    const type = r.kind === 'erc20' ? (r.direction === 'in' ? 'receive' : 'send') : (r.class || 'tx');
+    const type = r.kind === 'erc20' ? (r.direction === 'in' ? 'receive' : 'send') : r.class || 'tx';
     const token = r.token?.symbol || '';
     const amount = r.amount != null ? String(r.amount) : '';
-    lines.push([date, r.chain, type, token, amount, r.from || '', r.to || '', r.hash]
-      .map((v) => `"${String(v || '').replace(/"/g, '""')}"`).join(','));
+    lines.push(
+      [date, r.chain, type, token, amount, r.from || '', r.to || '', r.hash]
+        .map((v) => `"${String(v || '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -69,10 +82,16 @@ function exportCsv(rows) {
 }
 
 export default function TransactionHistoryCard() {
-  let ctx; try { ctx = useWallets(); } catch { ctx = undefined; }
+  const ctx = useWallets();
   const fromCtx = Array.isArray(ctx?.wallets) ? ctx.wallets : [];
-  const fromLS = (() => { try { return JSON.parse(localStorage.getItem('wallets') || '[]'); } catch { return []; } })();
-  const wallets = (fromCtx.length ? fromCtx : fromLS);
+  const fromLS = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('wallets') || '[]');
+    } catch {
+      return [];
+    }
+  })();
+  const wallets = fromCtx.length ? fromCtx : fromLS;
   const { registerTask } = useRefresh();
 
   const [chain, setChain] = useState('all');
@@ -105,7 +124,11 @@ export default function TransactionHistoryCard() {
   }, []);
   // ------------------------------------------------
 
-  useEffect(() => { try { startOrchestrator(); } catch { } }, []);
+  useEffect(() => {
+    try {
+      startOrchestrator();
+    } catch {}
+  }, []);
 
   const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
   const effectiveChains = useMemo(() => (chain === 'all' ? CHAINS : [String(chain).toLowerCase()]), [chain]);
@@ -140,34 +163,40 @@ export default function TransactionHistoryCard() {
           for (const w of walletsByFilter) {
             const addr = (w.address || '').toLowerCase();
             if (!addr) continue;
-            parts.push((async () => {
-              const [snap, meta] = await Promise.all([
-                getSnapshot(c, addr, days),
-                getMeta(c, addr)
-              ]);
-              return { rows: Array.isArray(snap) ? snap : [], meta };
-            })());
+            parts.push(
+              (async () => {
+                const [snap, meta] = await Promise.all([getSnapshot(c, addr, days), getMeta(c, addr)]);
+                return { rows: Array.isArray(snap) ? snap : [], meta };
+              })()
+            );
           }
         }
         const chunks = await Promise.all(parts);
         let merged = [];
         let latest = 0;
         for (const p of chunks) {
-          if ((merged.length + (p.rows?.length || 0)) > 2000 && typeof Worker !== 'undefined') {
+          if (merged.length + (p.rows?.length || 0) > 2000 && typeof Worker !== 'undefined') {
             try {
               // eslint-disable-next-line no-await-in-loop
               const rowsMerged = await new Promise((resolve) => {
                 const w = new Worker(new URL('../../../workers/txMerge.worker.js', import.meta.url), { type: 'module' });
-                w.onmessage = (ev) => { try { w.terminate(); } catch { } resolve(ev.data?.rows || []); };
+                w.onmessage = (ev) => {
+                  try {
+                    w.terminate();
+                  } catch {}
+                  resolve(ev.data?.rows || []);
+                };
                 w.postMessage({ existing: merged, incoming: p.rows || [], windowDays: days });
               });
               merged = rowsMerged;
             } catch {
               merged = mergeRows(merged, p.rows, { windowDays: days });
             }
-          } else if ((merged.length + (p.rows?.length || 0)) > 2000 && typeof requestIdleCallback === 'function') {
+          } else if (merged.length + (p.rows?.length || 0) > 2000 && typeof requestIdleCallback === 'function') {
             // eslint-disable-next-line no-await-in-loop
-            merged = await new Promise((resolve) => requestIdleCallback(() => resolve(mergeRows(merged, p.rows, { windowDays: days })), { timeout: 60 }));
+            merged = await new Promise((resolve) =>
+              requestIdleCallback(() => resolve(mergeRows(merged, p.rows, { windowDays: days })), { timeout: 60 })
+            );
           } else {
             merged = mergeRows(merged, p.rows, { windowDays: days });
           }
@@ -181,10 +210,14 @@ export default function TransactionHistoryCard() {
         }
       } catch (e) {
         if (!dead) setError(e?.message || 'Failed to load cache');
-      } finally { if (!dead) setCacheLoading(false); }
+      } finally {
+        if (!dead) setCacheLoading(false);
+      }
     };
     run();
-    return () => { dead = true; };
+    return () => {
+      dead = true;
+    };
   }, [effectiveChains.join(','), walletsByFilter.map((w) => (w.address || '').toLowerCase()).join(','), days]);
 
   // Delta fetching
@@ -229,16 +262,26 @@ export default function TransactionHistoryCard() {
         };
         const getKey = (c) => {
           try {
-            return localStorage.getItem(`kw:explorerKey:${c}`) || import.meta.env[`VITE_${c.toUpperCase()}SCAN_KEY`] || import.meta.env[`VITE_${c.toUpperCase()}ERSCAN_KEY`] || '';
-          } catch { return ''; }
+            return (
+              localStorage.getItem(`kw:explorerKey:${c}`) ||
+              import.meta.env[`VITE_${c.toUpperCase()}SCAN_KEY`] ||
+              import.meta.env[`VITE_${c.toUpperCase()}ERSCAN_KEY`] ||
+              ''
+            );
+          } catch {
+            return '';
+          }
         };
 
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const backoff = async (fn, retries = 3) => {
-          let i = 0; let last;
+          let i = 0;
+          let last;
           const waits = [300, 700, 1500];
-          for (; ;) {
-            try { return await fn(); } catch (e) {
+          for (;;) {
+            try {
+              return await fn();
+            } catch (e) {
               last = e;
               if (i >= retries) throw last;
               await sleep(waits[Math.min(i, waits.length - 1)]);
@@ -261,7 +304,8 @@ export default function TransactionHistoryCard() {
           if (!base) return { items: [], lastSeenTimestamp: 0 };
           const host = hosts[c];
           const key = getKey(c);
-          const mk = (action) => `${base}?module=account&action=${action}&address=${a}&page=1&offset=50&sort=desc${key ? `&apikey=${encodeURIComponent(key)}` : ''}`;
+          const mk = (action) =>
+            `${base}?module=account&action=${action}&address=${a}&page=1&offset=50&sort=desc${key ? `&apikey=${encodeURIComponent(key)}` : ''}`;
           const [meta, snap] = await Promise.all([getMeta(c, a), getSnapshot(c, a, days)]);
           let sinceTs = Number(meta?.lastSeenTimestamp || 0);
           if (!sinceTs && Array.isArray(snap) && snap.length) sinceTs = Number(snap[0]?.timeStamp || 0);
@@ -281,11 +325,17 @@ export default function TransactionHistoryCard() {
                 from: t.from,
                 to: t.to,
                 amount: Number(t.value || 0) / 1e18,
-                feeWei: (() => { try { return String((BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0))); } catch { return '0'; } })(),
+                feeWei: (() => {
+                  try {
+                    return String(BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0));
+                  } catch {
+                    return '0';
+                  }
+                })(),
                 explorer: host ? `${host}/tx/${t.hash}` : undefined
               });
             }
-          } catch { }
+          } catch {}
           // erc20
           try {
             const j = await backoff(() => fetchJson(mk('tokentx')));
@@ -294,7 +344,7 @@ export default function TransactionHistoryCard() {
               const ts = Number(t.timeStamp || 0);
               if (!ts) continue;
               const dec = Number(t.tokenDecimal || 18);
-              const amt = Number(t.value || 0) / (10 ** (Number.isFinite(dec) ? dec : 18));
+              const amt = Number(t.value || 0) / 10 ** (Number.isFinite(dec) ? dec : 18);
               all.push({
                 chain: c,
                 kind: 'erc20',
@@ -307,9 +357,9 @@ export default function TransactionHistoryCard() {
                 explorer: host ? `${host}/tx/${t.hash}` : undefined
               });
             }
-          } catch { }
+          } catch {}
           const minTs = Math.floor(Date.now() / 1000) - Number(days) * 24 * 60 * 60;
-          const fresh = all.filter((it) => (Number(it.timeStamp || 0) > Number(sinceTs || 0)) && (Number(it.timeStamp || 0) >= minTs));
+          const fresh = all.filter((it) => Number(it.timeStamp || 0) > Number(sinceTs || 0) && Number(it.timeStamp || 0) >= minTs);
           const merged = mergeRows(snap, fresh, { windowDays: days });
           const lastSeenTimestamp = merged.length ? Number(merged[0].timeStamp || 0) : Number(sinceTs || 0);
           await putSnapshot(c, a, merged, { lastSeenTimestamp }, days);
@@ -323,32 +373,45 @@ export default function TransactionHistoryCard() {
         async function worker() {
           while (i < pairs.length) {
             const cur = pairs[i++];
-            try { results.push(await fetchDeltaFor(cur.c, cur.a)); } catch (e) { setSyncWarn('Some networks throttled; retrying later'); }
+            try {
+              results.push(await fetchDeltaFor(cur.c, cur.a));
+            } catch {
+              setSyncWarn('Some networks throttled; retrying later');
+            }
           }
         }
         const workers = Array.from({ length: Math.min(MAX_C, pairs.length) }, () => worker());
         await Promise.all(workers);
 
         // Rebuild merged view from snapshots
-        const parts = await Promise.all(pairs.map(async ({ c, a }) => ({ rows: await getSnapshot(c, a, days), meta: await getMeta(c, a) })));
+        const parts = await Promise.all(
+          pairs.map(async ({ c, a }) => ({ rows: await getSnapshot(c, a, days), meta: await getMeta(c, a) }))
+        );
         let mergedAll = [];
         let latest = 0;
         for (const p of parts) {
-          if ((mergedAll.length + (p.rows?.length || 0)) > 2000 && typeof Worker !== 'undefined') {
+          if (mergedAll.length + (p.rows?.length || 0) > 2000 && typeof Worker !== 'undefined') {
             try {
               // eslint-disable-next-line no-await-in-loop
               const rowsMerged = await new Promise((resolve) => {
                 const w = new Worker(new URL('../../../workers/txMerge.worker.js', import.meta.url), { type: 'module' });
-                w.onmessage = (ev) => { try { w.terminate(); } catch { } resolve(ev.data?.rows || []); };
+                w.onmessage = (ev) => {
+                  try {
+                    w.terminate();
+                  } catch {}
+                  resolve(ev.data?.rows || []);
+                };
                 w.postMessage({ existing: mergedAll, incoming: p.rows || [], windowDays: days });
               });
               mergedAll = rowsMerged;
             } catch {
               mergedAll = mergeRows(mergedAll, p.rows, { windowDays: days });
             }
-          } else if ((mergedAll.length + (p.rows?.length || 0)) > 2000 && typeof requestIdleCallback === 'function') {
+          } else if (mergedAll.length + (p.rows?.length || 0) > 2000 && typeof requestIdleCallback === 'function') {
             // eslint-disable-next-line no-await-in-loop
-            mergedAll = await new Promise((resolve) => requestIdleCallback(() => resolve(mergeRows(mergedAll, p.rows, { windowDays: days })), { timeout: 60 }));
+            mergedAll = await new Promise((resolve) =>
+              requestIdleCallback(() => resolve(mergeRows(mergedAll, p.rows, { windowDays: days })), { timeout: 60 })
+            );
           } else {
             mergedAll = mergeRows(mergedAll, p.rows, { windowDays: days });
           }
@@ -361,7 +424,10 @@ export default function TransactionHistoryCard() {
           setLastSyncAt(latest || Date.now());
         }
       } catch (e) {
-        if (!dead) { setError(e?.message || 'Sync failed'); setSyncWarn('Sync error; showing cached data'); }
+        if (!dead) {
+          setError(e?.message || 'Sync failed');
+          setSyncWarn('Sync error; showing cached data');
+        }
       } finally {
         if (!dead) setNetLoading(false);
         deltaRef.current = false;
@@ -397,11 +463,12 @@ export default function TransactionHistoryCard() {
       });
     })();
     if (!s) return base;
-    return base.filter((r) =>
-      (r.token?.symbol || '').toLowerCase().includes(s) ||
-      (r.hash || '').toLowerCase().includes(s) ||
-      (r.from || '').toLowerCase().includes(s) ||
-      (r.to || '').toLowerCase().includes(s)
+    return base.filter(
+      (r) =>
+        (r.token?.symbol || '').toLowerCase().includes(s) ||
+        (r.hash || '').toLowerCase().includes(s) ||
+        (r.from || '').toLowerCase().includes(s) ||
+        (r.to || '').toLowerCase().includes(s)
     );
   }, [rows, dq, walletFilter]);
 
@@ -439,7 +506,7 @@ export default function TransactionHistoryCard() {
               const p = await DataClient.getPrice(c);
               const usd = Number(p?.usd || 0);
               if (usd > 0) next.set(`${c}:native`, usd);
-            } catch { }
+            } catch {}
             continue;
           }
           // eslint-disable-next-line no-await-in-loop
@@ -476,14 +543,16 @@ export default function TransactionHistoryCard() {
                   await putPriceCached(c, a.toLowerCase(), usd);
                 }
               }
-            } catch { }
+            } catch {}
           }
         }
         if (!dead) setUsdByKey(next);
-      } catch { }
+      } catch {}
     };
     if (debouncedTokenKeys.length) run();
-    return () => { dead = true; };
+    return () => {
+      dead = true;
+    };
   }, [debouncedTokenKeys.join(',')]);
 
   const nameByAddr = useMemo(() => {
@@ -493,12 +562,14 @@ export default function TransactionHistoryCard() {
         const a = (w.address || '').toLowerCase();
         if (a) m.set(a, (w.name || '').trim());
       }
-    } catch { }
+    } catch {}
     return m;
   }, [wallets]);
 
   const copyToClipboard = (text) => {
-    try { navigator.clipboard.writeText(String(text || '')); } catch { }
+    try {
+      navigator.clipboard.writeText(String(text || ''));
+    } catch {}
   };
 
   const summary = useMemo(() => {
@@ -531,14 +602,20 @@ export default function TransactionHistoryCard() {
             </small>
 
             <div className="text-muted small">
-              Loaded from cache · Last sync: {lastSyncAt ? `${Math.max(0, Math.floor((now - lastSyncAt) / 1000))}s ago` : 'never'} · Auto-refresh: every 10 min
+              Loaded from cache · Last sync: {lastSyncAt ? `${Math.max(0, Math.floor((now - lastSyncAt) / 1000))}s ago` : 'never'} ·
+              Auto-refresh: every 10 min
               {syncWarn ? <span className="ms-2 badge bg-warning text-dark">{syncWarn}</span> : null}
             </div>
             {/* removed the old netLoading line here */}
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <ChainSelector value={chain} onChange={(v) => { setChain(v); }} />
+            <ChainSelector
+              value={chain}
+              onChange={(v) => {
+                setChain(v);
+              }}
+            />
           </div>
         </div>
       </Card.Header>
@@ -548,6 +625,7 @@ export default function TransactionHistoryCard() {
             <Form.Select
               className="kw-wallet-search-input"
               size="sm"
+              aria-label="Filter transaction history by wallet"
               value={walletFilter}
               onChange={(e) => setWalletFilter(e.target.value)}
               style={{ width: 200 }}
@@ -563,6 +641,7 @@ export default function TransactionHistoryCard() {
               className="kw-wallet-search-input"
               size="sm"
               placeholder="Search token, address, hash"
+              aria-label="Search transactions"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               style={{ width: 400, height: 'calc(1.5em + .5rem + 2px)' }}
@@ -575,17 +654,22 @@ export default function TransactionHistoryCard() {
           </div>
         </div>
 
-        <div className="table-responsive">
+        <p className="kw-mobile-label px-3">Swipe the table to see all transaction details.</p>
+        <div className="table-responsive" tabIndex={0} role="region" aria-label="Transaction history, scroll horizontally for more details">
           <table className="table table-hover mb-0 align-middle">
             <thead className="sticky-top kw-tx-history-head" style={{ position: 'sticky', top: 0 }}>
               <tr>
                 <th style={{ width: '18%' }}>Date</th>
                 <th style={{ width: '10%' }}>Type</th>
                 <th style={{ width: '18%' }}>Token</th>
-                <th style={{ width: '12%' }} className="text-end">Amount</th>
+                <th style={{ width: '12%' }} className="text-end">
+                  Amount
+                </th>
                 <th style={{ width: '12%' }}>From</th>
                 <th style={{ width: '12%' }}>To</th>
-                <th style={{ width: '10%' }} className="text-end">Fee</th>
+                <th style={{ width: '10%' }} className="text-end">
+                  Fee
+                </th>
                 <th style={{ width: '8%' }}>Link</th>
               </tr>
             </thead>
@@ -595,96 +679,106 @@ export default function TransactionHistoryCard() {
               {!error && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-4 text-center text-muted">
-                    {walletFilter !== 'all' ? 'No transactions for this wallet' : (fromCache ? 'No transactions' : 'No transactions (offline/cache empty)')}
+                    {cacheLoading || netLoading
+                      ? 'Loading transactions…'
+                      : walletFilter !== 'all'
+                        ? 'No transactions for this wallet'
+                        : fromCache
+                          ? 'No transactions'
+                          : 'No transactions available in the cache. Refresh to try again.'}
                   </td>
                 </tr>
               )}
               {error && (
-                <tr><td colSpan={8} className="py-4 text-center text-danger">{error}</td></tr>
+                <tr>
+                  <td colSpan={8} className="py-4 text-center text-danger">
+                    {error}
+                  </td>
+                </tr>
               )}
-              {!error && filtered.map((r, i) => {
-                const type = r.type || (r.kind === 'erc20' ? 'erc20' : 'native');
-                const fromName = nameByAddr.get((r.from || '').toLowerCase()) || 'External';
-                const toName = nameByAddr.get((r.to || '').toLowerCase()) || 'External';
+              {!error &&
+                filtered.map((r, i) => {
+                  const type = r.type || (r.kind === 'erc20' ? 'erc20' : 'native');
+                  const fromName = nameByAddr.get((r.from || '').toLowerCase()) || 'External';
+                  const toName = nameByAddr.get((r.to || '').toLowerCase()) || 'External';
 
-                // Ensure PulseChain links use scan.9mm.pro even when cached
-                try {
-                  if (String(r.chain || '').toLowerCase() === 'pulse') {
-                    r.explorer = `https://scan.9mm.pro/tx/${r.hash}`;
-                  }
-                } catch {}
+                  // Ensure PulseChain links use scan.9mm.pro even when cached
+                  try {
+                    if (String(r.chain || '').toLowerCase() === 'pulse') {
+                      r.explorer = `https://scan.9mm.pro/tx/${r.hash}`;
+                    }
+                  } catch {}
 
-                return (
-                  <tr key={`${r.hash}-${i}`}>
-                    <td>
-                      {fmtDate(r.date || r.timeStamp)}
-                      <div className="mt-1"><ChainBadge chain={r.chain} /></div>
-                    </td>
-                    <td>
-                      <span className="badge bg-secondary text-uppercase">{String(type).toUpperCase()}</span>
-                    </td>
-                    <td>
-                      <div className="d-flex align-items-center gap-2">
-                        <TokenLogo chainId={chainIdOf(r.chain)} address={r.token?.address} size={20} />
-                        <span>{r.token?.symbol || (type === 'native' ? 'NATIVE' : '')}</span>
-                      </div>
-                    </td>
-                    <td className="text-end">
-                      {(() => {
-                        try {
-                          const c = r.kind === 'erc20' && r.token?.address
-                            ? `${String(r.chain).toLowerCase()}:${String(r.token.address).toLowerCase()}`
-                            : `${String(r.chain).toLowerCase()}:native`;
-                          const p = usdByKey.get(c) || 0;
-                          const val = (Number(r.amount) || 0) * Number(p || 0);
-                          return val ? <div className="text-muted small">{toUsd(val)}</div> : null;
-                        } catch { return null; }
-                      })()}
-                      {r.amount != null ? r.amount : ''}
-                    </td>
-                    {/* From */}
-                    <td style={{ fontFamily: 'monospace' }}>
-                      <div className="text-muted small">{fromName}</div>
-                      <div
-                        role="button"
-                        onClick={() => copyToClipboard(r.from)}
-                        title={fromName}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {shortAddr(r.from)}
-                      </div>
-                    </td>
-                    {/* To */}
-                    <td style={{ fontFamily: 'monospace' }}>
-                      <div className="text-muted small">{toName}</div>
-                      <div
-                        role="button"
-                        onClick={() => copyToClipboard(r.to)}
-                        title={toName}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {shortAddr(r.to)}
-                      </div>
-                    </td>
-                    <td className="text-end">
-                      {(() => {
-                        try {
-                          if (type !== 'native') return null;
-                          const weiStr = String(r.fee || r.feeWei || '0');
-                          const feeNativeAmt = Number(weiStr) / 1e18;
-                          const price = Number(usdByKey.get(`${String(r.chain).toLowerCase()}:native`) || 0);
-                          const usd = feeNativeAmt * price;
-                          return usd ? <div className="text-muted small">{toUsd(usd)}</div> : null;
-                        } catch { return null; }
-                      })()}
-                      {type === 'native' ? feeNative(r.chain, r.fee || r.feeWei) : ''}
-                    </td>
-                    <td>
-                      <a href={r.link || r.explorer} target="_blank" rel="noreferrer">🔗 View ↗</a>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={`${r.hash}-${i}`}>
+                      <td>
+                        {fmtDate(r.date || r.timeStamp)}
+                        <div className="mt-1">
+                          <ChainBadge chain={r.chain} />
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge bg-secondary text-uppercase">{String(type).toUpperCase()}</span>
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <TokenLogo chainId={chainIdOf(r.chain)} address={r.token?.address} size={20} />
+                          <span>{r.token?.symbol || (type === 'native' ? 'NATIVE' : '')}</span>
+                        </div>
+                      </td>
+                      <td className="text-end">
+                        {(() => {
+                          try {
+                            const c =
+                              r.kind === 'erc20' && r.token?.address
+                                ? `${String(r.chain).toLowerCase()}:${String(r.token.address).toLowerCase()}`
+                                : `${String(r.chain).toLowerCase()}:native`;
+                            const p = usdByKey.get(c) || 0;
+                            const val = (Number(r.amount) || 0) * Number(p || 0);
+                            return val ? <div className="text-muted small">{toUsd(val)}</div> : null;
+                          } catch {
+                            return null;
+                          }
+                        })()}
+                        {r.amount != null ? r.amount : ''}
+                      </td>
+                      {/* From */}
+                      <td style={{ fontFamily: 'monospace' }}>
+                        <div className="text-muted small">{fromName}</div>
+                        <div role="button" onClick={() => copyToClipboard(r.from)} title={fromName} style={{ cursor: 'pointer' }}>
+                          {shortAddr(r.from)}
+                        </div>
+                      </td>
+                      {/* To */}
+                      <td style={{ fontFamily: 'monospace' }}>
+                        <div className="text-muted small">{toName}</div>
+                        <div role="button" onClick={() => copyToClipboard(r.to)} title={toName} style={{ cursor: 'pointer' }}>
+                          {shortAddr(r.to)}
+                        </div>
+                      </td>
+                      <td className="text-end">
+                        {(() => {
+                          try {
+                            if (type !== 'native') return null;
+                            const weiStr = String(r.fee || r.feeWei || '0');
+                            const feeNativeAmt = Number(weiStr) / 1e18;
+                            const price = Number(usdByKey.get(`${String(r.chain).toLowerCase()}:native`) || 0);
+                            const usd = feeNativeAmt * price;
+                            return usd ? <div className="text-muted small">{toUsd(usd)}</div> : null;
+                          } catch {
+                            return null;
+                          }
+                        })()}
+                        {type === 'native' ? feeNative(r.chain, r.fee || r.feeWei) : ''}
+                      </td>
+                      <td>
+                        <a href={r.link || r.explorer} target="_blank" rel="noreferrer">
+                          🔗 View ↗
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -692,4 +786,3 @@ export default function TransactionHistoryCard() {
     </Card>
   );
 }
-

@@ -127,3 +127,9 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Credentials and machine configuration
+.env
+.env.*
+!.env.example
+!**/.env.example

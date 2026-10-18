@@ -1,3 +1,4 @@
+import { normalizeWallets } from '../utils/walletRecords.js';
 // src/services/syncService.js
 // Behaviour:
 // - CREATE/UPDATE: POST /api/portfolio with { id?, wallets }
@@ -5,8 +6,7 @@
 
 function resolveApiBase() {
   const raw = (import.meta?.env?.VITE_SYNC_API_BASE || '').trim();
-  const isPlaceholder =
-    /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
+  const isPlaceholder = /<|>/.test(raw) || /^https?:\/\/<your-sync-api-domain>\/?$/i.test(raw);
   let base = raw;
   if (!base || isPlaceholder) {
     if (typeof window !== 'undefined' && window.location?.origin) {
@@ -15,7 +15,9 @@ function resolveApiBase() {
       base = '/api';
     }
   }
-  base = String(base || '').trim().replace(/\s+$/, '');
+  base = String(base || '')
+    .trim()
+    .replace(/\s+$/, '');
   base = base.replace(/\/+$/, '');
   if (!base.toLowerCase().endsWith('/api')) {
     base = `${base}/api`;
@@ -27,11 +29,13 @@ const API_BASE = resolveApiBase();
 
 /* -------------------- PID helpers -------------------- */
 export function normalizePid(v) {
-  return String(v ?? '').trim().toUpperCase();
+  return String(v ?? '')
+    .trim()
+    .toUpperCase();
 }
 // Strict validator (kept because other files import it)
 export function isValidPid(v) {
-  return /^[A-Z0-9]{8}$/.test(normalizePid(v));
+  return /^[A-HJ-NP-Z2-9]{6,8}$/.test(normalizePid(v));
 }
 // Relaxed presence check (used internally when we just need "some PID")
 export function isNonEmptyPid(v) {
@@ -50,8 +54,8 @@ function extractWallets(data) {
     }
 
     if (data?.data) return extractWallets(data.data);
-  } catch { }
-  return [];
+  } catch {}
+  throw new Error('The server returned an invalid wallet backup. Your wallets have not been changed.');
 }
 
 function extractId(data) {
@@ -67,8 +71,10 @@ function extractId(data) {
           return j?.id;
         }
         return raw?.id;
-      } catch { return undefined; }
-    })(),
+      } catch {
+        return undefined;
+      }
+    })()
   ].filter(Boolean);
 
   for (const c of tryVals) {
@@ -89,20 +95,19 @@ const j = async (r) => {
           const jj = JSON.parse(txt);
           if (jj && jj.error) msg += `: ${jj.error}`;
           else msg += `: ${txt}`;
-        } catch { msg += `: ${txt}`; }
+        } catch {
+          msg += `: ${txt}`;
+        }
       }
-    } catch { }
+    } catch {}
     const err = new Error(msg);
     err.status = r.status;
     throw err;
   }
   const ct = r.headers.get('content-type') || '';
   if (ct.includes('application/json')) return r.json();
-  return {};
+  throw new Error('Portfolio service returned an invalid response. Please try again later.');
 };
-
-const v1Url = (id) =>
-  `${API_BASE}/v1/portfolio/${encodeURIComponent(normalizePid(id))}`;
 
 const ensureWalletArray = (wallets) => {
   if (Array.isArray(wallets)) return wallets;
@@ -119,6 +124,7 @@ async function postPortfolioRequest(id, wallets) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000)
   }).then(j);
 
   const returnedId = extractId(data) || cleanId;
@@ -131,24 +137,15 @@ async function postPortfolioRequest(id, wallets) {
 
 /* -------------------- Public API -------------------- */
 
-// LOAD (GET /portfolio?id=ID) with v1 fallback
+// A missing ID must never fall through to the SPA and become an empty wallet list.
 export async function loadById(id) {
   const clean = normalizePid(id);
-  if (!clean) throw new Error('Missing Portfolio ID');
-
-  const q = `${API_BASE}/portfolio?id=${encodeURIComponent(clean)}`;
-  try {
-    const data = await fetch(q, { headers: { Accept: 'application/json' } }).then(j);
-    const wallets = extractWallets(data);
-    return { wallets, source: 'remote', meta: {} };
-  } catch (e) {
-    if (/HTTP\s(404|405)/.test(String(e?.message || ''))) {
-      const data = await fetch(v1Url(clean), { headers: { Accept: 'application/json' } }).then(j);
-      const wallets = extractWallets(data);
-      return { wallets, source: 'remote', meta: { updatedAt: data?.updatedAt, checksum: data?.checksum } };
-    }
-    throw e;
-  }
+  if (!isValidPid(clean)) throw new Error('Enter a valid Portfolio ID (6–8 letters and numbers).');
+  const data = await fetch(`${API_BASE}/portfolio?id=${encodeURIComponent(clean)}`, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000)
+  }).then(j);
+  return { wallets: normalizeWallets(extractWallets(data), { strict: true }), source: 'remote', meta: {} };
 }
 
 export async function saveById(id, wallets) {
@@ -180,17 +177,23 @@ export function generatePortfolioId(len = 8) {
 /* -------------------- Local ID helpers -------------------- */
 const ID_KEY = 'kinko:sync:id';
 export function getSyncId() {
-  try { return normalizePid(localStorage.getItem(ID_KEY) || ''); } catch { return ''; }
+  try {
+    return normalizePid(localStorage.getItem(ID_KEY) || '');
+  } catch {
+    return '';
+  }
 }
 export function setSyncId(id) {
   try {
     const clean = normalizePid(id);
     if (clean) localStorage.setItem(ID_KEY, clean);
     else localStorage.removeItem(ID_KEY);
-  } catch { }
+  } catch {}
 }
 export function clearSyncId() {
-  try { localStorage.removeItem(ID_KEY); } catch { }
+  try {
+    localStorage.removeItem(ID_KEY);
+  } catch {}
 }
 
 /* -------------------- Back-compat named exports -------------------- */

@@ -11,7 +11,15 @@ const CHAINS = ['eth', 'pulse', 'bsc', 'polygon', 'base'];
 const keyFor = (t) => `${t.chain}:${t.address || 'native'}`.toLowerCase();
 
 export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
-  const addrs = useMemo(() => (Array.isArray(wallets) ? wallets : []).map((w) => (w.address || '').toLowerCase()).filter(Boolean), [wallets]);
+  const addrs = useMemo(
+    () =>
+      (Array.isArray(wallets) ? wallets : [])
+        .filter((w) => !w.hidden)
+        .filter((w, i, arr) => arr.findIndex((x) => x.address.toLowerCase() === w.address.toLowerCase()) === i)
+        .map((w) => (w.address || '').toLowerCase())
+        .filter(Boolean),
+    [wallets]
+  );
   const chains = useMemo(() => (only === 'all' ? CHAINS : [only]), [only]);
   const [tokens, setTokens] = useState([]);
   const [breakdown, setBreakdown] = useState(new Map());
@@ -23,7 +31,13 @@ export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
     setLoading(true);
     try {
       const calls = [];
-      for (const a of addrs) for (const c of chains) calls.push(DataClient.getBalances(c, a));
+      for (const a of addrs)
+        for (const c of chains)
+          calls.push(
+            (wallets.find((w) => w.address.toLowerCase() === a)?.networks || CHAINS).includes(c)
+              ? DataClient.getBalances(c, a)
+              : Promise.resolve([])
+          );
       const parts = await Promise.allSettled(calls);
       const perWallet = [];
       let idx = 0;
@@ -32,7 +46,7 @@ export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
           const p = parts[idx++];
           const rows = p?.status === 'fulfilled' && Array.isArray(p.value) ? p.value : [];
           // attach wallet for breakdown
-          perWallet.push(rows.map((t) => ({ ...t, wallet: a })));
+          perWallet.push(rows.map((t) => ({ ...t, chain: t.chain || c, wallet: a })));
         }
       }
       // flatten and aggregate
@@ -41,10 +55,10 @@ export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
       const bd = new Map();
       for (const r of flat) {
         const k = keyFor(r);
-        const cur = agg.get(k) || { ...r };
+        const cur = agg.get(k) || { ...r, amount: 0, valueUsd: 0 };
         cur.amount = (Number(cur.amount) || 0) + (Number(r.amount) || 0);
         if (!cur.priceUsd && r.priceUsd) cur.priceUsd = Number(r.priceUsd);
-        cur.valueUsd = Number(cur.valueUsd || 0) + (Number(r.valueUsd) || ((Number(r.amount) || 0) * Number(r.priceUsd || 0)));
+        cur.valueUsd = Number(cur.valueUsd || 0) + (Number(r.valueUsd) || (Number(r.amount) || 0) * Number(r.priceUsd || 0));
         agg.set(k, cur);
         if (!bd.has(k)) bd.set(k, []);
         bd.get(k).push({ wallet: r.wallet, amount: Number(r.amount) || 0, valueUsd: Number(r.valueUsd) || 0 });
@@ -57,15 +71,22 @@ export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
       setTokens(list);
       setBreakdown(bd);
       setTotalUsd(total);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { readOnce(); /* eslint-disable-next-line */ }, [addrs.join(','), chains.join(',')]);
+  useEffect(() => {
+    readOnce(); /* eslint-disable-next-line */
+  }, [addrs.join(','), chains.join(',')]);
 
   // update on cache writes
   useEffect(() => {
     let bc;
-    try { bc = new BroadcastChannel('kinko-data'); bcRef.current = bc; } catch {}
+    try {
+      bc = new BroadcastChannel('kinko-data');
+      bcRef.current = bc;
+    } catch {}
     const onMsg = (e) => {
       const k = e?.data?.key || '';
       if (e?.data?.type === 'updated' && k.startsWith('balances:')) {
@@ -79,9 +100,12 @@ export default function usePortfolioFromCache({ wallets = [], only = 'all' }) {
       }
     };
     bc?.addEventListener('message', onMsg);
-    return () => { try { bc?.removeEventListener('message', onMsg); } catch {} };
+    return () => {
+      try {
+        bc?.removeEventListener('message', onMsg);
+      } catch {}
+    };
   }, [addrs.join(','), chains.join(','), only]);
 
   return { tokens, totalUsd, breakdown, loading };
 }
-

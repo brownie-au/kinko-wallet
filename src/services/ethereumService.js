@@ -1,6 +1,9 @@
 // Ethereum balance + token discovery using free public APIs (no QuickNode, no Moralis)
 // Now powered entirely by FreeCryptoAPI — clean, fast, and CORS-safe.
 
+import { getEthTokensFromBlockscout, toUnits } from './ethBlockscoutService';
+import { formatTokenUnits } from '../utils/tokenMath';
+import { getEthNativeBalance } from './ethRpcService';
 import { isTokenBlacklisted } from '../data/tokenBlocklist';
 import axios from 'axios';
 import { getEthUsdPrice as getEthUsdPriceFallback } from './ethPriceService';
@@ -8,17 +11,10 @@ import { enrichErc20Prices } from './ethErc20PriceService';
 import { getCachedJSON, setCachedJSON } from '../utils/kinkoCache';
 
 // ----------------- CONFIG -----------------
-const FREECRYPTO_BASE = 'https://api.freecryptoapi.com/v1';
-const FREECRYPTO_KEY = import.meta.env.VITE_FREECRYPTO_KEY || '';
-
-const ETH_RPC_URL = import.meta.env.VITE_ETH_RPC_URL || 'https://eth.llamarpc.com';
-
 const PAPRIKA_BASE = 'https://api.coinpaprika.com/v1';
 const PAPRIKA_ETH_ID = 'eth-ethereum';
 const PRICE_CACHE_TTL_MS = Number(import.meta.env.VITE_PRICE_CACHE_TTL_SEC ?? 60) * 1000;
-const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60_000;
-const DEBUG = !!import.meta.env.DEV;
-const log = (...a) => DEBUG && console.log('%c[ETH]', 'color:#9cf', ...a);
+const CACHE_TTL_MS = Number(import.meta.env.VITE_WALLET_CACHE_TTL_MIN ?? 10) * 60000;
 
 // Spam + blocklist
 const ETH_HIDE_MIN_USD = Number(import.meta.env.VITE_ETH_HIDE_USD_MIN ?? 0);
@@ -91,7 +87,7 @@ async function getEthUsdFromPaprika() {
       setCachedJSON(cacheKey, price);
       return price;
     }
-  } catch { }
+  } catch {}
   return 0;
 }
 async function getEthUsdPricePrimary() {
@@ -114,7 +110,7 @@ async function enrichEthPrice(tokens) {
       native.price = ethUsd;
       native.usd = toNum(native.balance, 0) * ethUsd;
     }
-  } catch { }
+  } catch {}
   return tokens;
 }
 async function enrichAllPrices(tokens) {
@@ -125,62 +121,27 @@ async function enrichAllPrices(tokens) {
 
 // ---------- Native ETH ----------
 export async function fetchNativeETH(address) {
-  try {
-    const body = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'eth_getBalance',
-      params: [address, 'latest']
-    };
-    const { data } = await axios.post(ETH_RPC_URL, body, { timeout: 10000 });
-    const wei = BigInt(data.result);
-    const eth = Number(wei) / 1e18;
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: eth });
-  } catch (e) {
-    console.error('[ETH] native balance error:', e?.message);
-    return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance: 0 });
-  }
+  const balance = await getEthNativeBalance(address);
+  return row({ address: 'native', symbol: 'ETH', name: 'Ether', decimals: 18, balance });
 }
 
-// ---------- ERC-20 discovery (FreeCryptoAPI only) ----------
-export async function fetchERC20Tokens(address) {
-  try {
-    const url = `${FREECRYPTO_BASE}/ethereum/address/${address}/tokens?apikey=${FREECRYPTO_KEY}`;
-    const { data } = await axios.get(url, { timeout: 12000 });
-    const tokens = data?.data || [];
-    if (Array.isArray(tokens) && tokens.length > 0) {
-      log('[ETH] FreeCryptoAPI:', tokens.length, 'tokens');
-      return tokens
-        .map((t) =>
-          row({
-            address: t.contract_address,
-            symbol: t.symbol,
-            name: t.name,
-            decimals: Number(t.decimals ?? 18),
-            balance: Number(t.balance ?? 0),
-            priceUSD: Number(t.usd_value ?? 0),
-            usd: Number(t.usd_value ?? 0)
-          })
-        )
-        .filter((t) => t.balance > 0);
-    }
-  } catch (err) {
-    console.error('[ETH] FreeCryptoAPI failed:', err?.message);
-  }
-  return [];
+export async function fetchERC20Tokens(address, opts = {}) {
+  const tokens = await getEthTokensFromBlockscout(address, opts);
+  return tokens.map((t) => ({
+    ...row({ ...t, balance: toUnits(t.balanceRaw, t.decimals) }),
+    balanceRaw: t.balanceRaw,
+    amountExact: formatTokenUnits(t.balanceRaw, t.decimals),
+    possible_spam: t.possible_spam
+  }));
 }
 
 // ---------- Public API ----------
 export async function fetchEthereumTokens(address, { force = false } = {}) {
-  const key = `eth:tokens:${(address || '').toLowerCase()}`;
+  const key = `eth:tokens:v2:${(address || '').toLowerCase()}`;
   let cachedArr = null;
   if (!force) {
     const cachedRaw = getCachedJSON(key, CACHE_TTL_MS)?.data;
-    cachedArr = Array.isArray(cachedRaw)
-      ? cachedRaw
-      : Array.isArray(cachedRaw?.tokens)
-        ? cachedRaw.tokens
-        : null;
+    cachedArr = Array.isArray(cachedRaw) ? cachedRaw : Array.isArray(cachedRaw?.tokens) ? cachedRaw.tokens : null;
     if (cachedArr) {
       const fixed = applyKnownTokenFixes(cachedArr.slice());
       const priced = await enrichAllPrices(fixed);
@@ -190,7 +151,7 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
     }
   }
 
-  const [nativeRow, erc20] = await Promise.all([fetchNativeETH(address), fetchERC20Tokens(address)]);
+  const [nativeRow, erc20] = await Promise.all([fetchNativeETH(address), fetchERC20Tokens(address, { force })]);
   const baseList = [nativeRow, ...erc20];
   applyKnownTokenFixes(baseList);
   const result = await enrichAllPrices(baseList);
@@ -201,6 +162,6 @@ export async function fetchEthereumTokens(address, { force = false } = {}) {
 
 export async function refreshEthereumTokens(address) {
   const fresh = await fetchEthereumTokens(address, { force: true });
-  setCachedJSON(`eth:tokens:${(address || '').toLowerCase()}`, fresh);
+  setCachedJSON(`eth:tokens:v2:${(address || '').toLowerCase()}`, fresh);
   return fresh;
 }

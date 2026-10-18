@@ -48,7 +48,8 @@ function getVisibleWallets() {
       .filter((wallet) => wallet && !wallet.hidden)
       .map((wallet) => ({
         address: wallet.address,
-        name: wallet.name
+        name: wallet.name,
+        networks: wallet.networks
       }))
       .filter((wallet) => typeof wallet.address === 'string' && wallet.address);
   } catch {
@@ -84,16 +85,12 @@ export function RefreshProvider({ children }) {
 
     const snapshot = Array.from(tasksRef.current.entries());
     const wallets = getVisibleWallets();
-    const walletAddresses = wallets
-      .map((wallet) => String(wallet.address || '').trim())
-      .filter(Boolean);
+    const walletAddresses = wallets.map((wallet) => String(wallet.address || '').trim()).filter(Boolean);
 
     const txTask = tasksRef.current.get('transaction-history') || null;
-    const otherTasks = snapshot.filter(([name]) =>
-      !name.startsWith('wallet-detail') &&
-      !name.startsWith('staking:') &&
-      name !== 'portfolio-overview' &&
-      name !== 'transaction-history'
+    const otherTasks = snapshot.filter(
+      ([name]) =>
+        !name.startsWith('wallet-detail') && !name.startsWith('staking:') && name !== 'portfolio-overview' && name !== 'transaction-history'
     );
 
     const globalCacheSteps = 1;
@@ -148,7 +145,7 @@ export function RefreshProvider({ children }) {
 
           try {
             clearWalletPrefix(address);
-            await buildPortfolioDetailed([{ address, name: wallet?.name }], { force: true });
+            await buildPortfolioDetailed([{ address, name: wallet?.name, networks: wallet?.networks }], { force: true });
 
             const lower = address.toLowerCase();
             const specificKey = `wallet-detail:${lower}`;
@@ -158,10 +155,12 @@ export function RefreshProvider({ children }) {
             if (taskFn && (!hasSpecific ? !seenGenericWalletTask.has(taskName) : true)) {
               if (!hasSpecific) seenGenericWalletTask.add(taskName);
               try {
-                await runWithTimeout(taskName, () => taskFn({
-                  reason: GLOBAL_REASON,
-                  wallet
-                }));
+                await runWithTimeout(taskName, () =>
+                  taskFn({
+                    reason: GLOBAL_REASON,
+                    wallet
+                  })
+                );
               } catch (error) {
                 console.warn(`[refresh] wallet task "${taskName}" failed`, error);
               }
@@ -195,11 +194,13 @@ export function RefreshProvider({ children }) {
       const stakingHexTask = tasksRef.current.get('staking:hex');
       if (stakingHexTask && hexPayload) {
         try {
-          await runWithTimeout('staking:hex', () => stakingHexTask({
-            reason: GLOBAL_REASON,
-            payload: hexPayload,
-            wallets: walletAddresses
-          }));
+          await runWithTimeout('staking:hex', () =>
+            stakingHexTask({
+              reason: GLOBAL_REASON,
+              payload: hexPayload,
+              wallets: walletAddresses
+            })
+          );
         } catch (error) {
           console.warn('[refresh] staking:hex task failed', error);
         }
@@ -208,11 +209,13 @@ export function RefreshProvider({ children }) {
       const stakingEhexTask = tasksRef.current.get('staking:ehex');
       if (stakingEhexTask && ehexPayload) {
         try {
-          await runWithTimeout('staking:ehex', () => stakingEhexTask({
-            reason: GLOBAL_REASON,
-            payload: ehexPayload,
-            wallets: walletAddresses
-          }));
+          await runWithTimeout('staking:ehex', () =>
+            stakingEhexTask({
+              reason: GLOBAL_REASON,
+              payload: ehexPayload,
+              wallets: walletAddresses
+            })
+          );
         } catch (error) {
           console.warn('[refresh] staking:ehex task failed', error);
         }
@@ -232,10 +235,12 @@ export function RefreshProvider({ children }) {
       const portfolioTask = tasksRef.current.get('portfolio-overview');
       if (portfolioTask && portfolioPayload) {
         try {
-          await runWithTimeout('portfolio-overview', () => portfolioTask({
-            reason: GLOBAL_REASON,
-            payload: portfolioPayload
-          }));
+          await runWithTimeout('portfolio-overview', () =>
+            portfolioTask({
+              reason: GLOBAL_REASON,
+              payload: portfolioPayload
+            })
+          );
         } catch (error) {
           console.warn('[refresh] portfolio-overview task failed', error);
         }
@@ -312,4 +317,3 @@ export function useRefresh() {
 }
 
 export default RefreshContext;
-
