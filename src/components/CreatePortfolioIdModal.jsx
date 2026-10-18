@@ -134,7 +134,7 @@ export default function CreatePortfolioIdModal({ show, onHide }) {
           <span role="img" aria-label="warning">
             ⚠️
           </span>{' '}
-          <strong>Keep this ID safe and private</strong> - anyone with it can view your saved addresses.
+          <strong>Keep this ID safe and private</strong> - anyone with it can view or update your saved addresses.
         </Alert>
 
         <div className="small text-body-secondary mb-2">

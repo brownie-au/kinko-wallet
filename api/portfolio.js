@@ -88,7 +88,7 @@ export default async function handler(req, res) {
       const data = JSON.parse(raw);
       // Read the old {value: JSON-string, px: ...} format as well as the repaired schema.
       const record = typeof data.value === 'string' ? JSON.parse(data.value) : data;
-      return send(res, 200, { wallets: normalizeWallets(record.wallets || []) });
+      return send(res, 200, { wallets: normalizeWallets(record.wallets, { strict: true }) });
     } catch {
       return send(res, 503, { error: 'Portfolio sync unavailable' });
     }
