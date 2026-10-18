@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import AppLink from 'components/AppLink';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 import useConfig from 'hooks/useConfig';
 import { setResolvedTheme } from 'components/setResolvedTheme';
@@ -25,8 +25,12 @@ export default function Header() {
         <span>Menu</span>
       </button>
       <nav aria-label="Quick navigation">
-        <NavLink to="/portfolio">Portfolio</NavLink>
-        <NavLink to="/wallets/manage">Wallets</NavLink>
+        <AppLink nav to="/portfolio">
+          Portfolio
+        </AppLink>
+        <AppLink nav to="/wallets/manage">
+          Wallets
+        </AppLink>
       </nav>
     </header>
   );

@@ -1,7 +1,8 @@
 import { handlerDrawerOpen } from 'api/menu';
 // src/layout/Dashboard/Drawer/DrawerContent/index.jsx
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import Link from 'components/AppLink';
 import SimpleBarScroll from 'components/third-party/SimpleBar';
 import navigation from 'menu-items/navigation';
 import { useWallets } from 'contexts/WalletContext';

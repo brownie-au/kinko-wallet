@@ -523,7 +523,7 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
   min-height: 44px;
   display: flex;
   align-items: center;
-  color: var(--bs-secondary-color);
+  color: inherit;
   font-family: monospace;
 }
 .kw-address-disclosure[open] {
@@ -543,7 +543,10 @@ body[data-pc-theme='dark'] .kw-app .kwp-change-down {
 .kw-app button.kw-copy-btn {
   border: 0;
   background: transparent;
-  color: var(--bs-secondary-color);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   opacity: 1;
   margin-left: 0;
   padding: 0;

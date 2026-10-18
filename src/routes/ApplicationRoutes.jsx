@@ -30,9 +30,6 @@ const UserSocialProfilePage = Loadable(lazy(() => import('views/application/user
 const UserProfilePage = Loadable(lazy(() => import('views/application/users/Profile')));
 const UserCardPage = Loadable(lazy(() => import('views/application/users/UserCard')));
 
-// ✅ wallet detail (keep if you want it here; KinkoRoutes also defines it)
-const WalletDetail = Loadable(lazy(() => import('views/wallet/WalletDetail')));
-
 const ApplicationRoutes = {
   path: '/',
   element: <DashboardLayout />,
@@ -78,12 +75,7 @@ const ApplicationRoutes = {
           ]
         }
       ]
-    },
-
-    // ⛔ Removed: { path: 'portfolio', element: <PortfolioOverview /> },
-
-    // ✅ wallet detail (optional here; KinkoRoutes also has it)
-    { path: 'wallet/:address', element: <WalletDetail /> }
+    }
   ]
 };
 
