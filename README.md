@@ -1,0 +1,95 @@
+# Kinko Wallet · Reimagined
+
+Your keys. Your coins. Your control. Kinko just keeps you informed.
+
+A responsive, **strictly watch-only** crypto portfolio and HEX staking dashboard. Add public EVM addresses, name your wallets, inspect token holdings and open HEX stakes, and recover your encrypted watchlist on another device using a Kinko Access Key. No email, signing wallet, cryptocurrency private key, or seed phrase is required or accepted.
+
+## Run locally
+
+Node 22.12+ or Node 24 is required.
+
+```sh
+npm ci --ignore-scripts
+npm test
+npm run build
+npm run dev
+```
+
+`npm run dev` serves the interface and the clearly labelled illustrative demo. `/api/vault` and `/api/data` are Vercel functions; full local development uses `npx vercel dev` with an owner-linked project and the server-only variables in `.env.local`. The Vite-only server deliberately does not forward account data to an unrelated production site.
+
+Deploy the repository root as a Vite project on Vercel; `vercel.json` supplies the install/build commands, two API functions, security headers and SPA routing. Keep the rebuild on a separate branch and test deployment until approved for the primary domain. There are no paid SDKs, analytics, fonts, signing integrations, automatic upgrades, or purchased assets.
+
+## Implemented
+
+- Original forest/ivory design, light/dark themes, responsive sidebar/bottom navigation and an explicit sample-data demo.
+- Multiple public wallet addresses, names, network choices, add/edit/remove, search, copy confirmation and explorer links.
+- Ethereum and PulseChain priority; Base, Polygon and BNB Smart Chain configurations.
+- Native balances; paginated Blockscout token discovery on supported chains; custom read-only ERC-20 contracts (up to 30).
+- Decimal-string balances, BigInt calculations and contract/network-based token identity; no ticker-only merging.
+- DefiLlama pricing and chain-specific Dexscreener fallbacks for PulseChain; unavailable prices stay unavailable.
+- USD and AUD display (AUD uses an available dated ECB reference rate through Frankfurter).
+- Read-only HEX `currentDay`, `stakeCount`, `stakeLists`, principal, shares/T-Shares, maturity dates, status and a stake ladder.
+- Recent explorer-indexed transactions on supported networks. BNB activity requires its explorer.
+- Secure browser-generated Access Keys, client-encrypted cloud sync, optimistic concurrency, encrypted export/import, legacy JSON import, and account deletion.
+- Session-only portfolio observations. This is not historical investment performance.
+
+## Access Key and encrypted storage
+
+1. The browser generates 32 random bytes using Web Crypto (256 bits), displayed as `KINKO-` plus grouped hexadecimal characters. The KINKO prefix prevents accepting an ordinary cryptocurrency private key as an account key.
+2. HKDF-SHA-256 derives **separate** lookup, authorization and AES encryption material with versioned domain labels.
+3. AES-256-GCM encrypts wallet addresses, names, networks, preferences and custom contracts with a fresh 96-bit random nonce. The account identifier and version are bound as authenticated associated data.
+4. `/api/vault` receives ciphertext, the derived account identifier, and a **separate bearer credential** over HTTPS. It never receives the raw Access Key or encryption key.
+5. The database stores the identifier, a SHA-256 verifier of the derived authorization credential, encrypted envelope, and revision. Account creation uses Redis `SET NX`; updates/deletions use atomic Lua compare-and-swap checks of the verifier and revision.
+6. Another browser independently derives the same material, authenticates, fetches the envelope, and decrypts it locally. Nothing depends on the first browser's storage.
+7. The Access Key and authorization credential are kept in memory, never local/session storage. Reloading or signing out requires entering the saved key again. Browser storage contains only encrypted account envelopes; live financial results remain in memory.
+
+If the Access Key is lost, there is no recovery backdoor. The actual cryptocurrency is unaffected. Exported encrypted backups still require the same Access Key. A local backup can be opened explicitly if the cloud is unavailable; it is visibly marked **local**, without a false claim of cross-device sync. Conflicting edits are not silently overwritten: export pending edits, then load the current cloud copy.
+
+## Environment
+
+Use an **owner-controlled free Upstash Redis database**, configured only in the Vercel project's server environment. The existing test project already has KV variable names configured. No secrets are needed in the frontend.
+
+```text
+KV_REST_API_URL=...
+KV_REST_API_TOKEN=...
+```
+
+Equivalent `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` and legacy `UPSTASH_REST_URL` / `UPSTASH_REST_TOKEN` are supported. Use the read/write REST token, not a read-only token. Do not commit `.env` files. No optional legacy AI keys are used.
+
+## Public data and accuracy
+
+`api/data.js` accepts only fixed supported actions and networks, validated public addresses and bounded custom contracts. It is not an arbitrary proxy. Each RPC reader checks `eth_chainId`, pins contract reads to one block, and retries only known providers on that chain. Native and explorer balances are distinct retrieval paths. Prices require a usable recent timestamp (within six hours); unpriced tokens are excluded from known fiat totals. Failures are visible and cached client results are marked stale rather than changed to zero.
+
+HEX contract: `0x2b591e99afe9f32eaa6214f7b7629768c40eeb39` on Ethereum (1) and PulseChain (369). `LAUNCH_TIME = 1575331200`, hearts = 10^8 per HEX, and 10^12 raw shares per T-Share. `lockedDay + stakedDays` determines scheduled maturity at UTC day boundaries. `unlockedDay` indicates good accounting and is **not** equivalent to ending a stake. Ended positions disappear from `stakeLists` and require historical indexing; they are not fabricated here. Shares and principal summed across networks are **raw units**, not equal economic exposure. Use network filters for meaningful comparisons.
+
+## Free infrastructure and constraints
+
+Official sources reviewed **19 October 2026**:
+
+| Provider | Documented free allowance / limits | Use |
+| --- | --- | --- |
+| [Vercel Hobby](https://vercel.com/docs/plans/hobby) | 100 GB fast transfer, 1M function invocations, 4 active CPU hours, 360 GB-hours memory; non-commercial personal use only; quotas pause service | Vite assets + two read-only/server-storage functions |
+| [Upstash Redis Free](https://upstash.com/pricing/redis) | 500K commands/month; headline/FAQ says 250 MB, technical capacity table says 256 MB; use 250 MB as the conservative bound; 10 GB bandwidth, one free database | Ciphertext and authentication verifiers |
+| [Dexscreener API](https://docs.dexscreener.com/api/reference) | Chain token endpoint documented at 300 requests/minute | PulseChain missing-price fallback |
+| [Blockscout](https://docs.blockscout.com/devs/apis) / public RPCs / [DefiLlama](https://defillama.com/docs/api) | Shared availability/rate limits; no dedicated SLA assumed | Public blockchain and market data |
+| [Frankfurter](https://frankfurter.dev/) | Open-source public reference FX API; not a live trading rate | Optional AUD conversion |
+
+No paid plans or billing changes were made. Existing account/database plan and billing status must remain Free/Hobby; do not upgrade or enable pay-as-you-go. Upstash explicitly says paid tiers are billed differently; its free allowance is not an allowance on paid databases. Hosting quotas and public provider outages can stop refresh/sync. The code caches market requests for one minute, FX for one hour, limits concurrency, and never polls continuously. Account requests use a distributed Redis rate limit. Public-data throttling and cache are per process, so they are not a complete abuse defence across serverless instances. Monitor free quotas. Unlimited use at $0 is not promised.
+
+## Tests and verification
+
+`npm test` covers random key generation, rejection of crypto key formats, independent-client key derivation, authenticated encryption/tamper protection, absence of plaintext/key in request payloads, API read/write/delete authorization, independent-device restoration through a storage contract, concurrency conflicts, storage outages, exact amount arithmetic, HEX maturity boundaries, pinned block reads, wrong-chain rejection and unknown prices. See `docs/VERIFICATION.md` for actual live results and remaining verification gaps.
+
+`npm audit` is a known-vulnerability check, **not an independent security audit**.
+
+## Limitations and threat model
+
+- This app holds no cryptocurrency, signs nothing, cannot start/end stakes or move assets, and does not connect to browser signing wallets.
+- A Kinko Access Key grants access to saved Kinko data; keep it private. No Access Key rotation is currently implemented.
+- An unlocked/compromised browser, malicious extension, compromised host/frontend or an XSS vulnerability can access decrypted data. Encryption does not make the app anonymous or independently audited.
+- Public wallet addresses go to our read-only data endpoint and public providers for queries. Saved associations and names are encrypted. Providers and hosting may observe request metadata; ephemeral server caches can contain public address results.
+- Automatic BNB token discovery and BNB activity indexing are unavailable; custom token reads and explorer links are provided.
+- No NFTs, LP valuation, historical ended-stake index, reward/penalty projections, cost-basis/P&L or invented historical portfolio charts.
+- Token discovery is bounded to five pages; truncated results are labelled incomplete. Up to 500 open HEX positions per wallet/network are supported; large wallets may encounter request timeouts.
+- Session observations are not persisted history. Old short Portfolio IDs are separate from Access Keys; import a JSON wallet backup.
+- The earlier application sources and API code remain in Git history and `legacy-api/` for reference; legacy APIs are **not deployed** on this rebuild. They are not part of the supported runtime or the new test command.
