@@ -202,7 +202,7 @@ test('native balance and price complete while discovery is still waiting',async(
 test('shared indexer pacing spaces concurrent work and a cancelled request cannot poison the queue', async () => {
   let clock = 1000;
   const starts = [], waits = [];
-  const pace = createIndexerPacer({ now: () => clock, wait: async (ms) => { waits.push(ms); clock += ms; } });
+  const pace = createIndexerPacer({ interval: 250, now: () => clock, wait: async (ms) => { waits.push(ms); clock += ms; } });
   await Promise.all(Array.from({ length: 4 }, async () => { await pace(); starts.push(clock); }));
   assert.deepEqual(waits, [250, 250, 250]);
   assert.equal(starts.length, 4);
@@ -237,4 +237,41 @@ test('exhausted metadata throttling remains a retryable read issue rather than i
     assert.equal(result.notices[0].code, 'discovery-metadata-unavailable');
     assert.equal(result.notices[0].action, 'retry'); assert.match(result.notices[0].message, /rate limit/);
   });
+});
+test('a slow indexer leaves the holdings deadline available for pricing retained tokens', { timeout: 22000 }, async () => {
+  const prior = process.env.ALCHEMY_API_KEY;
+  process.env.ALCHEMY_API_KEY = 'test-budget-key';
+  const started = Date.now();
+  try {
+    await withFetch(async (url, opts) => {
+      if (url.includes('alchemy.com')) {
+        const req = request(opts);
+        if (req.method === 'eth_chainId') return ok({ result: '0x2105' });
+        if (req.method === 'alchemy_getTokenBalances') return ok({ result: { address: wallet, tokenBalances: Array.from({ length: 6 }, (_, i) => indexed(address(200 + i))) } });
+        if ([address(200), address(204)].includes(req.params[0])) return ok({ result: metadata });
+        return new Promise((resolve, reject) => {
+          if (opts.signal.aborted) reject(opts.signal.reason);
+          else opts.signal.addEventListener('abort', () => reject(opts.signal.reason), { once: true });
+        });
+      }
+      if (opts?.body) {
+        const req = request(opts);
+        return ok({ result: req.method === 'eth_chainId' ? '0x2105' : req.method === 'eth_blockNumber' ? '0x123' : '0xde0b6b3a7640000' });
+      }
+      return ok({ coins: { 'coingecko:ethereum': { price: 2000, timestamp: Date.now()/1000 }, [`base:${address(200)}`]: { price: 2, timestamp: Date.now()/1000 } } });
+    }, async () => {
+      let body;
+      const res = { setHeader() {}, end(raw) { body = JSON.parse(raw); } };
+      await handler({ method: 'POST', headers: { 'x-forwarded-for': 'budget-test' }, body: { action: 'holdings', chain: 'base', address: wallet } }, res);
+      assert.equal(res.statusCode, 200);
+      assert.ok(Date.now() - started < 17500);
+      assert.equal(body.discovery, 'partial');
+      assert.equal(body.rows.find(r => r.address === null).priceUsd, 2000);
+      assert.equal(body.rows.find(r => r.address === address(200)).priceUsd, 2);
+      assert.equal(body.notices[0].code, 'discovery-metadata-unavailable');
+    });
+  } finally {
+    if (prior === undefined) delete process.env.ALCHEMY_API_KEY;
+    else process.env.ALCHEMY_API_KEY = prior;
+  }
 });

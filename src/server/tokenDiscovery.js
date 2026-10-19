@@ -10,7 +10,7 @@ const metadata = new Map();
 
 // Shared by all requests in this function process. This is deliberately below
 // the free tier's throughput, but does not claim a distributed/account-wide cap.
-export function createIndexerPacer({ interval = 250, now = Date.now, wait = (ms, signal) => sleep(ms, undefined, { signal }) } = {}) {
+export function createIndexerPacer({ interval = 125, now = Date.now, wait = (ms, signal) => sleep(ms, undefined, { signal }) } = {}) {
   let queue = Promise.resolve(), next = 0;
   return (signal) => {
     const ticket = queue.then(async () => {
@@ -25,7 +25,9 @@ export function createIndexerPacer({ interval = 250, now = Date.now, wait = (ms,
   };
 }
 const pace = createIndexerPacer();
-export async function indexedDiscovery(chain, address, apiKey, signal) {
+export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
+  // Reserve most of the holdings window for direct reads and market prices.
+  const signal = parentSignal ? AbortSignal.any([parentSignal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
   const tokens = [], notices = [], seen = new Set(), cursors = new Set();
   let skipped = 0, unread = 0, rateLimited = false, pageKey;
   const result = (status) => {
