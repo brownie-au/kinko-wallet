@@ -1,3 +1,4 @@
+import { splitTokens, spamReason } from './tokenFilter.js';
 import { Interface } from 'ethers';
 import { isAddress } from './validation.js';
 export { isAddress };
@@ -93,6 +94,8 @@ export async function discover(chain, address, signal) {
   const tokens = [];
   const seen = new Set();
   const notices = [];
+  const filtered = [];
+  const finish = (...args) => ({ ...discoveryResult(...args), filtered });
   let skipped = 0;
   const recoverable = new Set();
   for (let page = 0; page < 5; page++) {
@@ -106,12 +109,12 @@ export async function discover(chain, address, signal) {
       }
     } catch (error) {
       notices.push(discoveryFailure(error, tokens.length > 0));
-      return discoveryResult(tokens, notices, tokens.length ? 'partial' : 'unavailable', skipped, [...recoverable]);
+      return finish(tokens, notices, tokens.length ? 'partial' : 'unavailable', skipped, [...recoverable]);
     }
     const items = Array.isArray(data) ? data : data?.items;
     if (!Array.isArray(items)) {
       notices.push(discoveryFailure(new Error('Invalid explorer response'), tokens.length > 0));
-      return discoveryResult(tokens, notices, tokens.length ? 'partial' : 'unavailable', skipped, [...recoverable]);
+      return finish(tokens, notices, tokens.length ? 'partial' : 'unavailable', skipped, [...recoverable]);
     }
     for (const item of items) {
       if (!item || typeof item !== 'object') {
@@ -122,7 +125,12 @@ export async function discover(chain, address, signal) {
       const contract = String(t.address_hash || t.address || '').toLowerCase();
       const raw = String(item.value ?? '');
       const decimals = Number(t.decimals);
-      if ((t.type && t.type !== 'ERC-20') || t.is_spam === true || raw === '0') continue;
+      if ((t.type && t.type !== 'ERC-20') || raw === '0') continue;
+      const reason = spamReason(t);
+      if (isAddress(contract) && reason) {
+        filtered.push({ address: contract, name: String(t.name || 'Token').slice(0,100), symbol: String(t.symbol || 'TOKEN').slice(0,30), reason });
+        continue;
+      }
       if (
         !isAddress(contract) ||
         !/^\d+$/.test(raw) ||
@@ -147,7 +155,7 @@ export async function discover(chain, address, signal) {
         spam: t.is_spam === true
       });
     }
-    if (!data.next_page_params) return discoveryResult(tokens, notices, skipped ? 'partial' : 'complete', skipped, [...recoverable]);
+    if (!data.next_page_params) return finish(tokens, notices, skipped ? 'partial' : 'complete', skipped, [...recoverable]);
     url = `${root}/tokens?${new URLSearchParams({ ...data.next_page_params, type: 'ERC-20' })}`;
   }
   notices.push({
@@ -156,7 +164,7 @@ export async function discover(chain, address, signal) {
     action: 'track-token',
     message: 'Token discovery reached its page limit. Some tokens may be missing; add a missing contract to check it directly.'
   });
-  return discoveryResult(tokens, notices, 'partial', skipped, [...recoverable]);
+  return finish(tokens, notices, 'partial', skipped, [...recoverable]);
 }
 function discoveryResult(tokens, notices, status, skipped = 0, recoverable = []) {
   if (skipped)
@@ -323,9 +331,14 @@ export async function holdings(chain, address, contracts = [], options = {}) {
     }
   } else addIssue('rpc-unavailable', 'Native RPC unavailable; explorer token balances may still be shown. Retry this network later.');
   if (!rows.length && issues.length) throw new Error(issues.join(' '));
+  const screened = splitTokens(rows.filter((t) => t.address).map((t) => ({ ...t, chain })),
+    contracts.map((address) => ({ chain, address })), (options.excludedContracts || []).map((address) => ({ chain, address })));
+  const filtered = [...(scanResult.status === 'fulfilled' ? scanResult.value.filtered || [] : []), ...screened.filtered]
+    .filter((t) => !screened.visible.some((v) => v.address === t.address));
   return {
+    filtered,
     rows: [...(nativeResult.status === 'fulfilled' ? [nativeResult.value] : []),
-      ...await addPrices(chain, rows.filter((t) => t.address), signal)
+      ...await addPrices(chain, screened.visible, signal)
     ].map((t) => ({ ...t, wallet: address.toLowerCase() })),
     issues,
     notices,

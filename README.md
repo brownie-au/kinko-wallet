@@ -25,6 +25,7 @@ Deploy the repository root as a Vite project on Vercel; `vercel.json` supplies t
 - Multiple public wallet addresses, names, network choices, add/edit/remove, search, copy confirmation and explorer links.
 - Ethereum and PulseChain priority; Base, Polygon and BNB Smart Chain configurations.
 - Native balances; paginated Blockscout token discovery on supported chains; custom read-only ERC-20 contracts (up to 30).
+- Cross-chain provider/claim-link spam filtering before pricing, encrypted manual hides (up to 100 contracts), review/restore controls, and optional Assets-only dust filtering.
 - Decimal-string balances, BigInt calculations and contract/network-based token identity; no ticker-only merging.
 - DefiLlama pricing and chain-specific Dexscreener fallbacks on all five networks; unavailable prices stay unavailable.
 - USD and AUD display (AUD uses an available dated ECB reference rate through Frankfurter).
@@ -110,3 +111,11 @@ Explorer records missing usable decimals are retried directly on-chain (at most 
 Holdings requests share a 45-second abort budget (inside the browser's 55-second limit). Native balance and price reads run concurrently with discovery so an indexer delay does not starve the native read. Price lookups use at most three concurrent batches per provider. Successful partial results remain visible when this budget expires.
 
 Authenticated indexer requests are spaced at least 125 ms apart within each server process, and an HTTP/JSON-RPC 429 receives one retry after a one-second backoff. Discovery has its own 15-second budget to reserve time for market prices; the shared 45-second holdings deadline still applies to queued work and retries. Metadata read failures are marked retryable separately from invalid token records. Pacing and metadata caches are process-local, so this is not an account-wide or distributed quota guarantee.
+
+## Spam filtering and discovery cost
+
+The same contract-based filter covers Ethereum, PulseChain, Base, Polygon and BNB. Provider spam flags and promotional claim/airdrop URLs in names or symbols are quarantined before pricing and excluded from asset totals and unpriced notices. Unpriced tokens and low balances alone are never spam signals. Assets exposes a filtered-token review list; explicitly tracking a verified contract overrides automatic filtering. Manual hides are saved in the encrypted watchlist and keyed by network plus contract, with restore available even if the token disappears from the provider. Native assets cannot be hidden. The optional USD 0.01 dust checkbox changes only the Assets list, not financial totals.
+
+On Alchemy-backed chains, large lists (30+ uncached positive-balance candidates) first try Tokens By Wallet with inline metadata and prices disabled, avoiding one metadata round trip per airdrop. Small lists and warm caches retain the cheaper Token API. Successful metadata and known spam classifications have bounded, process-local 24-hour caches; balances are always reread. Unsupported/denied batch requests fall back within the existing 15-second discovery budget, and later-page failures retain successful tokens with a notice. Explicitly hidden contracts skip individual metadata work. Spam filtering cannot remove upstream balance-page scanning, guarantee detection of every scam, or eliminate genuine provider timeouts.
+
+[Alchemy Tokens By Wallet](https://www.alchemy.com/docs/data/portfolio-apis/portfolio-api-endpoints/portfolio-api-endpoints/get-tokens-by-address) supplies inline metadata. Its documented [compute-unit cost](https://github.com/alchemyplatform/docs/blob/main/content/api-reference/pricing-resources/pricing/compute-unit-costs.mdx) is 480 per requested network; the batching threshold avoids spending this on every small or warm wallet. Existing free quotas still apply. No plan upgrades or new paid services are required by this change.

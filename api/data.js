@@ -32,13 +32,15 @@ export default async function handler(req, res) {
       body = JSON.parse(raw);
     }
     if (typeof body === 'string') body = JSON.parse(body);
-    const { action, chain, address, contracts = [] } = body || {};
+    const { action, chain, address, contracts = [], excludedContracts = [] } = body || {};
     if (!['holdings', 'stakes', 'activity', 'fx'].includes(action)) return reply(res, 400, { error: 'Unsupported action' });
     if (action !== 'fx' && (!NETWORKS[chain] || !isAddress(address)))
       return reply(res, 400, { error: 'Invalid network or public wallet address' });
     if (!Array.isArray(contracts) || contracts.length > 30 || contracts.some((c) => !isAddress(c)))
       return reply(res, 400, { error: 'Invalid token contracts' });
-    const key = JSON.stringify([action, chain, address?.toLowerCase(), contracts.map((c) => c.toLowerCase()).sort()]);
+    if (!Array.isArray(excludedContracts) || excludedContracts.length > 100 || excludedContracts.some((c) => !isAddress(c)))
+      return reply(res, 400, { error: 'Invalid hidden token contracts' });
+    const key = JSON.stringify([action, chain, address?.toLowerCase(), contracts.map((c) => c.toLowerCase()).sort(), excludedContracts.map((c) => c.toLowerCase()).sort()]);
     const prior = cache.get(key);
     if (prior && now - prior.time < (action === 'fx' ? 3600000 : 60000)) return reply(res, 200, await prior.promise);
     const promise =
@@ -50,8 +52,9 @@ export default async function handler(req, res) {
           }))
         : action === 'holdings'
           ? holdings(chain, address, contracts, {
+              excludedContracts,
               discover: process.env.ALCHEMY_API_KEY && ['base', 'polygon', 'bsc'].includes(chain)
-                ? (network, wallet, signal) => indexedDiscovery(network, wallet, process.env.ALCHEMY_API_KEY, signal)
+                ? (network, wallet, signal) => indexedDiscovery(network, wallet, process.env.ALCHEMY_API_KEY, signal, excludedContracts)
                 : undefined
             })
           : { stakes, activity }[action](chain, address, contracts);

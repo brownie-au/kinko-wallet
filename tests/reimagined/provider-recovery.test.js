@@ -9,7 +9,8 @@ const address = (n) => '0x' + n.toString(16).padStart(40, '0');
 const ok = (data) => ({ ok: true, json: async () => data });
 async function withFetch(fetch, task) {
   const prior = global.fetch;
-  global.fetch = fetch;
+  // These tests exercise the Token API fallback; Portfolio API is covered separately.
+  global.fetch = (url, ...args) => url.includes('/assets/tokens/by-address') ? Promise.resolve({ ok: false, status: 404 }) : fetch(url, ...args);
   try { await task(); } finally { global.fetch = prior; }
 }
 const pair = (chain, token, price = '2', liquidity = 20000) => ({ chainId: chain, baseToken: { address: token }, priceUsd: price, liquidity: { usd: liquidity } });

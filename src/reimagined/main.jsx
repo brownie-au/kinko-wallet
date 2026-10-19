@@ -1,3 +1,4 @@
+import { splitTokens, tokenKey } from './tokenFilter.js';
 import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { generateAccessKey, deriveAccess, encryptWatchlist, decryptWatchlist, normalizeKey } from './crypto.js';
@@ -43,11 +44,11 @@ const nav = [
   ['stakes', 'calendar', 'HEX staking'],
   ['activity', 'activity', 'Activity']
 ];
-async function api(action, chain, address, contracts = []) {
+async function api(action, chain, address, contracts = [], excludedContracts = []) {
   const r = await fetch('/api/data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, chain, address, contracts }),
+    body: JSON.stringify({ action, chain, address, contracts, excludedContracts }),
     signal: AbortSignal.timeout(55000)
   });
   const d = await r.json();
@@ -467,6 +468,7 @@ export function App() {
     [refresh, setRefresh] = useState(0),
     [fx, setFx] = useState(null),
     [sort, setSort] = useState('value'),
+    [hideDust, setHideDust] = useState(false),
     [stakeStatus, setStakeStatus] = useState('all'),
     [history, setHistory] = useState([]),
     [historyError, setHistoryError] = useState(''),
@@ -641,7 +643,7 @@ export function App() {
     if (error) toast(error.message);
   };
   const walletSignature = JSON.stringify(data.wallets.map((w) => [w.address, w.networks]));
-  const contractSignature = JSON.stringify(data.tokens || []);
+  const contractSignature = JSON.stringify([data.tokens || [], data.hiddenTokens || []]);
   useEffect(() => {
     if (!session) return;
     if (demo) {
@@ -665,7 +667,7 @@ export function App() {
         const key = `${w.address.toLowerCase()}:${c}`;
         const contracts = (data.tokens || []).filter((t) => t.chain === c).map((t) => t.address);
         try {
-          const d = await api('holdings', c, w.address, contracts);
+          const d = await api('holdings', c, w.address, contracts, (data.hiddenTokens || []).filter((t) => t.chain === c).map((t) => t.address));
           if (!stopped && generation.current === g) setResults((p) => ({ ...p, [key]: { ...d, error: null } }));
         } catch (e) {
           if (!stopped && generation.current === g)
@@ -746,7 +748,23 @@ export function App() {
   const rawRows = demo
     ? demoRows
     : Object.values(results).flatMap((r) => (r.rows || []).map((t) => ({ ...t, stale: !!(r.stale || t.stale) })));
-  const rows = rawRows.filter(matches).filter((r) => !r.spam);
+  const screened = splitTokens(rawRows.filter(matches), data.tokens, data.hiddenTokens);
+  const rows = screened.visible;
+  const filteredTokens = [...new Map([
+    ...scopedResults.flatMap((r) => (r.filtered || []).map((t) => ({ ...t, chain: r.chain }))),
+    ...screened.filtered,
+    ...(data.hiddenTokens || []).filter((t) => (chainFilter === 'all' || chainFilter === t.chain) && selectedWallets.some((w) => w.networks.includes(t.chain)))
+      .map((t) => ({ ...t, reason: 'Hidden by you' }))
+  ].map((t) => [tokenKey(t.chain, t.address), t])).values()]
+    .filter((t) => !rows.some((r) => tokenKey(r.chain, r.address) === tokenKey(t.chain, t.address)));
+  const setTokenHidden = async (token, hidden) => {
+    const prior = data.hiddenTokens || [];
+    const key = tokenKey(token.chain, token.address);
+    if (hidden && prior.length >= 100) { toast('Maximum 100 hidden contracts per watchlist.'); return; }
+    const next = prior.filter((t) => tokenKey(t.chain, t.address) !== key);
+    if (hidden) next.push({ chain: token.chain, address: token.address });
+    if (await persist({ ...data, hiddenTokens: next })) { setModal(null); toast(hidden ? 'Token hidden. Review filtered tokens on Assets to restore it.' : 'Token restored. Its balance will be refreshed.'); }
+  };
   const aggregate = aggregateHoldings(rows);
   const allStakes = (
     demo ? demoStakes : Object.values(stakeResults).flatMap((r) => (r.stakes || []).map((s) => ({ ...s, stale: r.stale })))
@@ -1339,7 +1357,11 @@ export function App() {
                       View all <Icon name="arrow" size={15} />
                     </button>
                   </div>
-                  <AssetTable
+                  <div className="panel-footnote">
+                <label><input type="checkbox" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
+                <p>Dust filtering only changes this list. Portfolio totals still include these balances.</p>
+              </div>
+              <AssetTable
                     tokens={tokens.slice(0, 5)}
                     money={money}
                     price={price}
@@ -1420,16 +1442,34 @@ export function App() {
                   </button>
                 </div>
               </div>
+              <div className="panel-footnote">
+                <label><input type="checkbox" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
+                <p>Dust filtering only changes this list. Portfolio totals still include these balances.</p>
+              </div>
               <AssetTable
-                tokens={tokens}
+                tokens={hideDust ? tokens.filter((t) => t.valueUsd == null || t.valueUsd >= 0.01 || !t.address) : tokens}
                 money={money}
                 price={price}
                 quantity={quantity}
                 onDetail={(t) => setModal({ kind: 'asset', token: t })}
               />
+              {filteredTokens.length > 0 && (
+                <details className="panel-footnote filtered-tokens">
+                  <summary>{filteredTokens.length} filtered tokens · Review</summary>
+                  <p>Hidden from assets, totals and price notices. Names are untrusted text. Tracking a contract overrides the automatic filter; verify its address first.</p>
+                  {filteredTokens.map((t) => (
+                    <div className="filtered-token" key={tokenKey(t.chain, t.address)}>
+                      <div><b>{t.symbol || 'Token'} · {NETWORKS[t.chain].name}</b><p>{t.reason}</p><span className="mono break">{t.address}</span></div>
+                      <button className="button small-button" disabled={saving || dirty} onClick={() => t.reason === 'Hidden by you'
+                        ? setTokenHidden(t, false) : setModal({ kind: 'token', chain: t.chain, address: t.address })}>
+                        {t.reason === 'Hidden by you' ? 'Restore' : 'Review contract'}
+                      </button>
+                    </div>
+                  ))}
+                </details>
+              )}
               <p className="panel-footnote">
-                Prices are estimates from public sources. Unpriced assets show “—” and are excluded from totals. Explorer-flagged spam is
-                hidden. Indexing can miss assets.
+                Prices are estimates from public sources. Unpriced assets show “—” and are excluded from totals. Provider-flagged and obvious claim-link spam is filtered across all networks. Unpriced tokens are not automatically spam. Indexing and spam detection can miss assets.
               </p>
             </section>
           )}
@@ -2014,6 +2054,9 @@ export function App() {
               </div>
             ))}
           {modal.token.address && (
+            <button className="button subtle full" disabled={saving || dirty} onClick={() => setTokenHidden(modal.token, true)}>Hide token</button>
+          )}
+          {modal.token.address && (
             <a
               className="button subtle full"
               href={`${NETWORKS[modal.token.chain].explorer}/token/${modal.token.address}`}
@@ -2067,6 +2110,7 @@ export function App() {
       {modal?.kind === 'token' && (
         <TokenForm
           initialChain={modal.chain}
+          initialAddress={modal.address}
           busy={saving}
           onClose={() => setModal(null)}
           onSave={async (t) => {
@@ -2166,9 +2210,9 @@ function AssetTable({ tokens, money, price, quantity, onDetail }) {
     </Empty>
   );
 }
-function TokenForm({ onClose, onSave, busy, initialChain = 'pulse' }) {
+function TokenForm({ onClose, onSave, busy, initialChain = 'pulse', initialAddress = '' }) {
   const [chain, setChain] = useState(initialChain),
-    [address, setAddress] = useState(''),
+    [address, setAddress] = useState(initialAddress),
     [error, setError] = useState('');
   return (
     <Modal title="Track a token contract" subtitle="Useful when explorer discovery misses a token." onClose={onClose}>
@@ -2204,7 +2248,7 @@ function TokenForm({ onClose, onSave, busy, initialChain = 'pulse' }) {
           placeholder="0x…"
         />
         <p className="small muted">
-          Contract balances are read for wallets monitoring this network. No balance or price will be invented if the provider fails.
+          Tracking explicitly shows this contract even if its name triggers the spam filter. Verify the network and full contract address. Contract balances are read for wallets monitoring this network. No balance or price will be invented if the provider fails.
         </p>
         {error && <p className="error">{error}</p>}
         <button className="button primary full" disabled={busy}>

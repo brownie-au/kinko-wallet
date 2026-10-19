@@ -12,6 +12,8 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     url: 'https://kinko.test/',
     pretendToBeVisual: true
   });
+  dom.window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+  dom.window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.localStorage = dom.window.localStorage;
@@ -54,6 +56,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
               action: 'track-token'
             }
           ],
+          filtered: [{ address: '0x' + '4'.repeat(40), symbol: 'FLAGGED', reason: 'Flagged by the token provider' }],
           rows: [
             {
               chain: 'bsc',
@@ -65,7 +68,9 @@ test('real-mode app displays its first partial reading, refreshes automatically,
               priceUsd: 100,
               valueUsd: 200,
               valueExact: '200'
-            }
+            },
+            { chain: 'bsc', wallet: address, address: '0x' + '2'.repeat(40), symbol: 'DUST', name: 'Legitimate dust', amountExact: '0.0001', priceUsd: 1, valueUsd: 0.0001, valueExact: '0.0001' },
+            { chain: 'bsc', wallet: address, address: '0x' + '3'.repeat(40), symbol: 'SCAM', name: 'Claim: scam.site', amountExact: '1', priceUsd: 1000, valueUsd: 1000, valueExact: '1000' }
           ]
         };
       return { stakes: [] };
@@ -111,6 +116,27 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await until(() => document.querySelectorAll('.reading-table tbody tr').length >= 2);
     assert.ok(document.querySelector('.history-panel .history-chart'));
     assert.ok(!document.querySelector('.history-panel').textContent.includes('Your history starts here'));
+    const click = async (element) => { assert.ok(element); await act(async () => element.click()); };
+    await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find((b) => b.textContent.includes('Assets')));
+    assert.equal(document.querySelectorAll('.asset-row').length, 2);
+    assert.ok(![...document.querySelectorAll('.asset-row')].some((r) => r.textContent.includes('SCAM')));
+    assert.match(document.querySelector('.filtered-tokens summary').textContent, /2 filtered/);
+    await click(document.querySelector('.panel-footnote input[type="checkbox"]'));
+    assert.equal(document.querySelectorAll('.asset-row').length, 1);
+    await click(document.querySelector('.asset-row'));
+    assert.ok(![...document.querySelectorAll('.modal button')].some((b) => b.textContent === 'Hide token'));
+    await click(document.querySelector('button[aria-label="Close dialog"]'));
+    await click(document.querySelector('.panel-footnote input[type="checkbox"]'));
+    await click([...document.querySelectorAll('.asset-row')].find((r) => r.textContent.includes('DUST')));
+    await click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Hide token'));
+    await until(() => document.querySelectorAll('.asset-row').length === 1 && !document.querySelector('button[aria-label="Close dialog"]'));
+    assert.match(document.querySelector('.filtered-tokens').textContent, /Hidden by you/);
+    await click([...document.querySelectorAll('.filtered-tokens button')].find((b) => b.textContent === 'Restore'));
+    await until(() => document.querySelectorAll('.asset-row').length === 2);
+    await click(document.querySelector('.filtered-tokens button'));
+    assert.equal(document.querySelector('#token-chain').value, 'bsc');
+    assert.match(document.querySelector('#token-contract').value, /^0x[34]{40}$/);
+
   } finally {
     if (root) act(() => root.unmount());
     t.mock.timers.reset();

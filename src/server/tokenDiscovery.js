@@ -1,4 +1,5 @@
 // Server-only: imported by api/data.js, never by the browser entry point.
+import { spamReason } from '../reimagined/tokenFilter.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { json } from '../reimagined/blockchain.js';
 import { NETWORKS } from '../reimagined/networks.js';
@@ -7,6 +8,64 @@ import { formatTokenUnits } from '../utils/tokenMath.js';
 
 const hosts = { base: 'base-mainnet', polygon: 'polygon-mainnet', bsc: 'bnb-mainnet' };
 const metadata = new Map();
+const quarantined = new Map();
+const rememberSpam = (chain, token, reason) => {
+  quarantined.set(`${chain}:${token.address}`, { token: { ...token, reason }, time: Date.now() });
+  if (quarantined.size > 2000) quarantined.delete(quarantined.keys().next().value);
+};
+// A page includes metadata for every token: no individual RPC metadata call for each airdrop.
+// Unsupported/denied Portfolio API falls back to the existing Token API, within the same budget.
+export async function portfolioDiscovery(chain, address, apiKey, signal, excludedContracts = []) {
+  const network = chain === 'polygon' ? 'matic-mainnet' : hosts[chain];
+  const tokens = [], filtered = [], notices = [], seen = new Set(), cursors = new Set();
+  let pageKey, skipped = 0;
+  for (let page = 0; page < 5; page++) {
+    let data;
+    try {
+      await pace(signal);
+      const response = await json(`https://api.g.alchemy.com/data/v1/${encodeURIComponent(apiKey)}/assets/tokens/by-address`, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(4000)]), method: 'POST', redirect: 'error',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses: [{ address, networks: [network] }], withMetadata: true, withPrices: false,
+          includeNativeTokens: false, includeErc20Tokens: true, ...(pageKey ? { pageKey } : {}) })
+      });
+      if (!Array.isArray(response?.data?.tokens)) throw Error('Invalid portfolio response');
+      data = response.data;
+      if (response.error) notices.push({ code: 'discovery-indexer', kind: 'warning', action: 'retry',
+        message: 'The token indexer returned partial data. Successful tokens are retained; retry later.' });
+    } catch {
+      if (!page) return null;
+      notices.push({ code: 'discovery-indexer', kind: 'warning', action: 'retry',
+        message: 'A later token page could not be read. Successful tokens are retained; retry later.' });
+      break;
+    }
+    for (const item of data.tokens) {
+      const contract = String(item?.tokenAddress || '').toLowerCase();
+      if (item?.network !== network || item?.address?.toLowerCase() !== address.toLowerCase() || !isAddress(contract) ||
+          !/^0x[0-9a-f]{1,64}$/i.test(item.tokenBalance || '')) { skipped++; continue; }
+      if (BigInt(item.tokenBalance) === 0n || seen.has(contract)) continue;
+      seen.add(contract);
+      const info = item.tokenMetadata || {};
+      const token = { address: contract, name: String(info.name || 'Token').slice(0, 100), symbol: String(info.symbol || 'TOKEN').slice(0, 30) };
+      const reason = excludedContracts.some((c) => c.toLowerCase() === contract) ? 'Hidden by you' : spamReason(info);
+      if (reason) { filtered.push({ ...token, reason }); if (reason !== 'Hidden by you') rememberSpam(chain, token, reason); continue; }
+      const decimals = Number(info.decimals);
+      if (info.decimals == null || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) { skipped++; continue; }
+      metadata.set(`${chain}:${contract}`, { promise: Promise.resolve(info), time: Date.now() });
+      if (metadata.size > 2000) metadata.delete(metadata.keys().next().value);
+      tokens.push({ ...token, decimals, amountExact: formatTokenUnits(BigInt(item.tokenBalance), decimals) });
+    }
+    if (notices.length || !data.pageKey) break;
+    if (page === 4 || typeof data.pageKey !== 'string' || data.pageKey.length > 4000 || cursors.has(data.pageKey)) {
+      notices.push({ code: 'discovery-limit', kind: 'warning', action: 'track-token', message: 'Token discovery reached its page limit. Some tokens may be missing; add a missing contract to check it directly.' });
+      break;
+    }
+    cursors.add(data.pageKey); pageKey = data.pageKey;
+  }
+  if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped,
+    message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
+  return { tokens, filtered, notices, issues: notices.map((n) => n.message), status: notices.length ? 'partial' : 'complete', recoverable: [] };
+}
 
 // Shared by all requests in this function process. This is deliberately below
 // the free tier's throughput, but does not claim a distributed/account-wide cap.
@@ -25,10 +84,10 @@ export function createIndexerPacer({ interval = 125, now = Date.now, wait = (ms,
   };
 }
 const pace = createIndexerPacer();
-export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
+export async function indexedDiscovery(chain, address, apiKey, parentSignal, excludedContracts = []) {
   // Reserve most of the holdings window for direct reads and market prices.
   const signal = parentSignal ? AbortSignal.any([parentSignal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
-  const tokens = [], notices = [], seen = new Set(), cursors = new Set();
+  const tokens = [], filtered = [], notices = [], seen = new Set(), cursors = new Set();
   let skipped = 0, unread = 0, rateLimited = false, pageKey;
   const result = (status) => {
     if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped, message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
@@ -36,7 +95,7 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
     if (unread && !signal.aborted) notices.push({ code: 'discovery-metadata-unavailable', kind: 'warning', action: 'retry', message: rateLimited
       ? 'Some token metadata could not be read within the provider rate limit. Valid balances are retained; retry later.'
       : 'Some token metadata could not be read before the request ended. Valid balances are retained; retry later.' });
-    return { tokens, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [] };
+    return { tokens, filtered, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [] };
   };
   const rpc = async (method, params) => {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -83,7 +142,21 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
       if (!isAddress(contract) || typeof raw !== 'string' || !/^0x[0-9a-f]{1,64}$/i.test(raw) || item.error) { skipped++; continue; }
       if (BigInt(raw) === 0n || seen.has(contract)) continue;
       seen.add(contract);
+      const priorSpam = quarantined.get(`${chain}:${contract}`);
+      if (excludedContracts.some((c) => c.toLowerCase() === contract)) {
+        filtered.push({ address: contract, reason: 'Hidden by you' }); continue;
+      }
+      if (priorSpam && Date.now() - priorSpam.time < 86400000) { filtered.push(priorSpam.token); continue; }
       candidates.push({ contract, raw });
+    }
+    // Use the heavier batch endpoint only for large, uncached lists. Small lists and
+    // warm metadata caches keep the cheaper Token API path and its fresh balances.
+    if (page === 0 && candidates.filter(({ contract }) => {
+      const cached = metadata.get(`${chain}:${contract}`);
+      return !cached || Date.now() - cached.time > 86400000;
+    }).length >= 30) {
+      const combined = await portfolioDiscovery(chain, address, apiKey, signal, excludedContracts);
+      if (combined) return combined;
     }
     // Bounded metadata concurrency; successful metadata is shared, balances are always re-read.
     for (let start = 0; start < candidates.length; start += 4) {
@@ -97,6 +170,12 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
           promise.catch(() => { if (metadata.get(key) === prior) metadata.delete(key); });
         }
         const info = await prior.promise, decimals = Number(info?.decimals);
+        const reason = spamReason(info || {});
+        if (reason) {
+          const token = { address: contract, name: String(info.name || 'Token').slice(0,100), symbol: String(info.symbol || 'TOKEN').slice(0,30), reason };
+          rememberSpam(chain, token, reason);
+          return token;
+        }
         if (info?.decimals == null || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
           metadata.delete(key);
           const error = new Error('Invalid token decimals'); error.code = 'invalid-metadata'; throw error;
@@ -104,7 +183,7 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
         return { address: contract, symbol: String(info.symbol || 'TOKEN').slice(0, 30), name: String(info.name || 'Token').slice(0, 100), decimals, amountExact: formatTokenUnits(BigInt(raw), decimals) };
       }));
       for (const item of batch) {
-        if (item.status === 'fulfilled') tokens.push(item.value);
+        if (item.status === 'fulfilled') (item.value.reason ? filtered : tokens).push(item.value);
         else if (item.reason?.code === 'invalid-metadata') skipped++;
         else { unread++; if (item.reason?.status === 429) rateLimited = true; }
       }
