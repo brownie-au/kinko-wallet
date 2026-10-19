@@ -1,4 +1,5 @@
 // Server-only: imported by api/data.js, never by the browser entry point.
+import { setTimeout as sleep } from 'node:timers/promises';
 import { json } from '../reimagined/blockchain.js';
 import { NETWORKS } from '../reimagined/networks.js';
 import { isAddress } from '../reimagined/validation.js';
@@ -6,21 +7,53 @@ import { formatTokenUnits } from '../utils/tokenMath.js';
 
 const hosts = { base: 'base-mainnet', polygon: 'polygon-mainnet', bsc: 'bnb-mainnet' };
 const metadata = new Map();
+
+// Shared by all requests in this function process. This is deliberately below
+// the free tier's throughput, but does not claim a distributed/account-wide cap.
+export function createIndexerPacer({ interval = 250, now = Date.now, wait = (ms, signal) => sleep(ms, undefined, { signal }) } = {}) {
+  let queue = Promise.resolve(), next = 0;
+  return (signal) => {
+    const ticket = queue.then(async () => {
+      signal?.throwIfAborted();
+      const delay = Math.max(0, next - now());
+      if (delay) await wait(delay, signal);
+      signal?.throwIfAborted();
+      next = now() + interval;
+    });
+    queue = ticket.catch(() => {});
+    return ticket;
+  };
+}
+const pace = createIndexerPacer();
 export async function indexedDiscovery(chain, address, apiKey, signal) {
   const tokens = [], notices = [], seen = new Set(), cursors = new Set();
-  let skipped = 0, pageKey;
-  const result = (status) => ({ tokens, notices, issues: notices.map((n) => n.message), status, recoverable: [] });
+  let skipped = 0, unread = 0, rateLimited = false, pageKey;
+  const result = (status) => {
+    if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped, message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
+    if (unread) notices.push({ code: 'discovery-metadata-unavailable', kind: 'warning', action: 'retry', message: rateLimited
+      ? 'Some token metadata could not be read within the provider rate limit. Valid balances are retained; retry later.'
+      : 'Some token metadata could not be read before the request ended. Valid balances are retained; retry later.' });
+    return { tokens, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [] };
+  };
   const rpc = async (method, params) => {
-    const data = await json(`https://${hosts[chain]}.g.alchemy.com/v2/${encodeURIComponent(apiKey)}`, {
-      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, redirect: 'error',
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-    });
-    if (data.error || data.result == null) {
-      const error = new Error('Indexer request failed');
-      if (data.error?.code === 429) error.status = 429;
-      throw error;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await pace(signal);
+        const data = await json(`https://${hosts[chain]}.g.alchemy.com/v2/${encodeURIComponent(apiKey)}`, {
+          signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, redirect: 'error',
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+        });
+        if (data.error || data.result == null) {
+          const error = new Error('Indexer request failed');
+          if (data.error?.code === 429) error.status = 429;
+          throw error;
+        }
+        return data.result;
+      } catch (error) {
+        if (error.status !== 429 || attempt) throw error;
+        await sleep(1000, undefined, { signal });
+      }
     }
-    return data.result;
   };
   const failure = (error) => {
     notices.push({ code: 'discovery-indexer', kind: 'warning', action: 'retry', message:
@@ -61,18 +94,19 @@ export async function indexedDiscovery(chain, address, apiKey, signal) {
         }
         const info = await prior.promise, decimals = Number(info?.decimals);
         if (info?.decimals == null || !Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
-          metadata.delete(key); throw new Error('Invalid token decimals');
+          metadata.delete(key);
+          const error = new Error('Invalid token decimals'); error.code = 'invalid-metadata'; throw error;
         }
         return { address: contract, symbol: String(info.symbol || 'TOKEN').slice(0, 30), name: String(info.name || 'Token').slice(0, 100), decimals, amountExact: formatTokenUnits(BigInt(raw), decimals) };
       }));
       for (const item of batch) {
         if (item.status === 'fulfilled') tokens.push(item.value);
-        else skipped++;
+        else if (item.reason?.code === 'invalid-metadata') skipped++;
+        else { unread++; if (item.reason?.status === 429) rateLimited = true; }
       }
     }
     if (!data.pageKey) {
-      if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped, message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
-      return result(skipped ? 'partial' : 'complete');
+      return result('complete');
     }
     if (typeof data.pageKey !== 'string' || data.pageKey.length > 4000 || cursors.has(data.pageKey)) break;
     cursors.add(data.pageKey); pageKey = data.pageKey;

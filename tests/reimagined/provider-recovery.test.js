@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Interface } from 'ethers';
 import { addPrices, holdings } from '../../src/reimagined/blockchain.js';
-import { indexedDiscovery } from '../../src/server/tokenDiscovery.js';
+import { indexedDiscovery, createIndexerPacer } from '../../src/server/tokenDiscovery.js';
 import handler from '../../api/data.js';
 const wallet = '0x' + '1'.repeat(40), contract = '0x' + '2'.repeat(40);
 const address = (n) => '0x' + n.toString(16).padStart(40, '0');
@@ -197,4 +197,44 @@ test('native balance and price complete while discovery is still waiting',async(
       assert.deepEqual(events,['native-price','discovery-returned']);
     });
   }finally{clearTimeout(fallback);release();}
+});
+
+test('shared indexer pacing spaces concurrent work and a cancelled request cannot poison the queue', async () => {
+  let clock = 1000;
+  const starts = [], waits = [];
+  const pace = createIndexerPacer({ now: () => clock, wait: async (ms) => { waits.push(ms); clock += ms; } });
+  await Promise.all(Array.from({ length: 4 }, async () => { await pace(); starts.push(clock); }));
+  assert.deepEqual(waits, [250, 250, 250]);
+  assert.equal(starts.length, 4);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(pace(controller.signal), { name: 'AbortError' });
+  await pace();
+  assert.equal(clock, 2000);
+});
+test('a temporary indexer metadata 429 retries once and restores a usable token', async () => {
+  let metadataCalls = 0;
+  await withFetch(async (url, opts) => {
+    const req = request(opts);
+    if (req.method === 'eth_chainId') return ok({ result: '0x89' });
+    if (req.method === 'alchemy_getTokenMetadata') return ++metadataCalls === 1 ? { ok: false, status: 429 } : ok({ result: metadata });
+    return ok({ result: { address: wallet, tokenBalances: [indexed(address(101))] } });
+  }, async () => {
+    const result = await indexedDiscovery('polygon', wallet, 'test-key');
+    assert.equal(metadataCalls, 2); assert.equal(result.status, 'complete'); assert.equal(result.tokens[0].amountExact, '1.234567');
+    assert.equal(result.notices.length, 0);
+  });
+});
+test('exhausted metadata throttling remains a retryable read issue rather than invalid contract metadata', async () => {
+  let calls = 0;
+  await withFetch(async (url, opts) => {
+    const req = request(opts);
+    if (req.method === 'eth_chainId') return ok({ result: '0x89' });
+    if (req.method === 'alchemy_getTokenMetadata') { calls++; return { ok: false, status: 429 }; }
+    return ok({ result: { address: wallet, tokenBalances: [indexed(address(102))] } });
+  }, async () => {
+    const result = await indexedDiscovery('polygon', wallet, 'test-key');
+    assert.equal(calls, 2); assert.equal(result.status, 'partial');
+    assert.equal(result.notices[0].code, 'discovery-metadata-unavailable');
+    assert.equal(result.notices[0].action, 'retry'); assert.match(result.notices[0].message, /rate limit/);
+  });
 });
