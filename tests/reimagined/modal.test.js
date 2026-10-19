@@ -40,7 +40,9 @@ test('network notices distinguish coverage limits from stale balances and route 
         wallets: ['a', 'b'],
         action: 'track-token'
       },
-      { chain: 'eth', code: 'blocked', kind: 'warning', message: 'Explorer blocked the read.', wallets: ['a'], action: 'retry' }
+      { chain: 'eth', code: 'blocked', kind: 'warning', message: 'Explorer blocked the read.', wallets: ['a'], action: 'retry' },
+      { chain: 'base', code: 'price-missing', kind: 'limitation', message: 'No usable market price.', wallets: ['a'] },
+      { chain: 'polygon', code: 'discovery-configuration', kind: 'warning', message: 'Provider not configured.', wallets: ['a'] }
     ],
     onTrackToken: (chain) => actions.push(['track', chain]),
     onRetry: (chain) => actions.push(['retry', chain])
@@ -50,6 +52,8 @@ test('network notices distinguish coverage limits from stale balances and route 
     const text = document.querySelector('details').textContent;
     assert.match(text, /BNB Smart Chain · 2 wallets · Coverage limit/);
     assert.match(text, /Ethereum · 1 wallet · Read issue/);
+    assert.match(text, /Base · 1 wallet · Price unavailable/);
+    assert.match(text, /Polygon · 1 wallet · Provider setup needed/);
     assert.ok(!document.querySelector('summary').textContent.includes('stale'));
     assert.equal(document.querySelector('details').open, false, 'coverage notices start collapsed');
     const buttons = [...document.querySelectorAll('details button')];

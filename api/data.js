@@ -1,5 +1,5 @@
 import { holdings, stakes, activity, isAddress, json } from '../src/reimagined/blockchain.js';
-import { indexedDiscovery } from '../src/server/tokenDiscovery.js';
+import { configuredDiscovery } from '../src/server/tokenDiscovery.js';
 import { NETWORKS } from '../src/reimagined/networks.js';
 const cache = new Map();
 const limits = new Map();
@@ -53,9 +53,7 @@ export default async function handler(req, res) {
         : action === 'holdings'
           ? holdings(chain, address, contracts, {
               excludedContracts,
-              discover: process.env.ALCHEMY_API_KEY && ['base', 'polygon', 'bsc'].includes(chain)
-                ? (network, wallet, signal) => indexedDiscovery(network, wallet, process.env.ALCHEMY_API_KEY, signal, excludedContracts)
-                : undefined
+              discover: (network, wallet, signal) => configuredDiscovery(network, wallet, process.env.ALCHEMY_API_KEY, signal, excludedContracts)
             })
           : { stakes, activity }[action](chain, address, contracts);
     cache.set(key, { time: now, promise });

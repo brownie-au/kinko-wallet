@@ -64,7 +64,7 @@ test('Portfolio pages preserve partial reads and reject wrong-wallet, wrong-chai
     assert.equal(result.notices.find((n) => n.code === 'discovery-metadata').skipped, 3);
   });
   await withFetch(async () => ok({ data: { tokens: [] }, error: { partialErrors: [{ network: 'bnb-mainnet' }] } }), async () => {
-    assert.equal((await portfolioDiscovery('bsc', wallet, 'test', AbortSignal.timeout(1000))).status, 'partial');
+    assert.equal((await portfolioDiscovery('bsc', wallet, 'test', AbortSignal.timeout(1000))).status, 'unavailable');
   });
 });
 test('known spam and explicitly hidden contracts skip fallback metadata calls, without leaking between chains', async () => {

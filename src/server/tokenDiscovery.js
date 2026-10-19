@@ -1,12 +1,22 @@
 // Server-only: imported by api/data.js, never by the browser entry point.
 import { spamReason } from '../reimagined/tokenFilter.js';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { json } from '../reimagined/blockchain.js';
+import { json, discover } from '../reimagined/blockchain.js';
 import { NETWORKS } from '../reimagined/networks.js';
 import { isAddress } from '../reimagined/validation.js';
 import { formatTokenUnits } from '../utils/tokenMath.js';
 
 const hosts = { base: 'base-mainnet', polygon: 'polygon-mainnet', bsc: 'bnb-mainnet' };
+// Missing deployment configuration must not silently select a blocked explorer.
+// Only safe provider identifiers cross the API boundary; never keys or URLs.
+export async function configuredDiscovery(chain, address, apiKey, signal, excludedContracts = []) {
+  if (!hosts[chain]) return { ...await discover(chain, address, signal), provider: 'blockscout' };
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (key) return indexedDiscovery(chain, address, key, signal, excludedContracts);
+  const notice = { code: 'discovery-configuration', kind: 'warning',
+    message: 'Automatic token discovery is not configured for this deployment. The site owner needs to enable its data provider. Native balances and added contracts are still checked.' };
+  return { tokens: [], filtered: [], notices: [notice], issues: [notice.message], status: 'unavailable', recoverable: [], provider: 'unconfigured' };
+}
 const metadata = new Map();
 const quarantined = new Map();
 const rememberSpam = (chain, token, reason) => {
@@ -64,7 +74,9 @@ export async function portfolioDiscovery(chain, address, apiKey, signal, exclude
   }
   if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped,
     message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
-  return { tokens, filtered, notices, issues: notices.map((n) => n.message), status: notices.length ? 'partial' : 'complete', recoverable: [] };
+  return { tokens, filtered, notices, issues: notices.map((n) => n.message),
+    status: notices.some((n) => n.code === 'discovery-indexer') && !tokens.length && !filtered.length ? 'unavailable' : notices.length ? 'partial' : 'complete',
+    recoverable: [], provider: 'alchemy-portfolio-api' };
 }
 
 // Shared by all requests in this function process. This is deliberately below
@@ -95,7 +107,7 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal, exc
     if (unread && !signal.aborted) notices.push({ code: 'discovery-metadata-unavailable', kind: 'warning', action: 'retry', message: rateLimited
       ? 'Some token metadata could not be read within the provider rate limit. Valid balances are retained; retry later.'
       : 'Some token metadata could not be read before the request ended. Valid balances are retained; retry later.' });
-    return { tokens, filtered, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [] };
+    return { tokens, filtered, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [], provider: 'alchemy-token-api' };
   };
   const rpc = async (method, params) => {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -107,7 +119,7 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal, exc
         });
         if (data.error || data.result == null) {
           const error = new Error('Indexer request failed');
-          if (data.error?.code === 429) error.status = 429;
+          if ([401, 403, 429].includes(data.error?.code)) error.status = data.error.code;
           throw error;
         }
         return data.result;
@@ -156,7 +168,9 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal, exc
       return !cached || Date.now() - cached.time > 86400000;
     }).length >= 30) {
       const combined = await portfolioDiscovery(chain, address, apiKey, signal, excludedContracts);
-      if (combined) return combined;
+      // An HTTP 200 with a failed-network envelope is not an empty wallet.
+      // Keep the working Token API route when Portfolio supplied no usable data.
+      if (combined && (combined.status === 'complete' || combined.tokens.length || combined.filtered.length)) return combined;
     }
     // Bounded metadata concurrency; successful metadata is shared, balances are always re-read.
     for (let start = 0; start < candidates.length; start += 4) {

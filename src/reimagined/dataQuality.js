@@ -34,7 +34,7 @@ export function dataNotices(results, rows = []) {
       add(row, {
         code: 'price-missing',
         kind: 'limitation',
-        message: 'Some held tokens have no usable market price. Their quantities remain visible and their values are excluded.'
+        message: 'Some held tokens have no usable market price and are excluded from the total. Use Show unpriced tokens in Assets to see their quantities.'
       });
   }
   return [...groups.values()].map((g) => ({ ...g, wallets: [...g.wallets] }));

@@ -343,6 +343,7 @@ export async function holdings(chain, address, contracts = [], options = {}) {
     issues,
     notices,
     discovery: scanResult.status === 'fulfilled' ? scanResult.value.status : 'unavailable',
+    discoveryProvider: scanResult.status === 'fulfilled' ? scanResult.value.provider || 'blockscout' : 'unavailable',
     asOf: Date.now()
   };
 }

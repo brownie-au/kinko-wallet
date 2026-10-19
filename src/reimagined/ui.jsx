@@ -293,7 +293,7 @@ export function DataNotices({ notices, staleBalances, loading, saving, onTrackTo
           <li key={`${n.chain}:${n.code || n.message}`}>
             <b>{NETWORKS[n.chain]?.name || n.chain}</b>
             {n.wallets.length > 0 && ` · ${n.wallets.length} wallet${n.wallets.length === 1 ? '' : 's'}`} ·{' '}
-            {n.kind === 'limitation' ? 'Coverage limit' : 'Read issue'}
+            {n.code === 'price-missing' ? 'Price unavailable' : n.code === 'discovery-configuration' ? 'Provider setup needed' : n.kind === 'limitation' ? 'Coverage limit' : 'Read issue'}
             <p>{n.message}</p>
             {n.action === 'track-token' && (
               <button type="button" className="text-link" disabled={saving} onClick={() => onTrackToken(n.chain)}>
