@@ -123,3 +123,13 @@ The supplied screenshot shows a generic token-discovery warning and an unconfigu
 Direct provider checks: a normal Ethereum test address returned five discovered tokens with complete status and no discovery issues using the corrected request. A high-token-count PulseChain address returned 250 tokens with the explicit page-limit notice. Some direct Base/Polygon calls received HTTP 403 challenge pages; these are retained as visible upstream failures, not bypassed. A separate high-token-count Ethereum call was temporarily unavailable, so provider uptime is not guaranteed.
 
 Reference: https://github.com/blockscout/blockscout-api-v2-swagger/blob/main/swagger.yaml (`/addresses/{address_hash}/tokens` supports type/pagination; `/token-balances` lists only the address parameter).
+
+Deployment `dpl_6DYNxYRL1cDMgtj732Ckg13zw9tv`, runtime commit `fba6eddc51c76840757feb30d4b960c5011d2835`: **READY**. Live deployed POST `/api/data` checks against the same public test address returned HTTP 200 on all five networks:
+
+- Ethereum: complete discovery, six balance rows, three priced, no discovery notices. The former HTTP 422 is resolved for this check.
+- PulseChain: 22 balance rows, four priced; valid records retained alongside the explicit incomplete-metadata notice.
+- Base and Polygon: native balances/prices returned; discovery is explicitly unavailable because each explorer returns HTTP 403 from the deployed service.
+- BNB: native balance/price returned; discovery correctly reported as manual/unconfigured rather than a temporary provider outage.
+- The production-response data produced valid, explicitly partial chart observations for all five network checks using the same observation helper as the UI.
+
+Browser inspection confirmed the stable branch URL serves the new `index-DUKetiZn.js` runtime. Notice rendering, network grouping, action routing and disabled states were verified through React/DOM tests. A real signed-in user session and two-point live chart rendering were not exercised in the browser; no user Access Key was requested or entered. Remaining upstream discovery limitations are retained visibly and are not claimed resolved.
