@@ -26,12 +26,12 @@ Deploy the repository root as a Vite project on Vercel; `vercel.json` supplies t
 - Ethereum and PulseChain priority; Base, Polygon and BNB Smart Chain configurations.
 - Native balances; paginated Blockscout token discovery on supported chains; custom read-only ERC-20 contracts (up to 30).
 - Decimal-string balances, BigInt calculations and contract/network-based token identity; no ticker-only merging.
-- DefiLlama pricing and chain-specific Dexscreener fallbacks for PulseChain; unavailable prices stay unavailable.
+- DefiLlama pricing and chain-specific Dexscreener fallbacks on all five networks; unavailable prices stay unavailable.
 - USD and AUD display (AUD uses an available dated ECB reference rate through Frankfurter).
 - Read-only HEX `currentDay`, `stakeCount`, `stakeLists`, principal, shares/T-Shares, maturity dates, status and a stake ladder.
 - Recent explorer-indexed transactions on supported networks. BNB activity requires its explorer.
 - Secure browser-generated Access Keys, client-encrypted cloud sync, optimistic concurrency, encrypted export/import, legacy JSON import, and account deletion.
-- Session-only portfolio observations. This is not historical investment performance.
+- Encrypted browser history of actual liquid portfolio readings (up to 31 days / 2,000 readings), with first-reading values and a recent-readings table. This is not investment performance or historical backfill.
 
 ## Access Key and encrypted storage
 
@@ -73,11 +73,11 @@ Official sources reviewed **19 October 2026**:
 | --- | --- | --- |
 | [Vercel Hobby](https://vercel.com/docs/plans/hobby) | 100 GB fast transfer, 1M function invocations, 4 active CPU hours, 360 GB-hours memory; non-commercial personal use only; quotas pause service | Vite assets + two read-only/server-storage functions |
 | [Upstash Redis Free](https://upstash.com/pricing/redis) | 500K commands/month; headline/FAQ says 250 MB, technical capacity table says 256 MB; use 250 MB as the conservative bound; 10 GB bandwidth, one free database | Ciphertext and authentication verifiers |
-| [Dexscreener API](https://docs.dexscreener.com/api/reference) | Chain token endpoint documented at 300 requests/minute | PulseChain missing-price fallback |
+| [Dexscreener API](https://docs.dexscreener.com/api/reference) | Chain token endpoint documented at 300 requests/minute | Missing/stale-price fallback on all five networks |
 | [Blockscout](https://docs.blockscout.com/devs/apis) / public RPCs / [DefiLlama](https://defillama.com/docs/api) | Shared availability/rate limits; no dedicated SLA assumed | Public blockchain and market data |
 | [Frankfurter](https://frankfurter.dev/) | Open-source public reference FX API; not a live trading rate | Optional AUD conversion |
 
-No paid plans or billing changes were made. Existing account/database plan and billing status must remain Free/Hobby; do not upgrade or enable pay-as-you-go. Upstash explicitly says paid tiers are billed differently; its free allowance is not an allowance on paid databases. Hosting quotas and public provider outages can stop refresh/sync. The code caches market requests for one minute, FX for one hour, limits concurrency, and never polls continuously. Account requests use a distributed Redis rate limit. Public-data throttling and cache are per process, so they are not a complete abuse defence across serverless instances. Monitor free quotas. Unlimited use at $0 is not promised.
+No paid plans or billing changes were made. Existing account/database plan and billing status must remain Free/Hobby; do not upgrade or enable pay-as-you-go. Upstash explicitly says paid tiers are billed differently; its free allowance is not an allowance on paid databases. Hosting quotas and public provider outages can stop refresh/sync. The code caches market requests for one minute, FX for one hour, limits concurrency, and refreshes every two minutes only while signed in, visible, online and idle. Account requests use a distributed Redis rate limit. Public-data throttling and cache are per process, so they are not a complete abuse defence across serverless instances. Monitor free quotas. Unlimited use at $0 is not promised.
 
 ## Tests and verification
 
@@ -94,5 +94,17 @@ No paid plans or billing changes were made. Existing account/database plan and b
 - Automatic BNB token discovery and BNB activity indexing are unavailable; custom token reads and explorer links are provided.
 - No NFTs, LP valuation, historical ended-stake index, reward/penalty projections, cost-basis/P&L or invented historical portfolio charts.
 - Token discovery is bounded to five pages; truncated results are labelled incomplete. Up to 500 open HEX positions per wallet/network are supported; large wallets may encounter request timeouts.
-- Session observations are not persisted history. Old short Portfolio IDs are separate from Access Keys; import a JSON wallet backup.
+- Readings are saved only in this browser and are not cloud-synchronized or included in watchlist backups. Old short Portfolio IDs are separate from Access Keys; import a JSON wallet backup.
 - The earlier application sources and API code remain in Git history and `legacy-api/` for reference; legacy APIs are **not deployed** on this rebuild. They are not part of the supported runtime or the new test command.
+
+### Optional token indexer for the test preview
+
+Base and Polygon public explorers currently reject discovery requests with HTTP 403; BNB has no public explorer indexer configured. The owner can set **`ALCHEMY_API_KEY`** as a **sensitive, server-only Preview variable** in the separate `kinko-wallet-v2-test` project, scoped to `feature/kinko-reimagined`, then redeploy that preview. No credential is accepted from the browser and the adapter is never included in frontend code. No key, account or paid plan was created by this change. Leave paid overages disabled and do not upgrade automatically.
+
+The adapter uses Alchemy's [Token API](https://www.alchemy.com/docs/data/token-api/token-api-endpoints/alchemy-get-token-balances), verifies the network's chain ID, validates the returned wallet address and integer quantities/decimals, deduplicates and reads at most five pages of 100 ERC-20 records. Native balances are separate. Up to four metadata calls run concurrently; successful metadata is cached in-process for 24 hours, with a 2,000-contract bound. Balances are always re-read. Current public explorer discovery remains in place for Ethereum and PulseChain. Native balances and manually tracked contracts continue through chain-verified RPCs. Indexer errors and quota limits remain visible; they do not become zero balances.
+
+Alchemy documents a [Free tier with 30 million monthly compute units and Token API access](https://www.alchemy.com/docs/reference/pricing-plans). Balance pages currently cost 20 CUs and metadata calls 10 CUs; a finite free allowance may be exhausted by frequent refreshes. Enable Base, Polygon and BNB mainnets on the owner's Alchemy app. Only use an owner-controlled free account with a hard free-tier cap. The existing 60-second API cache remains per-process, not a distributed quota guarantee. This option is implemented and tested with simulated responses but cannot resolve live discovery until a valid key is configured.
+
+Explorer records missing usable decimals are retried directly on-chain (at most 12 contracts per wallet/read). Only verified precision and balances replace those records; unresolved metadata remains a notice. Price recovery now queries all missing or stale markets in batches of 30 on the correct chain, selecting only finite positive base-token USD prices from pools with at least $10,000 reported liquidity. Fresh DefiLlama prices remain preferred. Unpriced tokens stay visible and excluded from fiat totals; a market may have no usable price.
+
+Holdings requests share a 45-second abort budget (inside the browser's 55-second limit). Native balance and price reads run concurrently with discovery so an indexer delay does not starve the native read. Price lookups use at most three concurrent batches per provider. Successful partial results remain visible when this budget expires.

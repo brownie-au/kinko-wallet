@@ -1,6 +1,8 @@
 export const HEX_ADDRESS = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39';
 export const NETWORKS = {
   pulse: {
+    dex: 'pulsechain',
+    wrappedNative: '0xa1077a294dde1b09bb078844df40758a5d0f9a27',
     name: 'PulseChain',
     id: 369,
     symbol: 'PLS',
@@ -12,6 +14,8 @@ export const NETWORKS = {
     nativePrice: 'pulsechain:' + '0xa1077a294dde1b09bb078844df40758a5d0f9a27'
   },
   eth: {
+    dex: 'ethereum',
+    wrappedNative: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     name: 'Ethereum',
     id: 1,
     symbol: 'ETH',
@@ -23,6 +27,8 @@ export const NETWORKS = {
     nativePrice: 'coingecko:ethereum'
   },
   base: {
+    dex: 'base',
+    wrappedNative: '0x4200000000000000000000000000000000000006',
     name: 'Base',
     id: 8453,
     symbol: 'ETH',
@@ -34,6 +40,8 @@ export const NETWORKS = {
     nativePrice: 'coingecko:ethereum'
   },
   polygon: {
+    dex: 'polygon',
+    wrappedNative: '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270',
     name: 'Polygon',
     id: 137,
     symbol: 'POL',
@@ -45,6 +53,8 @@ export const NETWORKS = {
     nativePrice: 'coingecko:polygon-ecosystem-token'
   },
   bsc: {
+    dex: 'bsc',
+    wrappedNative: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
     name: 'BNB Smart Chain',
     id: 56,
     symbol: 'BNB',

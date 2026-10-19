@@ -1,4 +1,5 @@
 import { holdings, stakes, activity, isAddress, json } from '../src/reimagined/blockchain.js';
+import { indexedDiscovery } from '../src/server/tokenDiscovery.js';
 import { NETWORKS } from '../src/reimagined/networks.js';
 const cache = new Map();
 const limits = new Map();
@@ -47,7 +48,13 @@ export default async function handler(req, res) {
             date: d.date,
             source: 'ECB reference rate via Frankfurter'
           }))
-        : { holdings, stakes, activity }[action](chain, address, contracts);
+        : action === 'holdings'
+          ? holdings(chain, address, contracts, {
+              discover: process.env.ALCHEMY_API_KEY && ['base', 'polygon', 'bsc'].includes(chain)
+                ? (network, wallet, signal) => indexedDiscovery(network, wallet, process.env.ALCHEMY_API_KEY, signal)
+                : undefined
+            })
+          : { stakes, activity }[action](chain, address, contracts);
     cache.set(key, { time: now, promise });
     if (cache.size > 1000) cache.delete(cache.keys().next().value);
     try {
