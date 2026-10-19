@@ -85,3 +85,7 @@ The reported symptom was an access dialog that disappeared immediately in Opera 
 - Close controls explicitly use `type="button"`. Existing authentication, encryption and remembered-device storage are unchanged.
 - Added five React/DOM regression tests with jsdom. Full suite: **30 passed**. Production build passed: 228.69 KB JavaScript / 72.12 KB gzip. Production dependency audit: zero known vulnerabilities.
 - Native Escape/top-layer behaviour needs live-browser inspection; jsdom's dialog lifecycle is shimmed and does not establish Opera/Dashlane compatibility.
+
+Deployment `dpl_6NEyDnJx4YHbqz9ZMrdm7ggR1NA4`, runtime commit `8e6213a792eb4480f822a08d23b3df92581173bc`: **READY**. On the stable branch preview, live Chrome inspection confirmed the Dashlane field hint, persistent form after a real outside click, Close and native Escape dismissal, focus returning to the landing-page access button, and selectable Remember This Device help text. No key was entered. This verifies the updated Chromium UI but does not reproduce the user's Opera/Dashlane setup.
+
+[Verified access dialog](screenshots/access-dialog-compatibility.jpg)
