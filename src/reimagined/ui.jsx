@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { NETWORKS } from './networks.js';
 export function Icon({ name, size = 20, ...props }) {
   const paths = {
     grid: (
@@ -276,6 +277,38 @@ export function Modal({ title, subtitle, children, onClose, wide = false, dismis
         {children}
       </div>
     </dialog>
+  );
+}
+export function DataNotices({ notices, staleBalances, loading, saving, onTrackToken, onRetry }) {
+  if (!notices.length) return null;
+  return (
+    <details className="provider-notice" open>
+      <summary>
+        <Icon name="info" size={16} />
+        {notices.length} data {notices.length === 1 ? 'notice' : 'notices'} ·{' '}
+        {staleBalances ? 'Some balances are stale or unavailable' : 'Some coverage or prices are incomplete'}
+      </summary>
+      <ul>
+        {notices.map((n) => (
+          <li key={`${n.chain}:${n.code || n.message}`}>
+            <b>{NETWORKS[n.chain]?.name || n.chain}</b>
+            {n.wallets.length > 0 && ` · ${n.wallets.length} wallet${n.wallets.length === 1 ? '' : 's'}`} ·{' '}
+            {n.kind === 'limitation' ? 'Coverage limit' : 'Read issue'}
+            <p>{n.message}</p>
+            {n.action === 'track-token' && (
+              <button type="button" className="text-link" disabled={saving} onClick={() => onTrackToken(n.chain)}>
+                Add a token contract
+              </button>
+            )}
+            {n.action === 'retry' && (
+              <button type="button" className="text-link" disabled={loading} onClick={() => onRetry(n.chain)}>
+                Retry {NETWORKS[n.chain]?.name}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 export function Empty({ icon = 'wallet', title, children, action }) {

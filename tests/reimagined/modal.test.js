@@ -16,16 +16,54 @@ dom.window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
 };
 const { createRoot } = await import('react-dom/client');
-let Modal, AccessPage;
+let Modal, AccessPage, DataNotices;
 before(async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    ({ Modal, AccessPage } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
+    ({ Modal, AccessPage, DataNotices } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
   } finally {
     await server.close();
   }
 });
 after(() => dom.window.close());
+
+test('network notices distinguish coverage limits from stale balances and route actions correctly', () => {
+  const root = createRoot(document.querySelector('#root'));
+  const actions = [];
+  const props = {
+    notices: [
+      {
+        chain: 'bsc',
+        code: 'manual',
+        kind: 'limitation',
+        message: 'Automatic discovery is not configured.',
+        wallets: ['a', 'b'],
+        action: 'track-token'
+      },
+      { chain: 'eth', code: 'blocked', kind: 'warning', message: 'Explorer blocked the read.', wallets: ['a'], action: 'retry' }
+    ],
+    onTrackToken: (chain) => actions.push(['track', chain]),
+    onRetry: (chain) => actions.push(['retry', chain])
+  };
+  try {
+    act(() => root.render(React.createElement(DataNotices, props)));
+    const text = document.querySelector('details').textContent;
+    assert.match(text, /BNB Smart Chain · 2 wallets · Coverage limit/);
+    assert.match(text, /Ethereum · 1 wallet · Read issue/);
+    assert.ok(!document.querySelector('summary').textContent.includes('stale'));
+    const buttons = [...document.querySelectorAll('details button')];
+    act(() => buttons.forEach((b) => b.click()));
+    assert.deepEqual(actions, [
+      ['track', 'bsc'],
+      ['retry', 'eth']
+    ]);
+    act(() => root.render(React.createElement(DataNotices, { ...props, loading: true, saving: true, staleBalances: true })));
+    assert.match(document.querySelector('summary').textContent, /stale or unavailable/);
+    assert.ok([...document.querySelectorAll('details button')].every((b) => b.disabled));
+  } finally {
+    act(() => root.unmount());
+  }
+});
 
 function mount(props = {}) {
   let closed = 0;

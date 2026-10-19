@@ -13,10 +13,11 @@ import {
 } from './vault.js';
 import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
 import { NETWORKS } from './networks.js';
+import { dataNotices, portfolioObservation, appendObservation, observationSeries } from './dataQuality.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { addDecimal } from '../utils/tokenMath.js';
 import { isAddress } from './validation.js';
-import { Icon, Mark, Copy, Modal, AccessPage, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
+import { Icon, Mark, Copy, Modal, AccessPage, DataNotices, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
 import { demoRows, demoWatchlist, demoStakes } from './demo.js';
 import './styles.css';
 const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -711,7 +712,7 @@ function App() {
       ([k]) =>
         selectedWallets.some((w) => k.startsWith(w.address.toLowerCase() + ':')) && (chainFilter === 'all' || k.endsWith(':' + chainFilter))
     )
-    .map(([, v]) => v);
+    .map(([key, v]) => ({ ...v, wallet: key.split(':')[0], chain: key.split(':')[1] }));
   const rawRows = demo
     ? demoRows
     : Object.values(results).flatMap((r) => (r.rows || []).map((t) => ({ ...t, stale: !!(r.stale || t.stale) })));
@@ -745,21 +746,20 @@ function App() {
           );
   const quantity = (value, dp = 4) => (privacy ? '••••' : number(value, dp));
   const issues = scopedResults.flatMap((r) => [...(r.issues || []), ...(r.error ? [r.error] : [])]);
-  const uniqueIssues = [...new Set(issues)];
+  const notices = dataNotices(scopedResults, rows);
   const unknown = rows.filter((t) => Number(t.amountExact) > 0 && t.priceUsd == null).length;
   const priced = rows.some((t) => t.priceUsd != null);
   const unavailable = !demo && (issues.length > 0 || rows.some((t) => t.stale));
+  const staleBalances = !demo && scopedResults.some((r) => r.stale || r.error);
   const total = priced ? aggregate.totalUsd : rows.length === 0 && !loading && scopedResults.length > 0 && !issues.length ? 0 : null;
   const observedAt = Math.max(0, ...scopedResults.map((r) => r.asOf || 0));
   const scopeKey = `${walletFilter}:${chainFilter}`;
+  const observationKey = demo ? '' : JSON.stringify(portfolioObservation({ rows, results: scopedResults, scope: scopeKey, loading }));
   useEffect(() => {
-    if (demo || loading || !priced || unavailable || unknown || !observedAt) return;
-    setHistory((prior) => {
-      if (prior.some((s) => s.scope === scopeKey && s.time === observedAt)) return prior;
-      return [...prior, { scope: scopeKey, time: observedAt, value: aggregate.totalUsd }].slice(-200);
-    });
-  }, [observedAt, loading, demo, scopeKey, priced, unavailable, unknown, aggregate.totalUsd]);
-  const observations = history.filter((h) => h.scope === scopeKey && h.time > Date.now() - range * 86400000);
+    if (observationKey) setHistory((prior) => appendObservation(prior, JSON.parse(observationKey)));
+  }, [observationKey]);
+  const { observations, coverageChanged } = observationSeries(history, scopeKey, range);
+  const lastObservation = observations.at(-1);
   const tokens = aggregate.tokens
     .filter((t) => `${t.name} ${t.symbol} ${t.address || ''}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sort === 'name' ? a.symbol.localeCompare(b.symbol) : (b.valueUsd || 0) - (a.valueUsd || 0)));
@@ -1066,19 +1066,17 @@ function App() {
             </div>
           )}
           {data.currency === 'AUD' && !fx && <p className="small muted">AUD conversion is unavailable. Values are shown in USD.</p>}
-          {uniqueIssues.length > 0 && (
-            <details className="provider-notice">
-              <summary>
-                <Icon name="info" size={16} />
-                {uniqueIssues.length} data {uniqueIssues.length === 1 ? 'notice' : 'notices'} · Values may be incomplete or stale
-              </summary>
-              <ul>
-                {uniqueIssues.map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <DataNotices
+            notices={notices}
+            staleBalances={staleBalances}
+            loading={loading}
+            saving={saving || dirty}
+            onTrackToken={(chain) => setModal({ kind: 'token', chain })}
+            onRetry={(chain) => {
+              setChainFilter(chain);
+              setRefresh((v) => v + 1);
+            }}
+          />
           {page === 'overview' && (
             <>
               <section className="summary-grid">
@@ -1091,11 +1089,13 @@ function App() {
                   <p className="portfolio-caption">
                     {loading
                       ? 'Reading your public balances…'
-                      : unavailable
-                        ? 'Some providers are unavailable. Cached values are marked stale.'
-                        : unknown
-                          ? `${unknown} unpriced assets excluded from this estimate.`
-                          : 'Market estimates · excludes staked HEX'}
+                      : staleBalances
+                        ? 'Some balance reads failed. Retained balances are marked stale.'
+                        : unavailable
+                          ? 'Partial coverage · shown balances are from successful reads; some tokens may be missing.'
+                          : unknown
+                            ? `${unknown} unpriced assets excluded from this estimate.`
+                            : 'Market estimates · excludes staked HEX'}
                   </p>
                   <div className="portfolio-card-footer">
                     <span>
@@ -1154,7 +1154,9 @@ function App() {
                         {demo
                           ? 'Illustrative portfolio trend'
                           : observations.length > 1
-                            ? 'Observed liquid portfolio values this session'
+                            ? lastObservation?.partial
+                              ? 'Partial liquid values · fresh, priced assets only'
+                              : 'Observed liquid portfolio values this session'
                             : 'Your history starts here'}
                       </p>
                     </div>
@@ -1190,28 +1192,51 @@ function App() {
                     </>
                   ) : observations.length > 1 ? (
                     <>
-                      <div className="chart-amount">{money(total)}</div>
+                      <div className="chart-amount">
+                        {money(lastObservation.value)}
+                        {lastObservation.partial && <span>Partial value</span>}
+                      </div>
                       <Sparkline
                         values={observations.map((h) => h.value)}
                         large
-                        label="Actual portfolio observations from this browser session"
+                        label={
+                          lastObservation.partial
+                            ? 'Actual partial portfolio observations; excludes stale and unpriced balances'
+                            : 'Actual portfolio observations from this browser session'
+                        }
                       />
                       <div className="chart-labels">
                         <span>{new Date(observations[0].time).toLocaleTimeString()}</span>
                         <span>{observations.length} real observations · not investment returns</span>
-                        <span>Now</span>
+                        <span>{new Date(lastObservation.time).toLocaleTimeString()}</span>
                       </div>
+                      <p className="history-note">
+                        {lastObservation.partial ? 'Partial values exclude stale and unpriced balances. ' : ''}A new series starts when data
+                        coverage changes. History is limited to this page session.
+                      </p>
                     </>
                   ) : (
                     <div className="history-empty">
                       <span className="history-symbol">
                         <Icon name="activity" size={37} />
                       </span>
-                      <h3>A clearer picture, over time.</h3>
+                      <h3>
+                        {loading
+                          ? 'Reading your portfolio…'
+                          : lastObservation
+                            ? coverageChanged
+                              ? 'Coverage changed. A new series starts here.'
+                              : 'Your first reading is saved.'
+                            : 'Waiting for a usable reading.'}
+                      </h3>
                       <p>
-                        Refresh your portfolio to build real observations.
+                        {lastObservation
+                          ? 'Use Kinko’s Refresh after a minute to collect the next reading.'
+                          : 'Fresh balances with a market price are needed. Check the network notices above.'}
                         <br />
-                        Kinko never invents your past performance.
+                        {lastObservation?.partial
+                          ? 'Partial readings are allowed; stale and unpriced balances are excluded.'
+                          : 'Kinko never invents your past performance.'}
                       </p>
                       <span>History is limited to this session.</span>
                     </div>
@@ -1996,6 +2021,7 @@ function App() {
       )}
       {modal?.kind === 'token' && (
         <TokenForm
+          initialChain={modal.chain}
           busy={saving}
           onClose={() => setModal(null)}
           onSave={async (t) => {
@@ -2094,8 +2120,8 @@ function AssetTable({ tokens, money, price, quantity, onDetail }) {
     </Empty>
   );
 }
-function TokenForm({ onClose, onSave, busy }) {
-  const [chain, setChain] = useState('pulse'),
+function TokenForm({ onClose, onSave, busy, initialChain = 'pulse' }) {
+  const [chain, setChain] = useState(initialChain),
     [address, setAddress] = useState(''),
     [error, setError] = useState('');
   return (

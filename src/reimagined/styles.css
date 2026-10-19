@@ -1433,6 +1433,26 @@ h1 {
   margin: 0;
   padding: 0 30px 14px;
 }
+.provider-notice li {
+  padding: 8px 0;
+  font-size: 11px;
+}
+.provider-notice li + li {
+  border-top: 1px solid #e9ddbf;
+}
+.provider-notice li p {
+  margin: 4px 0;
+}
+.provider-notice .text-link {
+  min-height: 36px;
+  font-size: 11px;
+}
+.history-note {
+  margin: 4px 24px 20px;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+}
 .count-badge {
   font-size: 9px;
   padding: 3px 6px;
