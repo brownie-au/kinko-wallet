@@ -185,6 +185,46 @@ export function Copy({ text, label = 'Copy address', onCopy }) {
     </button>
   );
 }
+// Sign-in stays in normal document flow so extension security prompts remain reachable.
+export function AccessPage({ title, subtitle, children, onClose }) {
+  const heading = useRef();
+  useEffect(() => {
+    const previous = document.activeElement;
+    heading.current?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus?.();
+    };
+  }, []);
+  return (
+    <div className="welcome access-page">
+      <header className="welcome-header">
+        <button type="button" className="brand" onClick={onClose} aria-label="Kinko Wallet home">
+          <Mark />
+          <span>
+            Kinko<span className="brand-sub">WALLET</span>
+          </span>
+        </button>
+        <span className="watch-badge">
+          <Icon name="shield" size={15} />
+          Always watch-only
+        </span>
+      </header>
+      <main className="access-main" aria-labelledby="access-title">
+        <button type="button" className="button text-button" onClick={onClose}>
+          <Icon name="arrow" size={16} className="back-arrow" />
+          Back to Kinko
+        </button>
+        <section className="access-card">
+          <h1 id="access-title" ref={heading} tabIndex={-1}>
+            {title}
+          </h1>
+          <p className="access-subtitle">{subtitle}</p>
+          {children}
+        </section>
+      </main>
+    </div>
+  );
+}
 export function Modal({ title, subtitle, children, onClose, wide = false, dismissOnBackdrop = true }) {
   const ref = useRef();
   const backdropPress = useRef(false);

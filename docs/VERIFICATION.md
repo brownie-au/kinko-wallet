@@ -89,3 +89,18 @@ The reported symptom was an access dialog that disappeared immediately in Opera 
 Deployment `dpl_6NEyDnJx4YHbqz9ZMrdm7ggR1NA4`, runtime commit `8e6213a792eb4480f822a08d23b3df92581173bc`: **READY**. On the stable branch preview, live Chrome inspection confirmed the Dashlane field hint, persistent form after a real outside click, Close and native Escape dismissal, focus returning to the landing-page access button, and selectable Remember This Device help text. No key was entered. This verifies the updated Chromium UI but does not reproduce the user's Opera/Dashlane setup.
 
 [Verified access dialog](screenshots/access-dialog-compatibility.jpg)
+
+## Dashlane phishing warning follow-up · 20 October 2026
+
+New screenshots were available for inspection and show Dashlane's **Phishing risk detected** warning with its AI-model explanation. This establishes that the reported warning is phishing classification, not just autofill. The earlier autofill hint does not exempt a site from phishing checks. The warning appears dimmed behind Kinko's native modal. Native `showModal()` makes other document elements inert; a conflict with an injected extension prompt is plausible, but the exact Opera/Dashlane interaction is not reproduced here.
+
+Returning-user access now uses a normal document-flow screen, keeping the existing form, encrypted backup import and Remember This Device control. It has an accessible page heading and Back to Kinko control, with no modal top layer or focus trap blocking external extension UI. Creation retains its existing dialog. Authentication and encryption are unchanged. This is a UI interoperability fix, not a change to Dashlane's security verdict.
+
+Added a React/DOM regression for the access screen: no dialog or inert state, external security UI remains focusable/clickable without leaving access, heading focus and Back control work. All **31 tests pass** and production build passes. The browser suite does not reproduce the Opera/Dashlane extension environment.
+
+Dashlane's official resolution for incorrect phishing classifications is an owner report through Support Chat. A user may also choose the extension's site-specific trust control after independently verifying the URL. No extension settings were changed and no report was submitted on the user's behalf.
+
+References:
+- https://support.dashlane.com/hc/en-us/articles/33017283560594-I-own-a-website-that-is-being-flagged-for-phishing
+- https://support.dashlane.com/hc/en-us/articles/30786899404690-AI-Powered-Scam-Protection-for-personal-plans
+- https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal

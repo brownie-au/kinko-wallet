@@ -1953,6 +1953,46 @@ h1 {
 .notice b {
   font-weight: 600;
 }
+.access-main {
+  width: min(520px, calc(100% - 32px));
+  margin: 32px auto 72px;
+}
+.access-page .brand {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.access-page .watch-badge {
+  margin-left: auto;
+}
+.access-main > .button {
+  margin-bottom: 12px;
+}
+.back-arrow {
+  transform: rotate(180deg);
+}
+.access-card {
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 16px 48px #112b3110;
+}
+.access-card h1 {
+  font-size: 27px;
+  line-height: 1.3;
+  letter-spacing: -0.7px;
+  font-weight: 550;
+}
+.access-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 9px 0 24px;
+}
+.access-card form > .notice:first-child {
+  margin-top: 0;
+}
 .modal {
   border: 1px solid var(--line);
   border-radius: 15px;

@@ -16,11 +16,11 @@ dom.window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
 };
 const { createRoot } = await import('react-dom/client');
-let Modal;
+let Modal, AccessPage;
 before(async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
-    ({ Modal } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
+    ({ Modal, AccessPage } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
   } finally {
     await server.close();
   }
@@ -127,4 +127,49 @@ test('explicit close and Escape cancellation still work for the access dialog', 
     view.cleanup();
   }
   assert.equal(document.activeElement.id, 'opener');
+});
+
+test('returning-user access stays in document flow and leaves external security UI reachable', () => {
+  const opener = document.querySelector('#opener');
+  opener.focus();
+  const root = createRoot(document.querySelector('#root'));
+  const securityPrompt = document.createElement('button');
+  securityPrompt.textContent = 'Extension security prompt';
+  let acknowledged = false;
+  securityPrompt.onclick = () => {
+    acknowledged = true;
+  };
+  document.body.append(securityPrompt);
+  let back = 0;
+  act(() =>
+    root.render(
+      React.createElement(
+        AccessPage,
+        {
+          title: 'Welcome back.',
+          subtitle: 'Your Access Key brings your watchlist back.',
+          onClose: () => back++
+        },
+        React.createElement('textarea', { 'aria-label': 'Kinko Access Key' })
+      )
+    )
+  );
+  try {
+    assert.equal(document.querySelector('dialog'), null);
+    assert.equal(document.querySelector('[aria-modal="true"], [inert]'), null);
+    assert.equal(document.activeElement, document.querySelector('h1'));
+    assert.equal(document.querySelector('main').getAttribute('aria-labelledby'), 'access-title');
+    securityPrompt.focus();
+    securityPrompt.click();
+    assert.equal(document.activeElement, securityPrompt);
+    assert.equal(acknowledged, true);
+    assert.equal(back, 0, 'external interactions must not leave sign-in');
+    assert.ok(document.querySelector('textarea'));
+    act(() => [...document.querySelectorAll('main button')].find((b) => b.textContent.includes('Back to Kinko')).click());
+    assert.equal(back, 1);
+  } finally {
+    act(() => root.unmount());
+    securityPrompt.remove();
+  }
+  assert.equal(document.activeElement, opener);
 });

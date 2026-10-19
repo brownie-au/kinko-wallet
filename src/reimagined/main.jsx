@@ -16,7 +16,7 @@ import { NETWORKS } from './networks.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { addDecimal } from '../utils/tokenMath.js';
 import { isAddress } from './validation.js';
-import { Icon, Mark, Copy, Modal, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
+import { Icon, Mark, Copy, Modal, AccessPage, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
 import { demoRows, demoWatchlist, demoStakes } from './demo.js';
 import './styles.css';
 const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -226,8 +226,9 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
       setBusy(false);
     }
   };
+  const AccessSurface = mode === 'new' ? Modal : AccessPage;
   return (
-    <Modal
+    <AccessSurface
       title={mode === 'new' ? 'Your Kinko starts here.' : 'Welcome back.'}
       subtitle={mode === 'new' ? 'A private watchlist. No email. No wallet connection.' : 'Your Access Key brings your watchlist back.'}
       onClose={onClose}
@@ -341,7 +342,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
         )}
         <p className="small muted center">No key is sent to the server. Keep your device and browser secure.</p>
       </form>
-    </Modal>
+    </AccessSurface>
   );
 }
 function WalletForm({ wallet, onClose, onSave, busy, error }) {
@@ -805,16 +806,18 @@ function App() {
   if (!session)
     return (
       <>
-        <Welcome
-          onCreate={() => setFlow('new')}
-          onRestore={() => setFlow('restore')}
-          onDemo={() => {
-            setSession('demo');
-            setData(demoWatchlist);
-            setMode('demo');
-            setPage('overview');
-          }}
-        />
+        <div hidden={flow === 'restore'}>
+          <Welcome
+            onCreate={() => setFlow('new')}
+            onRestore={() => setFlow('restore')}
+            onDemo={() => {
+              setSession('demo');
+              setData(demoWatchlist);
+              setMode('demo');
+              setPage('overview');
+            }}
+          />
+        </div>
         {flow && <AccessFlow mode={flow} onClose={() => setFlow(null)} onOpen={open} toast={toast} />}{' '}
         {notice && (
           <div className="toast" role="status">
