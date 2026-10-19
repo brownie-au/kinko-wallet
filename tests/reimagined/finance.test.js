@@ -111,3 +111,26 @@ test('on-chain stake decoding pins all reads to a checked chain and block', asyn
     global.fetch = old;
   }
 });
+
+test('a provider that fails mid-read falls back only after the alternate chain is checked', async () => {
+  const old = global.fetch;
+  const requests = [];
+  global.fetch = async (url, options) => {
+    const b = JSON.parse(options.body);
+    requests.push({ url, method: b.method });
+    if (url.includes('ethereum-rpc.publicnode') && b.method === 'eth_getBalance') throw new Error('rate limited');
+    const result = b.method === 'eth_chainId' ? '0x1' : b.method === 'eth_blockNumber' ? '0x999' : '0x123';
+    return { ok: true, json: async () => ({ result }) };
+  };
+  try {
+    const r = await reader('eth');
+    assert.equal(await r.rpc('eth_getBalance', ['0x' + '1'.repeat(40), r.block]), '0x123');
+    const fallback = requests.filter((r) => r.url.includes('eth.drpc.org'));
+    assert.deepEqual(
+      fallback.map((r) => r.method),
+      ['eth_chainId', 'eth_getBalance']
+    );
+  } finally {
+    global.fetch = old;
+  }
+});

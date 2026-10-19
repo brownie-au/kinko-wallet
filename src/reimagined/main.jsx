@@ -18,7 +18,7 @@ import { isAddress } from './validation.js';
 import { Icon, Mark, Copy, Modal, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
 import { demoRows, demoWatchlist, demoStakes } from './demo.js';
 import './styles.css';
-const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const number = (v, dp = 2) => Number(v).toLocaleString('en-AU', { maximumFractionDigits: dp });
 const nav = [
   ['overview', 'grid', 'Overview'],
@@ -650,7 +650,7 @@ function App() {
       ? '••••••'
       : value == null
         ? '—'
-        : new Intl.NumberFormat('en-AU', { style: 'currency', currency, maximumFractionDigits: value * rate < 0.01 ? 8 : 2 }).format(
+        : new Intl.NumberFormat('en-AU', { style: 'currency', currency, maximumFractionDigits: value * rate < 1 ? 8 : 2 }).format(
             value * rate
           );
   const quantity = (value, dp = 4) => (privacy ? '••••' : number(value, dp));
@@ -1667,6 +1667,38 @@ function App() {
                   Backups remain encrypted. Store your Access Key separately. Old Portfolio IDs do not unlock this system.
                 </p>
               </section>
+              {(data.tokens || []).length > 0 && (
+                <section className="panel settings-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h2>Tracked token contracts</h2>
+                      <p>Custom contracts are read across wallets on their selected network.</p>
+                    </div>
+                    <Icon name="layers" size={20} />
+                  </div>
+                  {(data.tokens || []).map((t) => (
+                    <div className="setting-row" key={`${t.chain}:${t.address}`}>
+                      <span>
+                        <b>{NETWORKS[t.chain].name}</b>
+                        <small className="mono" title={t.address}>
+                          {shortAddress(t.address)}
+                        </small>
+                      </span>
+                      <Copy text={t.address} label="Copy token contract" />
+                      <button
+                        className="icon-button danger-text"
+                        aria-label={`Remove tracked contract ${shortAddress(t.address)}`}
+                        disabled={saving || dirty}
+                        onClick={() =>
+                          persist({ ...data, tokens: data.tokens.filter((x) => !(x.chain === t.chain && x.address === t.address)) })
+                        }
+                      >
+                        <Icon name="trash" size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </section>
+              )}
               <section className="panel security-panel">
                 <div className="panel-header">
                   <div>
@@ -1944,7 +1976,7 @@ function AssetTable({ tokens, money, price, quantity, onDetail }) {
             </span>
           </span>
           <span className="asset-price">{price(t.priceUsd)}</span>
-          <span className="asset-quantity" title={t.amountExact}>
+          <span className="asset-quantity" title={quantity(t.amountExact, 4).includes('•') ? undefined : t.amountExact}>
             {quantity(t.amountExact, 4)}
           </span>
           <span className="asset-value">

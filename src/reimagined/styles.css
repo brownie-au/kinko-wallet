@@ -3773,3 +3773,25 @@ h1 {
     font-size: 11px;
   }
 }
+@media (max-width: 700px) {
+  .network-tabs > button {
+    min-height: 44px;
+  }
+  .heading-actions > .button {
+    min-height: 44px;
+  }
+  .top-actions > .icon-button {
+    min-width: 44px;
+    width: 44px;
+  }
+  .segmented button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .panel-header > select {
+    min-height: 44px;
+  }
+  .table-tools select {
+    min-height: 44px;
+  }
+}
