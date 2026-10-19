@@ -1,6 +1,6 @@
 import { encryptWatchlist, decryptWatchlist } from './crypto.js';
 import { normalizeWallets } from '../utils/walletRecords.js';
-export const blankWatchlist = () => ({ version: 1, wallets: [], currency: 'USD', theme: 'light', tokens: [], hiddenTokens: [], snapshots: [] });
+export const blankWatchlist = () => ({ version: 1, wallets: [], currency: 'USD', theme: 'light', tokens: [], hiddenTokens: [], showUnpricedTokens: false, snapshots: [] });
 export function validateWatchlist(data) {
   if (data?.version !== 1) throw new Error('Unsupported watchlist version.');
   const tokens = Array.isArray(data.tokens)
@@ -13,6 +13,7 @@ export function validateWatchlist(data) {
   return {
     version: 1,
     tokens,
+    showUnpricedTokens: data.showUnpricedTokens === true,
     hiddenTokens: Array.isArray(data.hiddenTokens) ? data.hiddenTokens.slice(0, 100).map((t) => {
       if (!['eth', 'pulse', 'base', 'polygon', 'bsc'].includes(t?.chain) || !/^0x[a-fA-F0-9]{40}$/.test(t?.address || ''))
         throw new Error('Invalid hidden token contract.');

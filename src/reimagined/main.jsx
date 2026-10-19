@@ -1,4 +1,4 @@
-import { splitTokens, tokenKey } from './tokenFilter.js';
+import { splitTokens, tokenKey, assetListTokens } from './tokenFilter.js';
 import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { generateAccessKey, deriveAccess, encryptWatchlist, decryptWatchlist, normalizeKey } from './crypto.js';
@@ -854,6 +854,9 @@ export function App() {
   const tokens = aggregate.tokens
     .filter((t) => `${t.name} ${t.symbol} ${t.address || ''}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sort === 'name' ? a.symbol.localeCompare(b.symbol) : (b.valueUsd || 0) - (a.valueUsd || 0)));
+  const listedTokens = assetListTokens(tokens, { tracked: data.tokens, showUnpriced: data.showUnpricedTokens, hideDust });
+  const defaultAssetTokens = assetListTokens(tokens, { tracked: data.tokens });
+  const unpricedCount = tokens.length - defaultAssetTokens.length;
   const expectedStakeReads = selectedWallets.reduce(
     (n, w) => n + w.networks.filter((c) => (c === 'eth' || c === 'pulse') && (chainFilter === 'all' || chainFilter === c)).length,
     0
@@ -1358,7 +1361,8 @@ export function App() {
                     </button>
                   </div>
                   <AssetTable
-                    tokens={tokens.slice(0, 5)}
+                    tokens={assetListTokens(tokens, { tracked: data.tokens, showUnpriced: data.showUnpricedTokens }).slice(0, 5)}
+                    filteredEmpty={tokens.length > 0}
                     money={money}
                     price={price}
                     quantity={quantity}
@@ -1414,7 +1418,7 @@ export function App() {
               <div className="panel-header">
                 <div>
                   <h2>
-                    Assets <span className="count-badge">{aggregate.tokens.length}</span>
+                    Assets <span className="count-badge">{listedTokens.length}</span>
                   </h2>
                   <p>Network + contract identifies a token. Tickers alone do not.</p>
                 </div>
@@ -1438,16 +1442,20 @@ export function App() {
                   </button>
                 </div>
               </div>
-              <div className="panel-footnote">
-                <label><input type="checkbox" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
+              <div className="panel-footnote asset-filters">
+                <label><input type="checkbox" aria-label="Show unpriced tokens" checked={data.showUnpricedTokens === true} disabled={saving || dirty}
+                  onChange={(e) => persist({ ...data, showUnpricedTokens: e.target.checked })} /> Show unpriced tokens ({unpricedCount})</label>
+                <p>Unpriced tokens are hidden from this list by default and remain available to review. They are excluded from known fiat totals. Explicitly tracked contracts stay visible.</p>
+                <label><input type="checkbox" aria-label="Hide dust balances" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
                 <p>Dust filtering only changes this list. Portfolio totals still include these balances.</p>
               </div>
               <AssetTable
-                tokens={hideDust ? tokens.filter((t) => t.valueUsd == null || t.valueUsd >= 0.01 || !t.address) : tokens}
+                tokens={listedTokens}
                 money={money}
                 price={price}
                 quantity={quantity}
                 onDetail={(t) => setModal({ kind: 'asset', token: t })}
+                filteredEmpty={tokens.length > 0}
               />
               {filteredTokens.length > 0 && (
                 <details className="panel-footnote filtered-tokens">
@@ -1465,7 +1473,7 @@ export function App() {
                 </details>
               )}
               <p className="panel-footnote">
-                Prices are estimates from public sources. Unpriced assets show “—” and are excluded from totals. Provider-flagged and obvious claim-link spam is filtered across all networks. Unpriced tokens are not automatically spam. Indexing and spam detection can miss assets.
+                Prices are estimates from public sources. Unpriced assets show “—” and are excluded from totals. Provider-flagged tokens, website-only names and promotional links are filtered across all networks. Unpriced tokens are not automatically spam. Indexing and spam detection can miss assets.
               </p>
             </section>
           )}
@@ -1487,7 +1495,7 @@ export function App() {
                 {selectedWallets
                   .filter((w) => `${w.name} ${w.address}`.toLowerCase().includes(search.toLowerCase()))
                   .map((w, i) => {
-                    const wr = rawRows.filter((t) => t.wallet === w.address.toLowerCase());
+                    const wr = splitTokens(rawRows.filter((t) => t.wallet === w.address.toLowerCase()), data.tokens, data.hiddenTokens).visible;
                     const val = aggregateHoldings(wr).totalUsd;
                     const ok = wr.some((r) => r.priceUsd != null);
                     return (
@@ -2166,7 +2174,7 @@ export function App() {
     </div>
   );
 }
-function AssetTable({ tokens, money, price, quantity, onDetail }) {
+function AssetTable({ tokens, money, price, quantity, onDetail, filteredEmpty = false }) {
   return tokens.length ? (
     <div className="asset-table">
       <div className="asset-table-head">
@@ -2201,8 +2209,8 @@ function AssetTable({ tokens, money, price, quantity, onDetail }) {
       ))}
     </div>
   ) : (
-    <Empty icon="layers" title="Your assets will appear here">
-      Add a public wallet address, then let Kinko read the numbers.
+    <Empty icon="layers" title={filteredEmpty ? 'No assets match these display filters' : 'Your assets will appear here'}>
+      {filteredEmpty ? 'Use the Show unpriced tokens and dust controls on Assets to review more holdings.' : 'Add a public wallet address, then let Kinko read the numbers.'}
     </Empty>
   );
 }

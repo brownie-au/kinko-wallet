@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spamReason, splitTokens } from '../../src/reimagined/tokenFilter.js';
+import { spamReason, splitTokens, assetListTokens } from '../../src/reimagined/tokenFilter.js';
 import { portfolioDiscovery, indexedDiscovery } from '../../src/server/tokenDiscovery.js';
 import { holdings } from '../../src/reimagined/blockchain.js';
 import { validateWatchlist, blankWatchlist } from '../../src/reimagined/vault.js';
@@ -137,4 +137,42 @@ test('large cold wallets select batch metadata while small wallets keep the chea
     await indexedDiscovery('base', wallet, 'test');
     assert.equal(batches, 1); assert.equal(perToken, 0);
   });
+});
+
+test('bare domains, shorteners, uncommon suffixes and disguised claim links are quarantined on all five chains', () => {
+  const links = ['PPBox.io', 'PPBoxs.net', 'PULSEFOMO.COM', 'Zepe.io', 'Tu7.org', 'RiftDao.net', 'VOTEFORK.COM',
+    'BalancerV2.com', 'Celestia.icu', 'zerolends.com', 'Reward at cex.lat', 'Reward at 1000usdc.lol',
+    '$ | Check: blast-invite.me', '[L2PEPE.COM]GET PEPE2', 'Swap your Voucher on t.ly/dope', 'Swap your Voucher on fli.so/sh',
+    'Swap your Voucher on bio.link/', 'UЅDС - [ t.ly/USPOOL ] - *clai', '$USDT СLАlМ▷airUSDT.net', 'ＰＰＢｏｘ．ｉｏ'];
+  for (const chain of ['eth', 'pulse', 'base', 'polygon', 'bsc']) {
+    for (const name of links) {
+      assert.ok(spamReason({ name }), name);
+      const token = { chain, address: contract, name, priceUsd: null };
+      assert.equal(splitTokens([token]).visible.length, 0, `${chain}: ${name}`);
+      assert.equal(splitTokens([token], [{ chain, address: contract }]).visible.length, 1);
+    }
+  }
+  assert.equal(spamReason({ name: 'Crypto.com Coin', symbol: 'CRO' }), null);
+  assert.equal(spamReason({ name: 'Test Token', symbol: '首富币' }), null);
+});
+test('hundreds of unknown airdrops stay out of the default list without deleting balances or inventing spam verdicts', () => {
+  const unknown = Array.from({ length: 250 }, (_, i) => ({ chain: ['eth', 'pulse', 'base', 'polygon', 'bsc'][i % 5], address: addr(3000 + i), name: `Unknown token ${i}`, priceUsd: null, amountExact: '100' }));
+  const native = { chain: 'base', address: null, priceUsd: null };
+  const priced = { chain: 'base', address: addr(8888), priceUsd: 2, valueUsd: 20 };
+  const dust = { chain: 'base', address: addr(8889), priceUsd: 0.001, valueUsd: 0.001 };
+  const rows = [native, priced, dust, ...unknown];
+  assert.equal(splitTokens(rows).filtered.length, 0);
+  assert.deepEqual(assetListTokens(rows), [native, priced, dust]);
+  assert.equal(assetListTokens(rows, { showUnpriced: true }).length, 253);
+  assert.deepEqual(assetListTokens(rows, { hideDust: true }), [native, priced]);
+  assert.equal(assetListTokens(rows, { tracked: [unknown[0]] }).length, 4);
+  assert.equal(assetListTokens([unknown[0]], { tracked: [{ chain: 'other', address: unknown[0].address }] }).length, 0);
+  assert.equal(rows.length, 253); // Display policy never mutates the underlying positions.
+});
+test('unpriced visibility preference defaults off and survives encrypted watchlist backups', async () => {
+  assert.equal(validateWatchlist({ version: 1, wallets: [] }).showUnpricedTokens, false);
+  assert.equal(validateWatchlist({ version: 1, wallets: [], showUnpricedTokens: 'true' }).showUnpricedTokens, false);
+  const data = validateWatchlist({ ...blankWatchlist(), showUnpricedTokens: true });
+  const access = await deriveAccess(generateAccessKey());
+  assert.equal(validateWatchlist(await decryptWatchlist(access, await encryptWatchlist(access, data))).showUnpricedTokens, true);
 });
