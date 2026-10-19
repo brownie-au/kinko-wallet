@@ -754,7 +754,7 @@ export function App() {
     ...scopedResults.flatMap((r) => (r.filtered || []).map((t) => ({ ...t, chain: r.chain }))),
     ...screened.filtered,
     ...(data.hiddenTokens || []).filter((t) => (chainFilter === 'all' || chainFilter === t.chain) && selectedWallets.some((w) => w.networks.includes(t.chain)))
-      .map((t) => ({ ...t, reason: 'Hidden by you' }))
+      .map((t) => ({ ...rawRows.find((r) => tokenKey(r.chain, r.address) === tokenKey(t.chain, t.address)), ...t, reason: 'Hidden by you' }))
   ].map((t) => [tokenKey(t.chain, t.address), t])).values()]
     .filter((t) => !rows.some((r) => tokenKey(r.chain, r.address) === tokenKey(t.chain, t.address)));
   const setTokenHidden = async (token, hidden) => {
@@ -1357,11 +1357,7 @@ export function App() {
                       View all <Icon name="arrow" size={15} />
                     </button>
                   </div>
-                  <div className="panel-footnote">
-                <label><input type="checkbox" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
-                <p>Dust filtering only changes this list. Portfolio totals still include these balances.</p>
-              </div>
-              <AssetTable
+                  <AssetTable
                     tokens={tokens.slice(0, 5)}
                     money={money}
                     price={price}
@@ -1455,7 +1451,7 @@ export function App() {
               />
               {filteredTokens.length > 0 && (
                 <details className="panel-footnote filtered-tokens">
-                  <summary>{filteredTokens.length} filtered tokens · Review</summary>
+                  <summary>{filteredTokens.length} filtered {filteredTokens.length === 1 ? 'token' : 'tokens'} · Review</summary>
                   <p>Hidden from assets, totals and price notices. Names are untrusted text. Tracking a contract overrides the automatic filter; verify its address first.</p>
                   {filteredTokens.map((t) => (
                     <div className="filtered-token" key={tokenKey(t.chain, t.address)}>
