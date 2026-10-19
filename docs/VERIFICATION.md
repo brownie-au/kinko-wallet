@@ -67,3 +67,10 @@ A requested-by-agent optional friendly alias was rejected by automatic approval 
 - Added 12 lifecycle tests using actual Web Crypto and fake-indexeddb's IndexedDB implementation: refresh/session-end separation, simulated browser restart, no raw key/auth material in stored JSON, non-extractable keys, switching from remembered to session-only, logout cleanup, blocked storage, tampering, logout races, stale tabs, and cloud/offline restoration.
 - Full suite: **25 tests passed**. Production build passed (228.28 KB JavaScript; 71.96 KB gzip). Production dependency audit: zero known vulnerabilities.
 - Lifecycle restart checks are automated storage-context simulations, not claims of physical-device or browser-process restart testing. Saved access is scoped to the exact origin; use the same URL and browser profile. Browser session-recovery settings may restore sessionStorage, so explicit logout is required on shared devices.
+
+Deployment for this feature: `dpl_2Bq3JouikPjj4ZE19M3krwTwfnxn`, runtime commit `d0960ed874a1b14337dfcdce7f7762cd651f9ce8`, status **READY**. Browser inspection verified the returning-user checkbox defaults off, is selectable, and switches between session-only and trusted-device help text. No real user key was entered during UI inspection.
+
+Use the stable branch preview for remembered access:
+https://kinko-wallet-v2-test-git-feature-kin-b1ea48-rob-browns-projects.vercel.app/
+
+[Login checkbox screenshot](screenshots/remember-this-device.jpg)
