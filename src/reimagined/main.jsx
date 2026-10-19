@@ -231,8 +231,9 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
       title={mode === 'new' ? 'Your Kinko starts here.' : 'Welcome back.'}
       subtitle={mode === 'new' ? 'A private watchlist. No email. No wallet connection.' : 'Your Access Key brings your watchlist back.'}
       onClose={onClose}
+      dismissOnBackdrop={false}
     >
-      <form onSubmit={open}>
+      <form onSubmit={open} data-form-type="other">
         <div className="notice">
           <Icon name="key" />
           <p>
@@ -245,6 +246,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
         <div className="key-input-wrap">
           <textarea
             id="access-key"
+            data-form-type="other"
             autoComplete="off"
             autoCorrect="off"
             spellCheck="false"
@@ -270,6 +272,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
             </label>
             <input
               id="key-confirm"
+              data-form-type="other"
               className="input"
               value={suffix}
               onChange={(e) => setSuffix(e.target.value)}

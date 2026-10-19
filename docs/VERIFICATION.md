@@ -74,3 +74,14 @@ Use the stable branch preview for remembered access:
 https://kinko-wallet-v2-test-git-feature-kin-b1ea48-rob-browns-projects.vercel.app/
 
 [Login checkbox screenshot](screenshots/remember-this-device.jpg)
+
+## Opera / password-manager dialog compatibility · 20 October 2026
+
+The reported symptom was an access dialog that disappeared immediately in Opera with Dashlane, while Chrome without Dashlane worked. The supplied images were unavailable in this workspace, and Opera/Dashlane are not installed in the verification browser, so the exact cause remains unconfirmed.
+
+- Access/create dialogs now require their explicit Close control or Escape to dismiss; clicking outside cannot discard the form.
+- Shared dialogs only dismiss on an outside pointer gesture that starts and ends outside the dialog bounds. A standalone scripted click, padding click, inside-to-outside drag, or cancelled gesture does not dismiss them.
+- Access forms and both Access Key fields use Dashlane's documented `data-form-type="other"` hint. This requests no autofill for these custom key fields; it does not prevent extensions from inspecting the DOM or guarantee that every extension will respect the hint. Source: https://support.dashlane.com/hc/en-us/articles/4420122792594-Optimize-your-web-forms-for-Dashlane-autofill
+- Close controls explicitly use `type="button"`. Existing authentication, encryption and remembered-device storage are unchanged.
+- Added five React/DOM regression tests with jsdom. Full suite: **30 passed**. Production build passed: 228.69 KB JavaScript / 72.12 KB gzip. Production dependency audit: zero known vulnerabilities.
+- Native Escape/top-layer behaviour needs live-browser inspection; jsdom's dialog lifecycle is shimmed and does not establish Opera/Dashlane compatibility.

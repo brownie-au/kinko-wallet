@@ -185,8 +185,14 @@ export function Copy({ text, label = 'Copy address', onCopy }) {
     </button>
   );
 }
-export function Modal({ title, subtitle, children, onClose, wide = false }) {
+export function Modal({ title, subtitle, children, onClose, wide = false, dismissOnBackdrop = true }) {
   const ref = useRef();
+  const backdropPress = useRef(false);
+  const isBackdrop = (event) => {
+    if (event.target !== ref.current) return false;
+    const bounds = ref.current.getBoundingClientRect();
+    return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+  };
   useEffect(() => {
     const old = document.activeElement;
     const dialog = ref.current;
@@ -204,8 +210,17 @@ export function Modal({ title, subtitle, children, onClose, wide = false }) {
         e.preventDefault();
         onClose();
       }}
+      onPointerDown={(e) => {
+        // A lone click (including an extension-generated click) isn't an outside gesture.
+        backdropPress.current = dismissOnBackdrop && e.button === 0 && isBackdrop(e);
+      }}
+      onPointerCancel={() => {
+        backdropPress.current = false;
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) onClose();
+        const dismiss = backdropPress.current && isBackdrop(e);
+        backdropPress.current = false;
+        if (dismiss) onClose();
       }}
     >
       <div className="modal-content">
@@ -214,7 +229,7 @@ export function Modal({ title, subtitle, children, onClose, wide = false }) {
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button className="icon-button" aria-label="Close dialog" onClick={onClose}>
+          <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
             <Icon name="close" />
           </button>
         </div>
