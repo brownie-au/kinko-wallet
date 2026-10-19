@@ -3795,3 +3795,17 @@ h1 {
     min-height: 44px;
   }
 }
+.remember-device {
+  margin-top: 18px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.remember-device .check-label {
+  margin: 7px 0 0;
+  padding: 9px 0;
+}
+.remember-device p {
+  margin-left: 28px;
+  margin-top: 2px;
+  line-height: 1.7;
+}

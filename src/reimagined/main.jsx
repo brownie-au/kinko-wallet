@@ -11,6 +11,7 @@ import {
   writeLocalEncrypted,
   clearCachedPublicData
 } from './vault.js';
+import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
 import { NETWORKS } from './networks.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { addDecimal } from '../utils/tokenMath.js';
@@ -164,7 +165,22 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [backup, setBackup] = useState(null),
-    [localAvailable, setLocalAvailable] = useState(false);
+    [localAvailable, setLocalAvailable] = useState(false),
+    [remember, setRemember] = useState(false);
+  const completeOpen = async (access, data, rev, storage) => {
+    let warning = '';
+    try {
+      await createDeviceSessions().save(key, remember, storage);
+    } catch (error) {
+      if (error.code === 'SESSION_CANCELLED') throw error;
+      try {
+        await forgetDeviceAccess();
+      } catch {}
+      warning = 'Browser storage is unavailable. You are signed in for this page only; keep your Access Key for next time.';
+    }
+    await onOpen(access, data, rev, storage);
+    if (warning) toast(warning);
+  };
   const valid = mode !== 'new' || (saved && suffix.trim().toUpperCase() === key.slice(-4));
   const open = async (e) => {
     e.preventDefault();
@@ -175,17 +191,17 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
       const access = await deriveAccess(normalized);
       if (backup) {
         const data = validateWatchlist(await decryptWatchlist(access, backup.envelope));
-        await onOpen(access, data, backup.revision || 0, 'local');
+        await completeOpen(access, data, backup.revision || 0, 'local');
         return;
       }
       if (mode === 'new') {
         const data = blankWatchlist();
         const r = await createVault(access, data);
-        await onOpen(access, data, r.revision, 'cloud');
+        await completeOpen(access, data, r.revision, 'cloud');
       } else {
         try {
           const r = await readVault(access);
-          await onOpen(access, r.data, r.revision, 'cloud');
+          await completeOpen(access, r.data, r.revision, 'cloud');
         } catch (err) {
           setLocalAvailable(!!localStorage.getItem(`kinko:vault:${access.id}`));
           throw err;
@@ -203,7 +219,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
       const access = await deriveAccess(key);
       const cached = JSON.parse(localStorage.getItem(`kinko:vault:${access.id}`));
       const data = validateWatchlist(await decryptWatchlist(access, cached.envelope));
-      await onOpen(access, data, cached.revision, 'local');
+      await completeOpen(access, data, cached.revision, 'local');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -288,6 +304,24 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
             {backup && <p className="small">Encrypted backup selected. Enter its Access Key above.</p>}
           </div>
         )}
+        <div className="remember-device">
+          <label className="check-label" htmlFor="remember-device">
+            <input
+              id="remember-device"
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              disabled={busy}
+              aria-describedby="remember-device-help"
+            />
+            Remember This Device
+          </label>
+          <p id="remember-device-help" className="small muted">
+            {remember
+              ? 'Stay signed in on this browser after closing it. Only use on a device you trust.'
+              : 'Stay signed in for this tab session, including page refreshes.'}
+          </p>
+        </div>
         {error && (
           <div className="error" role="alert">
             {error}
@@ -396,6 +430,7 @@ function App() {
     [revision, setRevision] = useState(0),
     [mode, setMode] = useState('cloud'),
     [flow, setFlow] = useState(null),
+    [restoring, setRestoring] = useState(true),
     [page, setPage] = useState('overview'),
     [walletFilter, setWalletFilter] = useState('all'),
     [chainFilter, setChainFilter] = useState('all'),
@@ -454,6 +489,59 @@ function App() {
       toast('Encrypted browser backup could not be saved. Export a backup from Settings.');
     }
   };
+  const clearWorkspace = () => {
+    generation.current++;
+    setSession(null);
+    setData(blankWatchlist());
+    setResults({});
+    setStakeResults({});
+    setActivities({});
+    setHistory([]);
+    setSyncError('');
+    setDirty(false);
+    setWalletFilter('all');
+    setChainFilter('all');
+    setModal(null);
+    setFlow(null);
+    clearCachedPublicData();
+  };
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      try {
+        const saved = await createDeviceSessions().restore();
+        if (saved && !cancelled) {
+          const result = await resumeWatchlist(saved);
+          if (!cancelled) await open(saved.access, result.data, result.revision, result.mode);
+        }
+      } catch (error) {
+        // An offline outage can be retried next visit; rejected/corrupt credentials are removed.
+        if (error.status === 401 || error.status === 404 || /authentication|JSON/.test(error.message)) {
+          try {
+            await forgetDeviceAccess();
+          } catch {}
+        }
+        if (!cancelled) toast('Saved access could not be restored. Please enter your Kinko Access Key.');
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    };
+    const loggedOutElsewhere = (event) => {
+      if (event.key !== LOGOUT_STORAGE_KEY || !event.newValue) return;
+      cancelled = true;
+      try {
+        sessionStorage.removeItem('kinko:authentication:v1');
+      } catch {}
+      clearWorkspace();
+      setRestoring(false);
+    };
+    window.addEventListener('storage', loggedOutElsewhere);
+    restore();
+    return () => {
+      cancelled = true;
+      window.removeEventListener('storage', loggedOutElsewhere);
+    };
+  }, []);
   const persist = async (next) => {
     if (savingRef.current) return false;
     if (demo) {
@@ -504,20 +592,18 @@ function App() {
       setSaving(false);
     }
   };
-  const signOut = () => {
+  const signOut = async () => {
     if (dirty && !window.confirm('Your edits have not synced. Export an encrypted backup before leaving. Sign out anyway?')) return;
-    generation.current++;
-    setSession(null);
-    setData(blankWatchlist());
-    setResults({});
-    setStakeResults({});
-    setActivities({});
-    setHistory([]);
-    setSyncError('');
-    setDirty(false);
-    setWalletFilter('all');
-    setChainFilter('all');
-    clearCachedPublicData();
+    let error;
+    if (!demo) {
+      try {
+        await forgetDeviceAccess();
+      } catch (e) {
+        error = e;
+      }
+    }
+    clearWorkspace();
+    if (error) toast(error.message);
   };
   const walletSignature = JSON.stringify(data.wallets.map((w) => [w.address, w.networks]));
   const contractSignature = JSON.stringify(data.tokens || []);
@@ -705,6 +791,14 @@ function App() {
     toast('Encrypted backup downloaded. Keep your Access Key separately.');
   };
   const addWallet = () => setModal({ kind: 'wallet' });
+  if (restoring)
+    return (
+      <div className="fatal" role="status">
+        <Mark />
+        <h1>Opening your Kinko…</h1>
+        <p>Restoring saved access on this browser.</p>
+      </div>
+    );
   if (!session)
     return (
       <>
@@ -1923,6 +2017,7 @@ function App() {
             setSaving(true);
             try {
               await vaultRequest(session, 'DELETE', { revision });
+              await forgetDeviceAccess();
               localStorage.removeItem(`kinko:vault:${session.id}`);
               setDirty(false);
               setModal(null);

@@ -50,6 +50,10 @@ export function writeLocalEncrypted(access, envelope, revision) {
   localStorage.setItem(`kinko:vault:${access.id}`, JSON.stringify({ envelope, revision }));
 }
 export function clearCachedPublicData() {
-  for (const key of Object.keys(localStorage))
-    if (key.startsWith('kinko:market:') || key.startsWith('kinko:snapshots:')) localStorage.removeItem(key);
+  try {
+    for (const key of Object.keys(localStorage))
+      if (key.startsWith('kinko:market:') || key.startsWith('kinko:snapshots:')) localStorage.removeItem(key);
+  } catch {
+    /* A blocked optional cache must not prevent logout. */
+  }
 }

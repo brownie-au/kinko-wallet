@@ -57,3 +57,13 @@ Final production build: 222.37 KB JavaScript / 70.08 KB gzip; 50.88 KB CSS / 10.
 [Desktop screenshot — clearly labelled illustrative demo](screenshots/kinko-desktop.jpg)
 
 A requested-by-agent optional friendly alias was rejected by automatic approval review because it could displace existing public routing. No alias was changed. Delivery uses the verified Vercel-generated preview URL. The main domain and existing V2 test production URL retain their previous deployments.
+
+## Remember This Device · 20 October 2026
+
+- Added an unchecked-by-default Remember This Device control to existing access/create forms, plus automatic restoration before showing the welcome screen.
+- Checked: AES-GCM sealed derived credentials persist in origin-scoped IndexedDB across visits. Unchecked: the sealed credentials exist only in sessionStorage for the current tab session; refreshes restore that session. A non-extractable wrapping CryptoKey is structured-cloned through IndexedDB; the raw Kinko Access Key is never stored.
+- Explicit logout clears both authentication locations and the device key, invalidates in-flight restores, and notifies other tabs. Account deletion also forgets device access. If IndexedDB deletion is temporarily blocked, a non-secret logout marker prevents automatic restore; if Web Storage is blocked, IndexedDB deletion is still attempted.
+- Restored sessions fetch the current encrypted cloud watchlist. Offline cached data is explicitly local; missing or rejected cloud accounts require re-entry of the key.
+- Added 12 lifecycle tests using actual Web Crypto and fake-indexeddb's IndexedDB implementation: refresh/session-end separation, simulated browser restart, no raw key/auth material in stored JSON, non-extractable keys, switching from remembered to session-only, logout cleanup, blocked storage, tampering, logout races, stale tabs, and cloud/offline restoration.
+- Full suite: **25 tests passed**. Production build passed (228.28 KB JavaScript; 71.96 KB gzip). Production dependency audit: zero known vulnerabilities.
+- Lifecycle restart checks are automated storage-context simulations, not claims of physical-device or browser-process restart testing. Saved access is scoped to the exact origin; use the same URL and browser profile. Browser session-recovery settings may restore sessionStorage, so explicit logout is required on shared devices.
