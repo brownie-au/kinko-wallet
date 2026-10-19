@@ -104,3 +104,7 @@ References:
 - https://support.dashlane.com/hc/en-us/articles/33017283560594-I-own-a-website-that-is-being-flagged-for-phishing
 - https://support.dashlane.com/hc/en-us/articles/30786899404690-AI-Powered-Scam-Protection-for-personal-plans
 - https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal
+
+Deployment `dpl_CiXQGnxnx2WhnvL4MvjUxemwLzWG`, runtime commit `ae3366fdeb0062ef44832be5772b261e929f0932`: **READY**. Live Chrome inspection of the stable branch preview confirmed the normal access screen with zero open native dialogs, initial heading focus, selectable Remember This Device with updated help text, Back returning to the landing page and restoring focus to Access my Kinko, and successful reopening. The deployed script was `index--DWZcv9x.js`. No key was entered. Final build: 229.85 KB JavaScript / 72.33 KB gzip. This does not establish that Dashlane's classification has changed or reproduce Opera with Dashlane.
+
+[Access screen after compatibility update](screenshots/access-screen.jpg)
