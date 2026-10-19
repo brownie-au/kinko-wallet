@@ -45,3 +45,15 @@ Real deployed `/api/data` results:
 Desktop browser QA at 1348 CSS pixels verified the welcome page, demo dashboard, navigation, light/dark themes, wallet edit/save/renamed display, assets, HEX ladder, and stake detail dialog. No application-origin console errors were observed; the browser extension emitted unrelated metadata errors.
 
 **Verification limits:** The provided browser cannot change viewport/device emulation, so real mobile/tablet rendering remains unverified. Responsive breakpoints and mobile navigation/touch controls are implemented. Cross-device crypto/cloud restoration was verified with independent clients against the real API, not two physical devices or authenticated browser sessions. Browser sign-in/creation itself was not exercised with real user credentials. Existing account plan/billing settings could not be inspected; no plan changes, financial obligations or paid integrations were created.
+
+## Final delivery
+
+Final runtime commit: `cea969dab86314607738fa98cfa604fbc0c19207`. Vercel deployment `dpl_8SUiwxScwUrDnyN6edE1M4hY7iuE` returned READY and its public page was opened and inspected:
+
+https://kinko-wallet-v2-test-2w6waqaj0-rob-browns-projects.vercel.app/
+
+Final production build: 222.37 KB JavaScript / 70.08 KB gzip; 50.88 KB CSS / 10.65 KB gzip. All 13 focused tests passed. The final browser view also confirmed the corrected small-token price display (`0.018` rather than a rounded `0.02`).
+
+[Desktop screenshot — clearly labelled illustrative demo](screenshots/kinko-desktop.jpg)
+
+A requested-by-agent optional friendly alias was rejected by automatic approval review because it could displace existing public routing. No alias was changed. Delivery uses the verified Vercel-generated preview URL. The main domain and existing V2 test production URL retain their previous deployments.
