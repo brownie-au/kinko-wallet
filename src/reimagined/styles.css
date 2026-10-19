@@ -3925,3 +3925,9 @@ h1 {
 .filtered-token p { margin: 6px 0; }
 .filtered-token button { flex-shrink: 0; }
 @media (max-width: 600px) { .filtered-token { align-items: flex-start; flex-direction: column; } }
+
+.asset-filters > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; font-weight: 600; min-height: 24px; }
+.asset-filters > summary::-webkit-details-marker { display: none; }
+.asset-filters > summary svg { flex-shrink: 0; transform: rotate(90deg); transition: transform 150ms ease; }
+.asset-filters[open] > summary svg { transform: rotate(-90deg); }
+.asset-filter-options { padding-top: 14px; }

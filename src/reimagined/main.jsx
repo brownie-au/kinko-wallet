@@ -1442,13 +1442,16 @@ export function App() {
                   </button>
                 </div>
               </div>
-              <div className="panel-footnote asset-filters">
+              <details className="panel-footnote asset-filters">
+                <summary><span>Asset display options</span><Icon name="chevron" size={14} /></summary>
+                <div className="asset-filter-options">
                 <label><input type="checkbox" aria-label="Show unpriced tokens" checked={data.showUnpricedTokens === true} disabled={saving || dirty}
                   onChange={(e) => persist({ ...data, showUnpricedTokens: e.target.checked })} /> Show unpriced tokens ({unpricedCount})</label>
                 <p>Unpriced tokens are hidden from this list by default and remain available to review. They are excluded from known fiat totals. Explicitly tracked contracts stay visible.</p>
                 <label><input type="checkbox" aria-label="Hide dust balances" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} /> Hide balances below USD 0.01</label>
                 <p>Dust filtering only changes this list. Portfolio totals still include these balances.</p>
-              </div>
+                </div>
+              </details>
               <AssetTable
                 tokens={listedTokens}
                 money={money}
