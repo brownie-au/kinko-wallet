@@ -210,3 +210,19 @@ The Portfolio API documents HTTP 200 responses with error.partialErrors for fail
 80 automated tests pass, including all three networks through the API with missing/blank keys, HTTP and JSON-RPC 403, successful discovery, no explorer fallback, exact quantities, native retention, secret sanitisation, and recovery from a failed Portfolio network. Existing pagination/timeouts/429/spam/history tests pass. Vite build and diff checks pass; client assets contain neither ALCHEMY_API_KEY nor Alchemy authenticated endpoint hosts. Release bundle: index-CvTVcvQZ.js.
 
 Vercel management configuration/log reads were denied in this session; no attempt was made to bypass that restriction or read credentials. Successful authenticated runtime responses establish effective key access on the tested Preview, but do not establish a privileged audit of all branch overrides, provider billing, or other deployments. No production promotion or plan change is authorised or performed.
+
+### Deployed verification
+
+Runtime commit `34382fc3824006f6bab1e79a309f33411caf61c8`, explicit Preview deployment `dpl_BEyWCj2ENAnhrVma8nC5s79yFUaV`, served `index-CvTVcvQZ.js` with HTTP 200. Immutable Preview: https://kinko-wallet-v2-test-7mt6de3wb-rob-browns-projects.vercel.app . Chrome loaded the same bundle on the stable branch URL. Browser console showed an extension-origin metadata error; no app-origin error was observed in the inspected entries.
+
+The isolated real-mode React/JSDOM integration rendered live `/api/data` responses from that deployment: Base 375 assets / 27 filtered; Polygon 211 / 190; BNB 461 / 15. All returned HTTP 200 and `discoveryProvider: alchemy-portfolio-api`, with no access/explorer rejection. Network selection rendered the exact retained asset count and Price unavailable labels. The first harness run stopped on a test-selector mismatch (BNB button is labelled BNB, not BNB Smart Chain); correcting the selector completed all three checks. Authentication and vault storage were test doubles; this is not a claim of signed-in Chrome testing of the owner's account. Chrome verified only public Preview loading. No user credentials or wallet state were changed.
+
+Independent chain-verified RPC reads matched balance and decimals for one returned Base token and one Polygon token. The separate BNB RPC spot-check failed with contract/balance read unavailable, so no independent BNB balance-match claim is made. Its live Alchemy response and React rendering passed. Genuine five-page truncation remained on all three large-wallet reads, plus two invalid-metadata records on Polygon.
+
+Reproduce the optional live UI integration (uses only the well-known public test wallet; does not create a remote account):
+
+```sh
+node scripts/verify-preview-discovery.mjs https://kinko-wallet-v2-test-7mt6de3wb-rob-browns-projects.vercel.app
+```
+
+It checks the React client against live holdings endpoints using isolated test authentication/storage and saves public test responses to `/tmp/kinko-routing-live.json` (override with KINKO_TEST_OUTPUT). Provider results and counts can change over time. This check is separate from the deterministic 80-test suite.

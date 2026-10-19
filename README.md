@@ -92,7 +92,7 @@ No paid plans or billing changes were made. Existing account/database plan and b
 - A Kinko Access Key grants access to saved Kinko data; keep it private. No Access Key rotation is currently implemented.
 - An unlocked/compromised browser, malicious extension, compromised host/frontend or an XSS vulnerability can access decrypted data. Encryption does not make the app anonymous or independently audited.
 - Public wallet addresses go to our read-only data endpoint and public providers for queries. Saved associations and names are encrypted. Providers and hosting may observe request metadata; ephemeral server caches can contain public address results.
-- Automatic BNB token discovery and BNB activity indexing are unavailable; custom token reads and explorer links are provided.
+- BNB token discovery requires the server-side Alchemy configuration below. BNB activity indexing is unavailable; explorer links are provided.
 - No NFTs, LP valuation, historical ended-stake index, reward/penalty projections, cost-basis/P&L or invented historical portfolio charts.
 - Token discovery is bounded to five pages; truncated results are labelled incomplete. Up to 500 open HEX positions per wallet/network are supported; large wallets may encounter request timeouts.
 - Readings are saved only in this browser and are not cloud-synchronized or included in watchlist backups. Old short Portfolio IDs are separate from Access Keys; import a JSON wallet backup.
