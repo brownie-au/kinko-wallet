@@ -32,7 +32,8 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
   let skipped = 0, unread = 0, rateLimited = false, pageKey;
   const result = (status) => {
     if (skipped) notices.push({ code: 'discovery-metadata', kind: 'warning', action: 'track-token', skipped, message: 'Some indexer token records have invalid balances or metadata. Valid records are retained; add a missing contract to read it directly.' });
-    if (unread) notices.push({ code: 'discovery-metadata-unavailable', kind: 'warning', action: 'retry', message: rateLimited
+    if (signal.aborted) notices.push({ code: 'discovery-timeout', kind: 'warning', action: 'retry', message: 'Token discovery reached its time limit. Some tokens may be missing; successful balances and prices are retained. Retry later to check the remaining tokens.' });
+    if (unread && !signal.aborted) notices.push({ code: 'discovery-metadata-unavailable', kind: 'warning', action: 'retry', message: rateLimited
       ? 'Some token metadata could not be read within the provider rate limit. Valid balances are retained; retry later.'
       : 'Some token metadata could not be read before the request ended. Valid balances are retained; retry later.' });
     return { tokens, notices, issues: notices.map((n) => n.message), status: status === 'complete' && notices.length ? 'partial' : status, recoverable: [] };
@@ -58,6 +59,7 @@ export async function indexedDiscovery(chain, address, apiKey, parentSignal) {
     }
   };
   const failure = (error) => {
+    if (signal.aborted) return result(tokens.length ? 'partial' : 'unavailable');
     notices.push({ code: 'discovery-indexer', kind: 'warning', action: 'retry', message:
       [401, 403].includes(error.status)
         ? 'The configured token indexer rejected access. The site owner needs to check its provider key and enabled networks. Native balances and added contracts are still checked.'

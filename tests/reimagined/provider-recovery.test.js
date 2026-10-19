@@ -268,7 +268,9 @@ test('a slow indexer leaves the holdings deadline available for pricing retained
       assert.equal(body.discovery, 'partial');
       assert.equal(body.rows.find(r => r.address === null).priceUsd, 2000);
       assert.equal(body.rows.find(r => r.address === address(200)).priceUsd, 2);
-      assert.equal(body.notices[0].code, 'discovery-metadata-unavailable');
+      assert.equal(body.notices.length, 1);
+      assert.equal(body.notices[0].code, 'discovery-timeout');
+      assert.match(body.notices[0].message, /time limit/);
     });
   } finally {
     if (prior === undefined) delete process.env.ALCHEMY_API_KEY;
