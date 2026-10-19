@@ -16,11 +16,11 @@ dom.window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
 };
 const { createRoot } = await import('react-dom/client');
-let Modal, AccessPage, DataNotices;
+let Modal, AccessPage, DataNotices, PortfolioReadings;
 before(async () => {
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
   try {
-    ({ Modal, AccessPage, DataNotices } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
+    ({ Modal, AccessPage, DataNotices, PortfolioReadings } = await server.ssrLoadModule('/src/reimagined/ui.jsx'));
   } finally {
     await server.close();
   }
@@ -51,6 +51,7 @@ test('network notices distinguish coverage limits from stale balances and route 
     assert.match(text, /BNB Smart Chain · 2 wallets · Coverage limit/);
     assert.match(text, /Ethereum · 1 wallet · Read issue/);
     assert.ok(!document.querySelector('summary').textContent.includes('stale'));
+    assert.equal(document.querySelector('details').open, false, 'coverage notices start collapsed');
     const buttons = [...document.querySelectorAll('details button')];
     act(() => buttons.forEach((b) => b.click()));
     assert.deepEqual(actions, [
@@ -59,6 +60,7 @@ test('network notices distinguish coverage limits from stale balances and route 
     ]);
     act(() => root.render(React.createElement(DataNotices, { ...props, loading: true, saving: true, staleBalances: true })));
     assert.match(document.querySelector('summary').textContent, /stale or unavailable/);
+    assert.equal(document.querySelector('details').open, true, 'failed balance reads remain prominent');
     assert.ok([...document.querySelectorAll('details button')].every((b) => b.disabled));
   } finally {
     act(() => root.unmount());
@@ -210,4 +212,40 @@ test('returning-user access stays in document flow and leaves external security 
     securityPrompt.remove();
   }
   assert.equal(document.activeElement, opener);
+});
+
+test('the first actual portfolio reading shows its value, timestamp and table row immediately', () => {
+  const root = createRoot(document.querySelector('#root'));
+  const first = { scope: 'all:all', time: Date.now(), value: 7090.72, coverage: 'first', partial: true };
+  try {
+    act(() => root.render(React.createElement(PortfolioReadings, { observations: [first], money: (v) => `USD ${v.toFixed(2)}` })));
+    assert.match(document.querySelector('.chart-amount').textContent, /USD 7090.72/);
+    assert.equal(document.querySelectorAll('tbody tr').length, 1);
+    assert.match(document.querySelector('tbody').textContent, /7090.72.*Partial/);
+    assert.ok(document.querySelector('.first-observation'));
+    assert.equal(document.querySelector('.history-chart'), null, 'a second point is not fabricated');
+    act(() =>
+      root.render(
+        React.createElement(PortfolioReadings, {
+          observations: [first, { ...first, time: first.time + 61000, value: 7100 }],
+          money: (v) => `USD ${v.toFixed(2)}`
+        })
+      )
+    );
+    assert.equal(document.querySelectorAll('tbody tr').length, 2);
+    assert.ok(document.querySelector('.history-chart'));
+    act(() =>
+      root.render(
+        React.createElement(PortfolioReadings, {
+          observations: [first],
+          money: () => '••••',
+          historyError: 'Browser storage is unavailable.'
+        })
+      )
+    );
+    assert.ok(!document.querySelector('#root').textContent.includes('7090.72'));
+    assert.match(document.querySelector('.history-note').textContent, /storage is unavailable/);
+  } finally {
+    act(() => root.unmount());
+  }
 });

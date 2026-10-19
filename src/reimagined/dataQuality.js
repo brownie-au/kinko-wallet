@@ -1,4 +1,5 @@
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
+import { HISTORY_LIMIT } from './portfolioHistory.js';
 
 export function dataNotices(results, rows = []) {
   const groups = new Map();
@@ -62,12 +63,12 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
 }
 export function appendObservation(prior, sample) {
   if (!sample || prior.some((s) => s.scope === sample.scope && s.time === sample.time && s.coverage === sample.coverage)) return prior;
-  return [...prior, sample].slice(-200);
+  return [...prior, sample].sort((a, b) => a.time - b.time).slice(-HISTORY_LIMIT);
 }
 export function observationSeries(history, scope, days, now = Date.now()) {
   const samples = history.filter((s) => s.scope === scope && s.time > now - days * 86400000);
   const latest = samples.at(-1);
-  if (!latest) return { observations: [], coverageChanged: false };
+  if (!latest) return { observations: [], readings: [], coverageChanged: false };
   const lastDifferent = samples.findLastIndex((s) => s.coverage !== latest.coverage);
-  return { observations: samples.slice(lastDifferent + 1), coverageChanged: lastDifferent !== -1 };
+  return { observations: samples.slice(lastDifferent + 1), readings: samples, coverageChanged: lastDifferent !== -1 };
 }

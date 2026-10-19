@@ -13,11 +13,25 @@ import {
 } from './vault.js';
 import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
 import { NETWORKS } from './networks.js';
+import { portfolioHistory, identifyObservation } from './portfolioHistory.js';
 import { dataNotices, portfolioObservation, appendObservation, observationSeries } from './dataQuality.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { addDecimal } from '../utils/tokenMath.js';
 import { isAddress } from './validation.js';
-import { Icon, Mark, Copy, Modal, AccessPage, DataNotices, Empty, NetworkBadge, TokenIcon, Sparkline, shortAddress } from './ui.jsx';
+import {
+  Icon,
+  Mark,
+  Copy,
+  Modal,
+  AccessPage,
+  DataNotices,
+  PortfolioReadings,
+  Empty,
+  NetworkBadge,
+  TokenIcon,
+  Sparkline,
+  shortAddress
+} from './ui.jsx';
 import { demoRows, demoWatchlist, demoStakes } from './demo.js';
 import './styles.css';
 const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -429,7 +443,7 @@ function WalletForm({ wallet, onClose, onSave, busy, error }) {
     </Modal>
   );
 }
-function App() {
+export function App() {
   const [session, setSession] = useState(null),
     [data, setData] = useState(blankWatchlist),
     [revision, setRevision] = useState(0),
@@ -455,6 +469,8 @@ function App() {
     [sort, setSort] = useState('value'),
     [stakeStatus, setStakeStatus] = useState('all'),
     [history, setHistory] = useState([]),
+    [historyError, setHistoryError] = useState(''),
+    [historySaving, setHistorySaving] = useState(false),
     [range, setRange] = useState(30);
   const savingRef = useRef(false),
     noticeTimer = useRef(),
@@ -480,6 +496,18 @@ function App() {
     return () => window.removeEventListener('beforeunload', fn);
   }, [dirty]);
   const open = async (access, next, rev, storage) => {
+    const openedGeneration = generation.current;
+    let savedHistory = [],
+      historyMessage = '';
+    try {
+      savedHistory = await portfolioHistory.load(access);
+    } catch {
+      historyMessage = 'Previous browser history could not be restored. New readings will start here.';
+    }
+    if (generation.current !== openedGeneration) return;
+    setHistory(savedHistory);
+    setHistoryError(historyMessage);
+    setHistorySaving(false);
     setSession(access);
     setData(next);
     setRevision(rev);
@@ -502,6 +530,8 @@ function App() {
     setStakeResults({});
     setActivities({});
     setHistory([]);
+    setHistoryError('');
+    setHistorySaving(false);
     setSyncError('');
     setDirty(false);
     setWalletFilter('all');
@@ -756,9 +786,52 @@ function App() {
   const scopeKey = `${walletFilter}:${chainFilter}`;
   const observationKey = demo ? '' : JSON.stringify(portfolioObservation({ rows, results: scopedResults, scope: scopeKey, loading }));
   useEffect(() => {
-    if (observationKey) setHistory((prior) => appendObservation(prior, JSON.parse(observationKey)));
+    if (!observationKey) return;
+    let cancelled = false;
+    identifyObservation(JSON.parse(observationKey))
+      .then((sample) => {
+        if (!cancelled) setHistory((prior) => appendObservation(prior, sample));
+      })
+      .catch(() => setHistoryError('This reading could not be saved. Keep the page open and retry.'));
+    return () => {
+      cancelled = true;
+    };
   }, [observationKey]);
-  const { observations, coverageChanged } = observationSeries(history, scopeKey, range);
+  useEffect(() => {
+    if (!session || demo || !history.length) return;
+    setHistorySaving(true);
+    let cancelled = false;
+    const timer = setTimeout(
+      () =>
+        portfolioHistory
+          .save(session, history)
+          .then(() => {
+            if (!cancelled) {
+              setHistoryError('');
+              setHistorySaving(false);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setHistoryError('Browser storage is unavailable. These readings are kept only while this page is open.');
+              setHistorySaving(false);
+            }
+          }),
+      250
+    );
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [history, session, demo]);
+  useEffect(() => {
+    if (!session || demo || loading) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine !== false) setRefresh((value) => value + 1);
+    }, 120000);
+    return () => clearInterval(timer);
+  }, [session, demo, loading]);
+  const { observations, readings, coverageChanged } = observationSeries(history, scopeKey, range);
   const lastObservation = observations.at(-1);
   const tokens = aggregate.tokens
     .filter((t) => `${t.name} ${t.symbol} ${t.address || ''}`.toLowerCase().includes(search.toLowerCase()))
@@ -1153,10 +1226,10 @@ function App() {
                       <p>
                         {demo
                           ? 'Illustrative portfolio trend'
-                          : observations.length > 1
+                          : observations.length > 0
                             ? lastObservation?.partial
                               ? 'Partial liquid values · fresh, priced assets only'
-                              : 'Observed liquid portfolio values this session'
+                              : 'Saved liquid portfolio readings'
                             : 'Your history starts here'}
                       </p>
                     </div>
@@ -1190,55 +1263,27 @@ function App() {
                         <span>Today</span>
                       </div>
                     </>
-                  ) : observations.length > 1 ? (
-                    <>
-                      <div className="chart-amount">
-                        {money(lastObservation.value)}
-                        {lastObservation.partial && <span>Partial value</span>}
-                      </div>
-                      <Sparkline
-                        values={observations.map((h) => h.value)}
-                        large
-                        label={
-                          lastObservation.partial
-                            ? 'Actual partial portfolio observations; excludes stale and unpriced balances'
-                            : 'Actual portfolio observations from this browser session'
-                        }
-                      />
-                      <div className="chart-labels">
-                        <span>{new Date(observations[0].time).toLocaleTimeString()}</span>
-                        <span>{observations.length} real observations · not investment returns</span>
-                        <span>{new Date(lastObservation.time).toLocaleTimeString()}</span>
-                      </div>
-                      <p className="history-note">
-                        {lastObservation.partial ? 'Partial values exclude stale and unpriced balances. ' : ''}A new series starts when data
-                        coverage changes. History is limited to this page session.
-                      </p>
-                    </>
+                  ) : observations.length > 0 ? (
+                    <PortfolioReadings
+                      observations={observations}
+                      readings={readings}
+                      money={money}
+                      coverageChanged={coverageChanged}
+                      historyError={historyError}
+                      historySaving={historySaving}
+                    />
                   ) : (
                     <div className="history-empty">
                       <span className="history-symbol">
                         <Icon name="activity" size={37} />
                       </span>
-                      <h3>
-                        {loading
-                          ? 'Reading your portfolio…'
-                          : lastObservation
-                            ? coverageChanged
-                              ? 'Coverage changed. A new series starts here.'
-                              : 'Your first reading is saved.'
-                            : 'Waiting for a usable reading.'}
-                      </h3>
+                      <h3>{loading ? 'Reading your portfolio…' : 'Waiting for a usable reading.'}</h3>
                       <p>
-                        {lastObservation
-                          ? 'Use Kinko’s Refresh after a minute to collect the next reading.'
-                          : 'Fresh balances with a market price are needed. Check the network notices above.'}
+                        Fresh balances with a market price are needed. Check the network notices above.
                         <br />
-                        {lastObservation?.partial
-                          ? 'Partial readings are allowed; stale and unpriced balances are excluded.'
-                          : 'Kinko never invents your past performance.'}
+                        Kinko never invents your past performance.
                       </p>
-                      <span>History is limited to this session.</span>
+                      <span>Real readings are saved encrypted on this browser.</span>
                     </div>
                   )}
                 </section>
@@ -2050,6 +2095,7 @@ function App() {
             try {
               await vaultRequest(session, 'DELETE', { revision });
               await forgetDeviceAccess();
+              portfolioHistory.clear(session);
               localStorage.removeItem(`kinko:vault:${session.id}`);
               setDirty(false);
               setModal(null);
@@ -2206,8 +2252,9 @@ class ErrorBoundary extends React.Component {
     );
   }
 }
-createRoot(document.getElementById('root')).render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
-);
+if (!import.meta.env.SSR)
+  createRoot(document.getElementById('root')).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );

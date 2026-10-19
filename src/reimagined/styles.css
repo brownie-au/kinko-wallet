@@ -1453,6 +1453,55 @@ h1 {
   color: var(--muted);
   line-height: 1.7;
 }
+.first-observation {
+  min-height: 110px;
+  margin: 0 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.observation-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 7px var(--accent-soft);
+}
+.reading-table-wrap {
+  margin: 8px 24px 16px;
+  overflow-x: auto;
+}
+.reading-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 11px;
+}
+.reading-table th,
+.reading-table td {
+  padding: 11px 6px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.reading-table th {
+  font-weight: 500;
+  color: var(--muted);
+}
+.reading-table td:nth-child(2),
+.reading-table th:nth-child(2) {
+  text-align: right;
+}
+.reading-table td:last-child,
+.reading-table th:last-child {
+  text-align: right;
+  color: var(--muted);
+}
 .count-badge {
   font-size: 9px;
   padding: 3px 6px;

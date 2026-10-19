@@ -282,7 +282,7 @@ export function Modal({ title, subtitle, children, onClose, wide = false, dismis
 export function DataNotices({ notices, staleBalances, loading, saving, onTrackToken, onRetry }) {
   if (!notices.length) return null;
   return (
-    <details className="provider-notice" open>
+    <details className="provider-notice" open={staleBalances || undefined}>
       <summary>
         <Icon name="info" size={16} />
         {notices.length} data {notices.length === 1 ? 'notice' : 'notices'} ·{' '}
@@ -394,5 +394,64 @@ export function Sparkline({ values, label, large = false }) {
         strokeLinecap="round"
       />
     </svg>
+  );
+}
+
+export function PortfolioReadings({ observations, readings = observations, money, coverageChanged, historyError, historySaving }) {
+  const latest = observations.at(-1);
+  if (!latest) return null;
+  const stamp = (time) => new Date(time).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return (
+    <>
+      <div className="chart-amount">
+        {money(latest.value)}
+        <span>{latest.partial ? 'Partial liquid value' : 'Observed liquid value'}</span>
+      </div>
+      {observations.length > 1 ? (
+        <Sparkline
+          values={observations.map((s) => s.value)}
+          large
+          label="Saved real portfolio readings; only comparable coverage is connected"
+        />
+      ) : (
+        <div className="first-observation" role="img" aria-label="One real reading recorded. A trend needs another comparable reading.">
+          <span className="observation-dot" />
+          <p>First reading recorded · a trend builds from here</p>
+        </div>
+      )}
+      {coverageChanged && (
+        <p className="history-note">Coverage changed. The chart starts a new series; earlier readings remain in the table.</p>
+      )}
+      <div className="reading-table-wrap">
+        <table className="reading-table">
+          <caption className="sr-only">Real saved portfolio readings</caption>
+          <thead>
+            <tr>
+              <th>Recorded</th>
+              <th>Liquid value</th>
+              <th>Coverage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {readings
+              .slice(-5)
+              .reverse()
+              .map((s) => (
+                <tr key={`${s.scope}:${s.time}:${s.coverage}`}>
+                  <td>{stamp(s.time)}</td>
+                  <td>{money(s.value)}</td>
+                  <td>{s.partial ? 'Partial' : 'Complete'}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="history-note">
+        {historyError || (historySaving ? 'Saving encrypted history on this browser…' : 'Saved encrypted on this browser.')} Kinko collects
+        readings while open, with an automatic refresh every two minutes when visible.
+        <br />
+        Partial values exclude stale and unpriced balances. Readings are not investment returns.
+      </p>
+    </>
   );
 }
