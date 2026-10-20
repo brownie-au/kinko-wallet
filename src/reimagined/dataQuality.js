@@ -1,17 +1,20 @@
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { HISTORY_LIMIT } from './portfolioHistory.js';
+import { splitTokens, tokenKey, hasUsablePrice } from './tokenFilter.js';
 
-export function dataNotices(results, rows = []) {
+export function dataNotices(results, rows = [], { tracked = [], hidden = [], loading = false } = {}) {
   const groups = new Map();
   const add = (result, notice) => {
     const key = `${result.chain}:${notice.code || notice.message}`;
     if (!groups.has(key)) groups.set(key, { ...notice, chain: result.chain, wallets: new Set() });
     if (result.wallet) groups.get(key).wallets.add(result.wallet.toLowerCase());
+    return groups.get(key);
   };
   for (const result of results) {
     const notices =
       result.notices ?? (result.issues || []).map((message) => ({ code: message, message, kind: 'warning', action: 'retry' }));
-    for (const notice of notices) add(result, notice);
+    // Price notices are derived from the current eligible rows, never cached notices.
+    for (const notice of notices) if (notice.code !== 'price-missing') add(result, notice);
     if (result.error)
       add(result, {
         code: 'read-failed',
@@ -29,15 +32,26 @@ export function dataNotices(results, rows = []) {
         message: 'These balances are retained from an earlier read and may be stale. Retry this network.'
       });
   }
-  for (const row of rows) {
-    if (Number(row.amountExact) > 0 && row.priceUsd == null)
-      add(row, {
+  const failedReads = new Set(results.filter((r) => r.stale || r.error)
+    .map((r) => `${r.chain}:${String(r.wallet).toLowerCase()}`));
+  // Reuse the same contract-based spam/manual-hide rules as Assets. The display
+  // toggle is intentionally absent: unseen unpriced holdings still need a notice.
+  const eligible = loading ? [] : splitTokens(rows, tracked, hidden).visible;
+  for (const row of eligible) {
+    if (Number(row.amountExact) > 0 && !hasUsablePrice(row) && !row.stale &&
+        !failedReads.has(`${row.chain}:${String(row.wallet).toLowerCase()}`)) {
+      const group = add(row, {
         code: 'price-missing',
         kind: 'limitation',
-        message: 'Some held tokens have no usable market price and are excluded from the total. Use Show unpriced tokens in Assets to see their quantities.'
+        tokens: new Set()
       });
+      group.tokens.add(tokenKey(row.chain, row.address));
+    }
   }
-  return [...groups.values()].map((g) => ({ ...g, wallets: [...g.wallets] }));
+  return [...groups.values()].map(({ tokens, ...g }) => ({ ...g, wallets: [...g.wallets], ...(tokens ? {
+    tokenCount: tokens.size,
+    message: `${tokens.size} held token${tokens.size === 1 ? ' has' : 's have'} no usable market price and ${tokens.size === 1 ? 'is' : 'are'} excluded from the total. Use Show unpriced tokens in Assets to see ${tokens.size === 1 ? 'its quantity' : 'their quantities'}.`
+  } : {}) }));
 }
 
 // Partial values are useful, but changing data coverage must never draw a false gain/loss.

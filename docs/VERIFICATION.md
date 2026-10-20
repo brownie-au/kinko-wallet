@@ -226,3 +226,15 @@ node scripts/verify-preview-discovery.mjs https://kinko-wallet-v2-test-7mt6de3wb
 ```
 
 It checks the React client against live holdings endpoints using isolated test authentication/storage and saves public test responses to `/tmp/kinko-routing-live.json` (override with KINKO_TEST_OUTPUT). Provider results and counts can change over time. This check is separate from the deterministic 80-test suite.
+
+## Price-warning eligibility — 20 October 2026
+
+The supplied screenshot shows price notices, not a token-level list. Source tracing confirmed that main.jsx already passed splitTokens(...).visible to dataNotices: classified spam and explicitly hidden contracts were excluded. The separate Show unpriced tokens display toggle did not exclude unresolved holdings from financial coverage notices, by design. The screenshot alone cannot establish that remaining unclassified tokens are spam. No new price-based spam classification was introduced.
+
+The warning builder now applies the shared spam/manual-hide/explicit-track rules itself, counts distinct eligible token contracts per network and affected wallets, and uses the same finite-positive numeric-price predicate as the Assets display policy. Counts deduplicate repeat rows and the same token held in multiple wallets. Native assets remain eligible. Price notices are rebuilt from current rows rather than retained provider notices. Pending refreshes suppress price notices; failed/stale reads retain their read-failure warning instead of showing old missing prices as current. The UI passes current wallet/network scope and loading state explicitly. Wallets, raw quantities, valuation, discovery, prices and persistence are unchanged.
+
+Focused regressions cover all five chains: spam-only, manual hides, mixed genuine/spam, all priced, tracked false positives, hide precedence, duplicate rows, zero/negative balances, invalid prices, native holdings, loading, stale/failed responses and changing scope. A real-mode React/JSDOM test with isolated authentication and mocked provider results verifies the actual Assets toggle, two-wallet selection, pending refresh, successful new prices and a different wallet's request completing after the selected scope changes. These are controlled UI tests, not access to the owner's signed-in account.
+
+Release client: index-DMWbQrBB.js. Vite build and git diff checks pass.
+
+All 84 deterministic tests pass, including the new real-mode UI lifecycle regression. No production promotion or provider/account configuration change was performed.

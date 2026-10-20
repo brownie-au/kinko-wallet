@@ -1,5 +1,6 @@
 // Contract identity is always chain + address; symbols and missing prices are not trust signals.
 export const tokenKey = (chain, address) => `${chain}:${String(address || '').toLowerCase()}`;
+export const hasUsablePrice = (token) => typeof token.priceUsd === 'number' && Number.isFinite(token.priceUsd) && token.priceUsd > 0;
 export function spamReason(token) {
   if (token.spam === true || token.is_spam === true) return 'Flagged by the token provider';
   const normalize = (value) => String(value || '').normalize('NFKC')
@@ -40,7 +41,7 @@ export function assetListTokens(tokens, { tracked = [], showUnpriced = false, hi
   const trackedKeys = new Set(tracked.map((t) => tokenKey(t.chain, t.address)));
   return tokens.filter((t) => {
     if (!t.address || trackedKeys.has(tokenKey(t.chain, t.address))) return true;
-    const priced = typeof t.priceUsd === 'number' && Number.isFinite(t.priceUsd) && t.priceUsd > 0;
+    const priced = hasUsablePrice(t);
     if (!priced) return showUnpriced;
     return !hideDust || t.valueUsd == null || t.valueUsd >= 0.01;
   });

@@ -21,11 +21,11 @@ test('notices identify the network, group affected wallets and retain actionable
   assert.equal(notices[0].kind, 'limitation');
   assert.equal(notices[0].action, 'track-token');
 });
-test('read failures and unpriced holdings remain visible instead of silently disappearing', () => {
+test('failed reads report stale data without presenting old missing prices as current results', () => {
   const notices = dataNotices([{ ...result, notices: [], stale: true, error: 'timeout' }], [{ ...row, priceUsd: null }]);
   assert.deepEqual(
     notices.map((n) => n.code),
-    ['read-failed', 'price-missing']
+    ['read-failed']
   );
   assert.match(notices[0].message, /stale/);
 });
@@ -63,4 +63,43 @@ test('coverage changes start a new series rather than manufacture gains or losse
   const third = { ...next, time: now + 122000, value: 405 };
   assert.equal(observationSeries(appendObservation(h, third), 'all:all', 1, now + 123000).observations.length, 2);
   assert.equal(observationSeries(h, 'different', 1, now + 62000).observations.length, 0);
+});
+
+test('price notices exclude shared spam and hidden-contract classifications on all five chains', () => {
+  for (const chain of ['eth', 'pulse', 'base', 'polygon', 'bsc']) {
+    const token = { ...row, chain, address: other, name: 'Claim: scam.site', priceUsd: null };
+    const flagged = { ...token, address: wallet, name: 'Ordinary name', spam: true };
+    const hidden = { ...token, address: '0x' + '3'.repeat(40), name: 'Hidden token' };
+    const options = { hidden: [{ chain, address: hidden.address }] };
+    assert.deepEqual(dataNotices([], [token, flagged, hidden], options), []);
+    const genuine = { ...token, address: '0x' + '4'.repeat(40), name: 'Community token' };
+    const [notice] = dataNotices([], [token, flagged, hidden, genuine, { ...genuine, wallet: other }, genuine], options);
+    assert.equal(notice.tokenCount, 1);
+    assert.deepEqual(notice.wallets.sort(), [wallet, other].sort());
+    assert.match(notice.message, /^1 held token has/);
+    assert.deepEqual(dataNotices([], [token, flagged, hidden, { ...genuine, priceUsd: 2 }], options), []);
+    // Explicitly tracked false positives are holdings again; a manual hide still wins.
+    assert.equal(dataNotices([], [token], { tracked: [{ chain, address: other }] })[0].tokenCount, 1);
+    assert.deepEqual(dataNotices([], [token], { tracked: [{ chain, address: other }], hidden: [{ chain, address: other }] }), []);
+  }
+});
+test('price eligibility requires a positive holding and a finite positive numeric price', () => {
+  for (const priceUsd of [null, undefined, 0, -1, NaN, Infinity, '2']) {
+    assert.equal(dataNotices([], [{ ...row, priceUsd }])[0].tokenCount, 1);
+  }
+  for (const amountExact of ['0', '0.000', '-1']) assert.deepEqual(dataNotices([], [{ ...row, amountExact, priceUsd: null }]), []);
+  assert.deepEqual(dataNotices([], [{ ...row, priceUsd: 0.00001 }]), []);
+  // Native assets cannot be hidden, even if a provider attaches a spam flag.
+  assert.equal(dataNotices([], [{ ...row, priceUsd: null, spam: true }])[0].tokenCount, 1);
+});
+test('loading and failed reads do not reuse stale price warnings; completed reads and scope determine current counts', () => {
+  const missing = { ...row, address: other, priceUsd: null };
+  const prior = { ...result, notices: [{ code: 'price-missing', kind: 'limitation', message: 'Old warning' }] };
+  assert.deepEqual(dataNotices([prior], [missing], { loading: true }), []);
+  assert.equal(dataNotices([prior], [missing])[0].tokenCount, 1);
+  assert.deepEqual(dataNotices([prior], [{ ...missing, priceUsd: 1 }]), []);
+  assert.deepEqual(dataNotices([], [{ ...missing, stale: true }]), []);
+  const second = { ...missing, wallet: other, address: wallet };
+  assert.equal(dataNotices([], [missing, second])[0].tokenCount, 2);
+  assert.deepEqual(dataNotices([], [missing])[0].wallets, [wallet]);
 });

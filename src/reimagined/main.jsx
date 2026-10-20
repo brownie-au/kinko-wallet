@@ -794,7 +794,9 @@ export function App() {
           );
   const quantity = (value, dp = 4) => (privacy ? '••••' : number(value, dp));
   const issues = scopedResults.flatMap((r) => [...(r.issues || []), ...(r.error ? [r.error] : [])]);
-  const notices = dataNotices(scopedResults, rows);
+  const notices = dataNotices(scopedResults, rawRows.filter(matches), {
+    tracked: data.tokens, hidden: data.hiddenTokens, loading
+  });
   const unknown = rows.filter((t) => Number(t.amountExact) > 0 && t.priceUsd == null).length;
   const priced = rows.some((t) => t.priceUsd != null);
   const unavailable = !demo && (issues.length > 0 || rows.some((t) => t.stale));
