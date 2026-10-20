@@ -123,7 +123,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.ok(!document.querySelector('.history-panel').textContent.includes('Your history starts here'));
     const click = async (element) => { assert.ok(element); await act(async () => element.click()); };
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find((b) => b.textContent.includes('Assets')));
-    assert.equal(document.querySelectorAll('.asset-row').length, 2);
+    assert.equal(document.querySelectorAll('.asset-row').length, 1);
     assert.ok(![...document.querySelectorAll('.asset-row')].some((r) => r.textContent.includes('SCAM')));
     assert.match(document.querySelector('.filtered-tokens summary').textContent, /2 filtered/);
     assert.equal(document.querySelector('.asset-filters').open, false);
@@ -131,10 +131,10 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.equal(document.querySelector('.asset-filters').open, true);
     assert.match(document.querySelector('.asset-filters').textContent, /Show unpriced tokens \(200\)/);
     await click(document.querySelector('input[aria-label="Show unpriced tokens"]'));
-    await until(() => document.querySelectorAll('.asset-row').length === 202);
+    await until(() => document.querySelectorAll('.asset-row').length === 201);
     await until(() => !document.querySelector('input[aria-label="Show unpriced tokens"]').disabled);
     await click(document.querySelector('input[aria-label="Show unpriced tokens"]'));
-    await until(() => document.querySelectorAll('.asset-row').length === 2);
+    await until(() => document.querySelectorAll('.asset-row').length === 1);
     await until(() => !document.querySelector('input[aria-label="Show unpriced tokens"]').disabled);
     act(() => root.unmount());
     root = createRoot(document.querySelector('#root'));
@@ -144,14 +144,16 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.equal(document.querySelector('.asset-filters').open, false);
     await click(document.querySelector('.asset-filters summary'));
     assert.equal(document.querySelector('input[aria-label="Show unpriced tokens"]').checked, false);
-    assert.equal(document.querySelectorAll('.asset-row').length, 2);
+    assert.equal(document.querySelectorAll('.asset-row').length, 1);
 
-    await click(document.querySelector('input[aria-label="Hide dust balances"]'));
+    assert.equal(document.querySelector('input[aria-label="Hide dust balances"]').checked, true);
     assert.equal(document.querySelectorAll('.asset-row').length, 1);
     await click(document.querySelector('.asset-row'));
     assert.ok(![...document.querySelectorAll('.modal button')].some((b) => b.textContent === 'Hide token'));
     await click(document.querySelector('button[aria-label="Close dialog"]'));
     await click(document.querySelector('input[aria-label="Hide dust balances"]'));
+    assert.equal(document.querySelector('input[aria-label="Hide dust balances"]').checked, false);
+    assert.equal(document.querySelectorAll('.asset-row').length, 2);
     await click([...document.querySelectorAll('.asset-row')].find((r) => r.textContent.includes('DUST')));
     await click([...document.querySelectorAll('button')].find((b) => b.textContent === 'Hide token'));
     await until(() => document.querySelectorAll('.asset-row').length === 1 && !document.querySelector('button[aria-label="Close dialog"]'));

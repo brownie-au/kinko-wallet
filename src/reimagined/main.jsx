@@ -468,7 +468,7 @@ export function App() {
     [refresh, setRefresh] = useState(0),
     [fx, setFx] = useState(null),
     [sort, setSort] = useState('value'),
-    [hideDust, setHideDust] = useState(false),
+    [hideDust, setHideDust] = useState(true),
     [stakeStatus, setStakeStatus] = useState('all'),
     [history, setHistory] = useState([]),
     [historyError, setHistoryError] = useState(''),
