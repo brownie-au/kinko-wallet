@@ -151,17 +151,16 @@ h1 {
 .brand-mark {
   height: 43px;
   width: 43px;
-  border-radius: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--forest);
-  color: var(--lime);
   flex-shrink: 0;
 }
-.brand-mark svg {
-  width: 30px;
-  height: 30px;
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .button {
   min-height: 44px;
@@ -422,11 +421,6 @@ h1 {
 .preview-top .brand-mark {
   height: 24px;
   width: 24px;
-  border-radius: 7px;
-}
-.preview-top .brand-mark svg {
-  height: 18px;
-  width: 18px;
 }
 .tiny-label {
   font-size: 6px;
@@ -671,14 +665,9 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e9ecdf;
   width: 31px;
   height: 31px;
-  border-radius: 50%;
-  font-size: 12px;
   margin-left: 6px;
-  color: #5c6c4e;
-  border: 3px solid var(--surface);
 }
 .workspace {
   padding: 34px 36px 0;
@@ -2902,11 +2891,6 @@ h1 {
   .mobile-brand .brand-mark {
     height: 31px;
     width: 31px;
-    border-radius: 9px;
-  }
-  .mobile-brand .brand-mark svg {
-    width: 23px;
-    height: 23px;
   }
   .mobile-brand strong {
     font-weight: 600;
@@ -3552,7 +3536,6 @@ h1 {
   .welcome-header .brand-mark {
     height: 36px;
     width: 36px;
-    border-radius: 11px;
   }
   .welcome-header .brand-sub {
     font-size: 6px;

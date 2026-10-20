@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci --ignore-scripts",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/|assets/|kinko-mark.svg|manifest.webmanifest).*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/((?!api/|assets/|manifest.webmanifest).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",

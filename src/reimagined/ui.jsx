@@ -145,12 +145,10 @@ export function Icon({ name, size = 20, ...props }) {
     </svg>
   );
 }
-export function Mark() {
+export function Mark({ className = '' }) {
   return (
-    <span className="brand-mark">
-      <svg viewBox="0 0 32 32" fill="none">
-        <path d="M9 5v22M25 5 14 16l11 11M9 16h5" stroke="currentColor" strokeWidth="3.4" strokeLinejoin="round" />
-      </svg>
+    <span className={`brand-mark ${className}`.trim()}>
+      <img src="/assets/kinko-wallet-logo.png" alt="Kinko Wallet" width="256" height="256" />
     </span>
   );
 }

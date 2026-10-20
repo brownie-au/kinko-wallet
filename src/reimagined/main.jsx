@@ -1016,7 +1016,7 @@ export function App() {
             >
               <Icon name={data.theme === 'dark' ? 'sun' : 'moon'} size={18} />
             </button>
-            <span className="workspace-avatar">K</span>
+            <Mark className="workspace-avatar" />
           </div>
         </header>
         <main className="workspace">

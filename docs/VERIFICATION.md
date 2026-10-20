@@ -238,3 +238,10 @@ Focused regressions cover all five chains: spam-only, manual hides, mixed genuin
 Release client: index-DMWbQrBB.js. Vite build and git diff checks pass.
 
 All 84 deterministic tests pass, including the new real-mode UI lifecycle regression. No production promotion or provider/account configuration change was performed.
+
+
+## Transparent wallet logo — 20 October 2026
+
+Replaced the shared square K mark and workspace K badge with the owner-supplied transparent green wallet artwork. PNG exports preserve the original colours and alpha, normalize transparent padding, and provide a 256px UI asset plus 32px favicon and 192px/512px install icons. Removed the obsolete square K SVG and its rewrite exception; new artwork uses the existing static `/assets/` route.
+
+Validation: production build passes; all 84 existing tests pass. An isolated React/JSDOM check verifies the replacement on the welcome page, access page and demo workspace, including the separate workspace badge, successful dark-theme toggle, and existing manifest icon targets. Light/dark composites were visually inspected at 24px, 31px, 43px and 100px; the original dark green is subtler on dark backgrounds. This is asset/composition inspection plus DOM verification, not an actual browser screenshot: this runtime has no installed Chromium executable. No wallet data, authentication or pricing logic changed.
