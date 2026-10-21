@@ -25,7 +25,7 @@ export const demoRows = [
   token('eth', null, 'ETH', 'Ethereum', 18.42, 2600),
   token('pulse', '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39', 'HEX', 'HEX', 1600000, 0.018),
   token('pulse', null, 'PLS', 'PulseChain', 420000000, 0.000064),
-  token('pulse', '0x95b303987a60c71504d99aa1b13b4dAA07b0790ab'.toLowerCase(), 'PLSX', 'PulseX', 580000000, 0.000033),
+  token('pulse', '0x95b303987a60c71504d99aa1b13b4da07b0790ab', 'PLSX', 'PulseX', 580000000, 0.000033),
   token('base', null, 'ETH', 'Ethereum', 4.6, 2600, b),
   token('eth', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', 'USDC', 'USD Coin', 8200, 1, b)
 ];

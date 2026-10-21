@@ -4,7 +4,7 @@ const nativeIcons = { eth: 'ethereum', base: 'ethereum', pulse: 'pulsechain', bs
 const localTokens = {
   [`eth:${HEX_ADDRESS}`]: 'hex',
   [`pulse:${HEX_ADDRESS}`]: 'hex',
-  'pulse:0x95b303987a60c71504d99aa1b13b4daa07b0790ab': 'pulsex',
+  'pulse:0x95b303987a60c71504d99aa1b13b4da07b0790ab': 'pulsex',
   'pulse:0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d': 'inc',
   'eth:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'usdc',
   'base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'usdc',

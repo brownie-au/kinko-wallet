@@ -5,6 +5,7 @@ import { tokenIconUrl, tokenInitials } from '../../src/reimagined/tokenIcons.js'
 import { tokenIconSource, readTokenIcon } from '../../src/server/tokenIconSource.js';
 import handler from '../../api/token-icon.js';
 import { HEX_ADDRESS } from '../../src/reimagined/networks.js';
+import { demoRows } from '../../src/reimagined/demo.js';
 
 const unknown = '0x1111111111111111111111111111111111111111';
 test('icons distinguish native assets, contracts, networks and ticker impersonation', () => {
@@ -23,6 +24,9 @@ test('icons distinguish native assets, contracts, networks and ticker impersonat
   assert.equal(tokenIconUrl('solana', unknown), null);
   assert.equal(tokenInitials('HEX'), 'HE');
   assert.equal(tokenInitials(''), '?');
+  assert.equal(tokenIconUrl('pulse', '0x95B303987A60C71504D99Aa1b13B4DA07b0790ab'), '/assets/tokens/pulsex.png');
+  assert.equal(tokenIconUrl('pulse', '0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d'), '/assets/tokens/inc.png');
+  for (const token of demoRows) assert.match(tokenIconUrl(token.chain, token.address) || '', /^\/assets\/tokens\//);
 });
 
 test('upstream URLs are restricted and use case-sensitive checksum folders', () => {
