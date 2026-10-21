@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NETWORKS } from './networks.js';
+import { tokenIconUrl, tokenInitials } from './tokenIcons.js';
 export function Icon({ name, size = 20, ...props }) {
   const paths = {
     grid: (
@@ -335,22 +336,39 @@ export function NetworkBadge({ chain }) {
     </span>
   );
 }
-export function TokenIcon({ symbol, chain }) {
+const failedIcons = new Map();
+function TokenArtwork({ src, symbol }) {
+  const [failed, setFailed] = useState(() => (failedIcons.get(src) || 0) > Date.now());
+  const [loaded, setLoaded] = useState(false);
   return (
-    <span className={`token-icon token-${symbol?.toLowerCase()}`}>
-      <span>
-        {symbol === 'ETH'
-          ? '♦'
-          : symbol === 'HEX'
-            ? '⬡'
-            : symbol === 'PLS'
-              ? 'ϟ'
-              : symbol === 'PLSX'
-                ? '×'
-                : symbol === 'USDC'
-                  ? '$'
-                  : symbol?.slice(0, 2)}
-      </span>
+    <>
+      {(!loaded || failed || !src) && <span className="token-initials">{tokenInitials(symbol)}</span>}
+      {src && !failed && (
+        <img
+          src={src}
+          alt=""
+          width="32"
+          height="32"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className={loaded ? 'loaded' : ''}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            failedIcons.set(src, Date.now() + 300000);
+            if (failedIcons.size > 512) failedIcons.delete(failedIcons.keys().next().value);
+            setFailed(true);
+          }}
+        />
+      )}
+    </>
+  );
+}
+export function TokenIcon({ symbol, chain, address }) {
+  const src = tokenIconUrl(chain, address);
+  return (
+    <span className="token-icon" aria-hidden="true">
+      <TokenArtwork key={src || 'fallback'} src={src} symbol={symbol} />
       <i style={{ background: { pulse: '#8853cb', eth: '#6075b7', base: '#3269f0', polygon: '#8256d3', bsc: '#b78d22' }[chain] }} />
     </span>
   );

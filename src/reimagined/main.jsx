@@ -13,7 +13,7 @@ import {
   clearCachedPublicData
 } from './vault.js';
 import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
-import { NETWORKS } from './networks.js';
+import { NETWORKS, HEX_ADDRESS } from './networks.js';
 import { portfolioHistory, identifyObservation } from './portfolioHistory.js';
 import { dataNotices, portfolioObservation, appendObservation, observationSeries } from './dataQuality.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
@@ -1477,7 +1477,10 @@ export function App() {
                   <p>Hidden from assets, totals and price notices. Names are untrusted text. Tracking a contract overrides the automatic filter; verify its address first.</p>
                   {filteredTokens.map((t) => (
                     <div className="filtered-token" key={tokenKey(t.chain, t.address)}>
-                      <div><b>{t.symbol || 'Token'} · {NETWORKS[t.chain].name}</b><p>{t.reason}</p><span className="mono break">{t.address}</span></div>
+                      <div className="filtered-token-identity">
+                        <TokenIcon symbol={t.symbol} chain={t.chain} address={t.address} />
+                        <div><b>{t.symbol || 'Token'} · {NETWORKS[t.chain].name}</b><p>{t.reason}</p><span className="mono break">{t.address}</span></div>
+                      </div>
                       <button className="button small-button" disabled={saving || dirty} onClick={() => t.reason === 'Hidden by you'
                         ? setTokenHidden(t, false) : setModal({ kind: 'token', chain: t.chain, address: t.address })}>
                         {t.reason === 'Hidden by you' ? 'Restore' : 'Review contract'}
@@ -1649,7 +1652,7 @@ export function App() {
                         onClick={() => setModal({ kind: 'stake', stake: s })}
                       >
                         <div className="stake-main">
-                          <TokenIcon symbol="HEX" chain={s.chain} />
+                          <TokenIcon symbol="HEX" chain={s.chain} address={HEX_ADDRESS} />
                           <span>
                             <strong>
                               {quantity(s.principal, 0)} <small>HEX</small>
@@ -2033,6 +2036,10 @@ export function App() {
       )}
       {modal?.kind === 'asset' && (
         <Modal title={`${modal.token.symbol} · asset details`} subtitle={NETWORKS[modal.token.chain].name} onClose={() => setModal(null)}>
+          <div className="asset-detail-heading">
+            <TokenIcon symbol={modal.token.symbol} chain={modal.token.chain} address={modal.token.address} />
+            <strong>{modal.token.name || modal.token.symbol}</strong>
+          </div>
           <dl className="detail-list">
             <div>
               <dt>Quantity</dt>
@@ -2093,6 +2100,10 @@ export function App() {
           subtitle={`${NETWORKS[modal.stake.chain].name} · ${modal.stake.status}${modal.stake.stale ? ' · stale data' : ''}`}
           onClose={() => setModal(null)}
         >
+          <div className="asset-detail-heading">
+            <TokenIcon symbol="HEX" chain={modal.stake.chain} address={HEX_ADDRESS} />
+            <strong>HEX</strong>
+          </div>
           <dl className="detail-list">
             {[
               ['Staked principal', `${quantity(modal.stake.principal, 8)} HEX`],
@@ -2201,7 +2212,7 @@ function AssetTable({ tokens, money, price, quantity, onDetail, filteredEmpty = 
       {tokens.map((t) => (
         <button className="asset-row" key={`${t.chain}:${t.address || 'native'}`} onClick={() => onDetail(t)}>
           <span className="asset-name">
-            <TokenIcon symbol={t.symbol} chain={t.chain} />
+            <TokenIcon symbol={t.symbol} chain={t.chain} address={t.address} />
             <span>
               <strong>{t.symbol}</strong>
               <small>
