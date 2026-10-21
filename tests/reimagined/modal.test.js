@@ -218,6 +218,24 @@ test('returning-user access stays in document flow and leaves external security 
   assert.equal(document.activeElement, opener);
 });
 
+test('history uses time spacing and keeps disconnected coverage visible through refreshes', () => {
+  const root = createRoot(document.querySelector('#root'));
+  const first = { scope: 'all:all', time: Date.now() - 900000, value: 100, coverage: 'a' };
+  const observations = [first, { ...first, time: first.time + 60000, value: 110 }, { ...first, time: first.time + 600000, value: 50, coverage: 'b' }];
+  try {
+    act(() => root.render(React.createElement(PortfolioReadings, { observations, money: String, coverageChanged: true, loading: true })));
+    const segments = [...document.querySelectorAll('[data-history-segment]')];
+    assert.equal(segments.length, 2);
+    const xs = segments[0].getAttribute('points').split(' ').map((p) => Number(p.split(',')[0]));
+    assert.ok(xs[1] - xs[0] < 100, 'one minute occupies one tenth of the ten-minute span');
+    assert.match(document.querySelector('.history-status').textContent, /Updating/);
+    assert.equal(document.querySelector('.first-observation'), null);
+    act(() => root.render(React.createElement(PortfolioReadings, { observations, money: String, coverageChanged: true, unavailable: true })));
+    assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
+    assert.match(document.querySelector('.history-status').textContent, /Previous history retained/);
+  } finally { act(() => root.unmount()); }
+});
+
 test('the first actual portfolio reading shows its value, timestamp and table row immediately', () => {
   const root = createRoot(document.querySelector('#root'));
   const first = { scope: 'all:all', time: Date.now(), value: 7090.72, coverage: 'first', partial: true };

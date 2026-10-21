@@ -1,5 +1,5 @@
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
-import { HISTORY_LIMIT } from './portfolioHistory.js';
+import { compactHistory } from './portfolioHistory.js';
 import { splitTokens, tokenKey, hasUsablePrice } from './tokenFilter.js';
 
 export function dataNotices(results, rows = [], { tracked = [], hidden = [], loading = false } = {}) {
@@ -77,12 +77,12 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
 }
 export function appendObservation(prior, sample) {
   if (!sample || prior.some((s) => s.scope === sample.scope && s.time === sample.time && s.coverage === sample.coverage)) return prior;
-  return [...prior, sample].sort((a, b) => a.time - b.time).slice(-HISTORY_LIMIT);
+  return compactHistory([...prior, sample].sort((a, b) => a.time - b.time));
 }
 export function observationSeries(history, scope, days, now = Date.now()) {
   const samples = history.filter((s) => s.scope === scope && s.time > now - days * 86400000);
   const latest = samples.at(-1);
   if (!latest) return { observations: [], readings: [], coverageChanged: false };
-  const lastDifferent = samples.findLastIndex((s) => s.coverage !== latest.coverage);
-  return { observations: samples.slice(lastDifferent + 1), readings: samples, coverageChanged: lastDifferent !== -1 };
+  const coverageChanged = samples.some((s, i) => i > 0 && (s.breakBefore || s.coverage !== samples[i - 1].coverage));
+  return { observations: samples, readings: samples, coverageChanged };
 }

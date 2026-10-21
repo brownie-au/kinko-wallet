@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deriveAccess, generateAccessKey, encryptWatchlist } from '../../src/reimagined/crypto.js';
-import { createPortfolioHistory, identifyObservation, normalizeHistory, HISTORY_LIMIT } from '../../src/reimagined/portfolioHistory.js';
+import { createPortfolioHistory, identifyObservation, normalizeHistory, HISTORY_RETENTION } from '../../src/reimagined/portfolioHistory.js';
 import { observationSeries } from '../../src/reimagined/dataQuality.js';
 const memory = () => {
   const map = new Map();
@@ -51,16 +51,44 @@ test('history is account-bound, authenticated and purpose-separated from watchli
   storage.setItem(key, JSON.stringify(await encryptWatchlist(access, { version: 1, samples: [await sample()] })));
   await assert.rejects(store.load(access), /unsupported/);
 });
-test('large histories are bounded, expired/invalid readings excluded, and current values never invented', async () => {
-  const now = Date.now(),
-    baseline = await sample();
-  const samples = Array.from({ length: HISTORY_LIMIT + 20 }, (_, i) => ({ ...baseline, time: now - i * 61000 }));
-  samples.push({ ...baseline, time: now - 40 * 86400000 }, { ...baseline, value: NaN }, { ...baseline, value: -1 });
-  assert.equal(normalizeHistory(samples, now).length, HISTORY_LIMIT);
-  const access = await deriveAccess(generateAccessKey()),
-    store = createPortfolioHistory(memory());
+test('32-day history retains month coverage and extrema without the old global count cap', async () => {
+  const now = Date.now(), baseline = await sample();
+  const samples = Array.from({ length: 32 * 720 }, (_, i) => ({ ...baseline, time: now - i * 120000, value: 100 + i % 23 }));
+  samples.push({ ...baseline, time: now - HISTORY_RETENTION - 1 }, { ...baseline, value: NaN }, { ...baseline, value: -1 });
+  const compacted = normalizeHistory(samples, now);
+  assert.ok(compacted.length < 8000);
+  assert.ok(compacted[0].time < now - 31 * 86400000, 'month history survives continuous readings');
+  assert.ok(compacted.every((s) => s.time > now - HISTORY_RETENTION && s.value >= 0));
+  assert.ok(compacted.some((s) => s.value === 122));
+  const access = await deriveAccess(generateAccessKey()), storage = memory(), store = createPortfolioHistory(storage);
   await store.save(access, samples);
-  assert.equal((await store.load(access)).length, HISTORY_LIMIT);
+  assert.deepEqual(await createPortfolioHistory(storage).load(access), compacted);
+  const other = normalizeHistory([...samples, ...samples.map((s) => ({ ...s, scope: 'wallet:pulse' }))], now);
+  assert.equal(other.filter((s) => s.scope === 'all:all').length, compacted.length, 'scopes cannot evict one another');
+});
+test('compaction preserves a coverage break even when the changed reading is thinned away', async () => {
+  const now = Date.now(), baseline = await sample(), time = Math.floor((now - 10 * 86400000) / 3600000) * 3600000;
+  const samples = [0, 1, 2, 3, 4].map((i) => ({ ...baseline, time: time + i * 1000, value: [100, 90, 100, 110, 100][i], coverage: i === 2 ? 'b'.repeat(64) : baseline.coverage }));
+  const normalized = normalizeHistory(samples, now);
+  assert.equal(normalized.length, 4);
+  assert.equal(normalized[2].breakBefore, true);
+  assert.equal(observationSeries(normalized, 'all:all', 30, now).coverageChanged, true);
+  assert.deepEqual(normalizeHistory(normalized, now), normalized);
+});
+test('unlock prunes expired encrypted history and a cleanup write failure still restores valid readings', async () => {
+  const access = await deriveAccess(generateAccessKey()), storage = memory(), store = createPortfolioHistory(storage);
+  const now = Date.now(), originalNow = Date.now;
+  const first = await sample({ time: now - 31.9 * 86400000 });
+  const recent = await sample({ time: now });
+  await store.save(access, [first, recent]);
+  const raw = [...storage.map.values()][0];
+  try {
+    Date.now = () => now + 86400000;
+    const readOnly = createPortfolioHistory({ ...storage, setItem: () => { throw Error('quota'); } });
+    assert.deepEqual(await readOnly.load(access), [recent]);
+    assert.deepEqual(await store.load(access), [recent]);
+    assert.notEqual([...storage.map.values()][0], raw, 'expired encrypted data is physically removed on load');
+  } finally { Date.now = originalNow; }
 });
 test('storage errors remain explicit and clear prevents an in-flight write from restoring deleted history', async () => {
   const access = await deriveAccess(generateAccessKey()),

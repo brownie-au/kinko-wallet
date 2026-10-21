@@ -35,6 +35,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
   });
   await createDeviceSessions().save(key, true, 'cloud');
   const previousFetch = global.fetch;
+  let failHoldings = false, holdHoldings = false, releaseHoldings;
   let reads = 0,
     root;
   const now = Date.now();
@@ -47,7 +48,9 @@ test('real-mode app displays its first partial reading, refreshes automatically,
       }
       const request = JSON.parse(options.body);
       if (request.action === 'fx') return { rate: 1.5, date: '2026-10-20' };
-      if (request.action === 'holdings')
+      if (request.action === 'holdings') {
+        if (holdHoldings) await new Promise((resolve) => { releaseHoldings = resolve; });
+        if (failHoldings) throw new Error('Network unavailable');
         return {
           asOf: now + reads++ * 61000,
           discovery: 'manual',
@@ -78,6 +81,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
             { chain: 'bsc', wallet: address, address: '0x' + '3'.repeat(40), symbol: 'SCAM', name: 'Claim: scam.site', amountExact: '1', priceUsd: 1000, valueUsd: 1000, valueExact: '1000' }
           ]
         };
+      }
       return { stakes: [] };
     }
   });
@@ -114,6 +118,13 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.ok(stored);
     assert.ok(!localStorage.getItem(stored).includes('Integration test'));
     assert.ok(!localStorage.getItem(stored).includes('all:all'));
+    failHoldings = true;
+    await act(async () => t.mock.timers.tick(120000));
+    await until(() => document.querySelector('.history-status')?.textContent.includes('Some networks unavailable'));
+    assert.ok(document.querySelector('.history-panel .history-chart'), 'failed refresh retains the chart');
+    assert.equal(document.querySelectorAll('.reading-table tbody tr').length, 2);
+    failHoldings = false;
+    holdHoldings = true;
     act(() => root.unmount());
     t.mock.timers.reset();
     root = createRoot(document.querySelector('#root'));
@@ -121,6 +132,12 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await until(() => document.querySelectorAll('.reading-table tbody tr').length >= 2);
     assert.ok(document.querySelector('.history-panel .history-chart'));
     assert.ok(!document.querySelector('.history-panel').textContent.includes('Your history starts here'));
+    await until(() => !!releaseHoldings);
+    assert.match(document.querySelector('.history-status').textContent, /Updating/);
+    assert.equal(reads, 2, 'saved chart restores before fresh network balances finish');
+    holdHoldings = false;
+    await act(async () => releaseHoldings());
+    await until(() => !document.querySelector('.history-status').textContent.includes('Updating'));
     const click = async (element) => { assert.ok(element); await act(async () => element.click()); };
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find((b) => b.textContent.includes('Assets')));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);

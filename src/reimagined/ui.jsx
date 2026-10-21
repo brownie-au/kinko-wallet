@@ -419,7 +419,31 @@ export function Sparkline({ values, label, large = false }) {
   );
 }
 
-export function PortfolioReadings({ observations, readings = observations, money, coverageChanged, historyError, historySaving }) {
+export function HistoryChart({ observations }) {
+  const width = 700, height = 190;
+  const first = observations[0].time, elapsed = observations.at(-1).time - first || 1;
+  let min = Infinity, max = -Infinity;
+  for (const s of observations) { min = Math.min(min, s.value); max = Math.max(max, s.value); }
+  const segments = [];
+  for (const [i, s] of observations.entries()) {
+    const previous = observations[i - 1];
+    if (!previous || s.breakBefore || s.coverage !== previous.coverage || s.time - previous.time > (Date.now() - s.time >= 7 * 86400000 ? 2 * 3600000 : 30 * 60000)) segments.push([]);
+    segments.at(-1).push({ x: 8 + (s.time - first) / elapsed * (width - 16), y: height - 10 - (s.value - min) / (max - min || 1) * (height - 25) });
+  }
+  return (
+    <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
+      aria-label="Saved portfolio readings spaced by time. Gaps separate coverage changes and periods without readings." preserveAspectRatio="none">
+      <path d={`M0 38H${width}M0 105H${width}M0 171H${width}`} stroke="var(--line)" strokeDasharray="3 5" />
+      {segments.map((points, i) => <g key={i}>
+        <polyline data-history-segment points={points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}
+          fill="none" stroke="var(--accent)" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        {points.length === 1 && <circle cx={points[0].x} cy={points[0].y} r="3" fill="var(--accent)" />}
+      </g>)}
+    </svg>
+  );
+}
+
+export function PortfolioReadings({ observations, readings = observations, money, coverageChanged, historyError, historySaving, loading = false, unavailable = false }) {
   const latest = observations.at(-1);
   if (!latest) return null;
   const stamp = (time) => new Date(time).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -430,11 +454,7 @@ export function PortfolioReadings({ observations, readings = observations, money
         <span>{latest.partial ? 'Partial liquid value' : 'Observed liquid value'}</span>
       </div>
       {observations.length > 1 ? (
-        <Sparkline
-          values={observations.map((s) => s.value)}
-          large
-          label="Saved real portfolio readings; only comparable coverage is connected"
-        />
+        <HistoryChart observations={observations} />
       ) : (
         <div className="first-observation" role="img" aria-label="One real reading recorded. A trend needs another comparable reading.">
           <span className="observation-dot" />
@@ -442,8 +462,13 @@ export function PortfolioReadings({ observations, readings = observations, money
         </div>
       )}
       {coverageChanged && (
-        <p className="history-note">Coverage changed. The chart starts a new series; earlier readings remain in the table.</p>
+        <p className="history-note">Coverage changed · gaps separate different asset coverage. Previous history retained.</p>
       )}
+      <div className="chart-labels"><span>{stamp(observations[0].time)}</span><span>{stamp(latest.time)}</span></div>
+      <p className="history-status" role="status">
+        {historySaving ? 'Saving reading…' : `${historyError ? 'Last reading' : 'Last saved'} ${stamp(latest.time)}`}
+        {loading ? ' · Updating…' : unavailable ? ' · Some networks unavailable · Previous history retained' : ''}
+      </p>
       <div className="reading-table-wrap">
         <table className="reading-table">
           <caption className="sr-only">Real saved portfolio readings</caption>
@@ -470,7 +495,7 @@ export function PortfolioReadings({ observations, readings = observations, money
       </div>
       <p className="history-note">
         {historyError || (historySaving ? 'Saving encrypted history on this browser…' : 'Saved encrypted on this browser.')} Kinko collects
-        readings while open, with an automatic refresh every two minutes when visible.
+        readings while open, with an automatic refresh every two minutes when visible. A rolling 32 days is retained; older readings are condensed.
         <br />
         Partial values exclude stale and unpriced balances. Readings are not investment returns.
       </p>

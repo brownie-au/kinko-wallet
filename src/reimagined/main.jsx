@@ -1303,6 +1303,8 @@ export function App() {
                       coverageChanged={coverageChanged}
                       historyError={historyError}
                       historySaving={historySaving}
+                      loading={loading}
+                      unavailable={unavailable}
                     />
                   ) : (
                     <div className="history-empty">

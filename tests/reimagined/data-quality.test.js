@@ -59,9 +59,9 @@ test('coverage changes start a new series rather than manufacture gains or losse
   const h = appendObservation(appendObservation([], first), next);
   const series = observationSeries(h, 'all:all', 1, now + 62000);
   assert.equal(series.coverageChanged, true);
-  assert.equal(series.observations.length, 1);
+  assert.equal(series.observations.length, 2);
   const third = { ...next, time: now + 122000, value: 405 };
-  assert.equal(observationSeries(appendObservation(h, third), 'all:all', 1, now + 123000).observations.length, 2);
+  assert.equal(observationSeries(appendObservation(h, third), 'all:all', 1, now + 123000).observations.length, 3);
   assert.equal(observationSeries(h, 'different', 1, now + 62000).observations.length, 0);
 });
 
