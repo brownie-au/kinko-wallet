@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
+import { historyChartModel } from './historyChart.js';
 import { NETWORKS } from './networks.js';
 import { tokenIconUrl, tokenInitials } from './tokenIcons.js';
 export function Icon({ name, size = 20, ...props }) {
@@ -419,86 +420,125 @@ export function Sparkline({ values, label, large = false }) {
   );
 }
 
-export function HistoryChart({ observations }) {
-  const width = 700, height = 190;
+const historyStamp = (time) => new Date(time).toLocaleString('en-AU', {
+  day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'
+});
+
+export function HistoryChart({ observations, money, model }) {
+  const [selectedTime, setSelectedTime] = useState(null);
+  const width = 700, height = 160, pad = 8;
   const first = observations[0].time, elapsed = observations.at(-1).time - first || 1;
   let min = Infinity, max = -Infinity;
   for (const s of observations) { min = Math.min(min, s.value); max = Math.max(max, s.value); }
-  const segments = [];
-  for (const [i, s] of observations.entries()) {
-    const previous = observations[i - 1];
-    if (!previous || s.breakBefore || s.coverage !== previous.coverage || s.time - previous.time > (Date.now() - s.time >= 7 * 86400000 ? 2 * 3600000 : 30 * 60000)) segments.push([]);
-    segments.at(-1).push({ x: 8 + (s.time - first) / elapsed * (width - 16), y: height - 10 - (s.value - min) / (max - min || 1) * (height - 25) });
-  }
+  const padding = (max - min) * 0.12 || Math.max(max * 0.005, 1);
+  min = Math.max(0, min - padding); max += padding;
+  const x = (time) => pad + (time - first) / elapsed * (width - 2 * pad);
+  const y = (value) => height - pad - (value - min) / (max - min) * (height - 2 * pad);
+  const selectedIndex = Math.max(0, observations.findIndex((s) => s.time === selectedTime));
+  const selected = selectedTime === null ? null : observations[selectedIndex];
+  const selectAt = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const target = first + (((event.clientX - rect.left) / rect.width * width - pad) / (width - 2 * pad)) * elapsed;
+    let nearest = 0;
+    for (let i = 1; i < observations.length; i++)
+      if (Math.abs(observations[i].time - target) < Math.abs(observations[nearest].time - target)) nearest = i;
+    setSelectedTime(observations[nearest].time);
+  };
+  const keyboard = (event) => {
+    const current = selectedTime === null ? observations.length - 1 : selectedIndex;
+    const next = { ArrowLeft: current - 1, ArrowRight: current + 1, Home: 0, End: observations.length - 1 }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    setSelectedTime(observations[Math.max(0, Math.min(observations.length - 1, next))].time);
+  };
   return (
-    <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
-      aria-label="Saved portfolio readings spaced by time. Gaps separate coverage changes and periods without readings." preserveAspectRatio="none">
-      <path d={`M0 38H${width}M0 105H${width}M0 171H${width}`} stroke="var(--line)" strokeDasharray="3 5" />
-      {segments.map((points, i) => <g key={i}>
-        <polyline data-history-segment points={points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}
-          fill="none" stroke="var(--accent)" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-        {points.length === 1 && <circle cx={points[0].x} cy={points[0].y} r="3" fill="var(--accent)" />}
-      </g>)}
-    </svg>
+    <div className="portfolio-plot">
+      <div className="history-inspection" aria-live="polite">
+        {selected ? <><strong>{money(selected.value)}</strong><span>{historyStamp(selected.time)} · {selected.partial ? 'Partial coverage' : 'Complete coverage'}</span></>
+          : <span>Hover or tap to inspect · arrow keys to browse</span>}
+      </div>
+      <div className="portfolio-axis-y" aria-label="Portfolio value scale">
+        {[max, (min + max) / 2, min].map((v, i) => <span key={i}>{money(v)}</span>)}
+      </div>
+      <div className="portfolio-plot-input" tabIndex="0" role="slider" aria-label="Portfolio reading"
+        aria-valuemin={0} aria-valuemax={observations.length - 1} aria-valuenow={selectedTime === null ? observations.length - 1 : selectedIndex}
+        aria-valuetext={`${historyStamp((selected || observations.at(-1)).time)}, ${money((selected || observations.at(-1)).value)}, ${(selected || observations.at(-1)).partial ? 'partial' : 'complete'} coverage`}
+        onPointerMove={selectAt} onPointerDown={selectAt} onKeyDown={keyboard} onFocus={() => setSelectedTime(observations.at(-1).time)}>
+        <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
+          aria-label="Saved portfolio readings spaced by time. Shaded gaps have no readings; different asset coverage is not connected." preserveAspectRatio="none">
+          {[pad, height / 2, height - pad].map((v) => <path key={v} d={`M0 ${v}H${width}`} stroke="var(--line)" strokeDasharray="3 5" />)}
+          {model.gaps.map((gap) => <rect key={gap.from} data-history-gap x={x(gap.from)} y="0" width={x(gap.to) - x(gap.from)} height={height} fill="var(--history-gap)" />)}
+          {model.segments.map((points, i) => <g key={i}>
+            <polyline data-history-segment points={points.map((p) => `${x(p.time).toFixed(2)},${y(p.value).toFixed(2)}`).join(' ')}
+              fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeDasharray={points[0].partial ? '5 4' : undefined}
+              vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+            {points.length === 1 && <circle cx={x(points[0].time)} cy={y(points[0].value)} r="3" fill="var(--accent)" />}
+          </g>)}
+          {selected && <g><path d={`M${x(selected.time)} 0V${height}`} stroke="var(--muted)" strokeDasharray="3 4" />
+            <circle cx={x(selected.time)} cy={y(selected.value)} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" /></g>}
+        </svg>
+        {model.gaps.filter((gap) => (gap.to - gap.from) / elapsed > 0.18).map((gap) =>
+          <span key={gap.from} className="history-gap-label" style={{ left: `${(x((gap.from + gap.to) / 2) / width) * 100}%` }}>No readings recorded</span>)}
+      </div>
+      <div className="portfolio-axis-x"><span>{historyStamp(first)}</span><span>{historyStamp(first + elapsed / 2)}</span><span>{historyStamp(observations.at(-1).time)}</span></div>
+      <div className="history-legend"><span className="legend-complete">Complete</span><span className="legend-partial">Partial</span>
+        {model.gaps.length > 0 && <span className="legend-gap">No readings recorded</span>}</div>
+    </div>
   );
 }
 
+function HistoryInfo() {
+  const [open, setOpen] = useState(false);
+  const tooltipId = useId();
+  return <div className="history-info" data-open={open} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+    onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+    <button type="button" aria-label="About portfolio history" aria-expanded={open} aria-describedby={tooltipId}
+      onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}><Icon name="info" size={16} /></button>
+    <div className="history-info-popover" id={tooltipId} role="tooltip">Readings are saved encrypted in this browser for 32 days. Older readings are condensed.
+      Collection runs every two minutes while Kinko is open and visible. Partial values exclude stale and unpriced assets.
+      Different asset coverage is not comparable. These readings are not investment returns.</div>
+  </div>;
+}
+
 export function PortfolioReadings({ observations, readings = observations, money, coverageChanged, historyError, historySaving, loading = false, unavailable = false }) {
+  const model = useMemo(() => historyChartModel(observations), [observations]);
   const latest = observations.at(-1);
   if (!latest) return null;
-  const stamp = (time) => new Date(time).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   return (
-    <>
-      <div className="chart-amount">
-        {money(latest.value)}
-        <span>{latest.partial ? 'Partial liquid value' : 'Observed liquid value'}</span>
+    <div className="portfolio-readings">
+      <div className="history-value-row">
+        <div className="chart-amount">{money(latest.value)}<span>{latest.partial ? 'Partial value' : 'Liquid value'}</span></div>
+        <HistoryInfo />
       </div>
-      {observations.length > 1 ? (
-        <HistoryChart observations={observations} />
-      ) : (
-        <div className="first-observation" role="img" aria-label="One real reading recorded. A trend needs another comparable reading.">
-          <span className="observation-dot" />
-          <p>First reading recorded · a trend builds from here</p>
-        </div>
-      )}
-      {coverageChanged && (
-        <p className="history-note">Coverage changed · gaps separate different asset coverage. Previous history retained.</p>
-      )}
-      <div className="chart-labels"><span>{stamp(observations[0].time)}</span><span>{stamp(latest.time)}</span></div>
       <p className="history-status" role="status">
-        {historySaving ? 'Saving reading…' : `${historyError ? 'Last reading' : 'Last saved'} ${stamp(latest.time)}`}
+        <span className={loading || historySaving ? 'history-status-dot updating' : 'history-status-dot'} />
+        {historySaving ? 'Saving reading…' : `${historyError ? 'Last reading' : 'Last saved'} ${historyStamp(latest.time)}`}
         {loading ? ' · Updating…' : unavailable ? ' · Some networks unavailable · Previous history retained' : ''}
       </p>
-      <div className="reading-table-wrap">
-        <table className="reading-table">
-          <caption className="sr-only">Real saved portfolio readings</caption>
-          <thead>
-            <tr>
-              <th>Recorded</th>
-              <th>Liquid value</th>
-              <th>Coverage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {readings
-              .slice(-5)
-              .reverse()
-              .map((s) => (
-                <tr key={`${s.scope}:${s.time}:${s.coverage}`}>
-                  <td>{stamp(s.time)}</td>
-                  <td>{money(s.value)}</td>
-                  <td>{s.partial ? 'Partial' : 'Complete'}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="history-note">
-        {historyError || (historySaving ? 'Saving encrypted history on this browser…' : 'Saved encrypted on this browser.')} Kinko collects
-        readings while open, with an automatic refresh every two minutes when visible. A rolling 32 days is retained; older readings are condensed.
-        <br />
-        Partial values exclude stale and unpriced balances. Readings are not investment returns.
-      </p>
-    </>
+      {model.sparse ? (
+        <div className="history-building">
+          <div className="history-building-heading"><span className="history-building-icon"><Icon name="activity" size={20} /></span>
+            <div><h3>History building</h3><p>{readings.length} saved reading{readings.length === 1 ? '' : 's'} · {model.sessionCount} recording session{model.sessionCount === 1 ? '' : 's'}</p></div>
+          </div>
+          <p>{model.gaps.length ? 'Readings are separated by time away. More comparable readings will build a useful trend.' : 'A trend appears as more readings with the same asset coverage are recorded.'}</p>
+          <div className="history-recent">
+            {readings.slice(-3).reverse().map((s) => <div key={`${s.time}:${s.coverage}`}><time dateTime={new Date(s.time).toISOString()}>{historyStamp(s.time)}</time><strong>{money(s.value)}</strong><span>{s.partial ? 'Partial' : 'Complete'}</span></div>)}
+          </div>
+        </div>
+      ) : <HistoryChart key={latest.scope} observations={observations} money={money} model={model} />}
+      {coverageChanged && <p className="history-coverage-note"><Icon name="info" size={13} />Asset coverage changed. Values across different coverage cannot be compared.</p>}
+      {historyError && <p className="history-note" role="alert">{historyError}</p>}
+      <details className="history-saved-readings">
+        <summary>View saved readings <span>{readings.length}</span></summary>
+        <div className="reading-table-wrap"><table className="reading-table">
+          <caption className="sr-only">Most recent saved portfolio readings</caption>
+          <thead><tr><th>Recorded</th><th>Liquid value</th><th>Coverage</th></tr></thead>
+          <tbody>{readings.slice(-50).reverse().map((s) => <tr key={`${s.scope}:${s.time}:${s.coverage}`}>
+            <td>{historyStamp(s.time)}</td><td>{money(s.value)}</td><td>{s.partial ? 'Partial' : 'Complete'}</td>
+          </tr>)}</tbody>
+        </table>{readings.length > 50 && <p className="history-note">Showing the latest 50 readings in this range.</p>}</div>
+      </details>
+    </div>
   );
 }
