@@ -216,7 +216,9 @@ export async function addPrices(chain, tokens, signal) {
   const n = NETWORKS[chain];
   const keys = tokens.map((t) => (t.address ? `${n.llama}:${t.address}` : n.nativePrice));
   const prices = {};
-  await priceBatches(keys, async (batch) => {
+  const previousPrices = {};
+  const yesterday = Math.floor(Date.now() / 1000) - 86400;
+  await Promise.all([priceBatches([...new Set(keys)], async (batch) => {
     try {
       Object.assign(
         prices,
@@ -225,7 +227,14 @@ export async function addPrices(chain, tokens, signal) {
     } catch {
       /* Unknown prices remain null. */
     }
-  });
+  }), priceBatches([...new Set(keys)], async (batch) => {
+    try {
+      Object.assign(previousPrices,
+        (await json(`https://coins.llama.fi/prices/historical/${yesterday}/${encodeURIComponent(batch.join(','))}?searchWidth=1h`, { signal })).coins || {});
+    } catch {
+      /* Optional change data must never discard a usable current price. */
+    }
+  })]);
   const usable = (meta) => meta?.timestamp && Math.abs(Date.now() / 1000 - meta.timestamp) < 21600 &&
     Number.isFinite(Number(meta.price)) && Number(meta.price) > 0;
   // Look up every missing/stale price, in the documented maximum batches of 30.
@@ -243,7 +252,9 @@ export async function addPrices(chain, tokens, signal) {
         if (!best) continue;
         tokens.forEach((t, index) => {
           if ((t.address?.toLowerCase() || n.wrappedNative) === address && !usable(prices[keys[index]]))
-            prices[keys[index]] = { price: Number(best.priceUsd), timestamp: Date.now() / 1000, source: 'Dexscreener' };
+            prices[keys[index]] = { price: Number(best.priceUsd), timestamp: Date.now() / 1000, source: 'Dexscreener',
+              change24h: typeof best.priceChange?.h24 === 'number' && Number.isFinite(best.priceChange.h24) && best.priceChange.h24 >= -100
+                ? best.priceChange.h24 : null };
         });
       }
     } catch {
@@ -255,10 +266,19 @@ export async function addPrices(chain, tokens, signal) {
     const recent = meta?.timestamp && Math.abs(Date.now() / 1000 - meta.timestamp) < 21600;
     const priceUsd = recent && Number(meta.price) > 0 && Number.isFinite(Number(meta.price)) ? Number(meta.price) : null;
     const valueExact = priceUsd == null ? null : multiplyDecimal(t.amountExact, String(priceUsd));
+    const previous = previousPrices[keys[i]];
+    const historical = previous?.timestamp && Math.abs(previous.timestamp - yesterday) <= 3600 &&
+      Number.isFinite(Number(previous.price)) && Number(previous.price) > 0;
+    // Compare like-for-like sources; never mix a DEX quote with a Llama historical price.
+    const change = priceUsd == null ? null : meta.source === 'Dexscreener' ? meta.change24h :
+      historical ? (priceUsd / Number(previous.price) - 1) * 100 : null;
+    const priceChange24h = Number.isFinite(change) ? change : null;
     return {
       ...t,
       chain,
       priceUsd,
+      priceChange24h,
+      change24hSource: priceChange24h == null ? null : meta.source || 'DefiLlama',
       valueExact,
       valueUsd: valueExact == null ? null : Number(valueExact),
       priceSource: priceUsd == null ? null : meta.source || 'DefiLlama',

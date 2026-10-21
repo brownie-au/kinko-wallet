@@ -32,7 +32,7 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
     reads++;
     if (gate) await gate;
     const token = (address, name, price) => ({ chain: 'base', wallet: req.address, address, name, symbol: name,
-      amountExact: '2', priceUsd: price, valueUsd: price == null ? null : price * 2 });
+      amountExact: '2', priceChange24h: price == null ? null : 4.25, priceUsd: price, valueUsd: price == null ? null : price * 2 });
     return { ok: true, json: async () => ({ asOf: Date.now(), discovery: 'complete', notices: [], issues: [], rows: [
       token(null, 'ETH', 2), token(spam, 'claim.scam.site', null), token(hidden, 'Manually hidden', null),
       ...(req.address === second ? [token(genuine, 'GENUINE', priceUsd)] : [])
@@ -61,6 +61,8 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
     await selectWallet(second); assert.match(warning(), /1 held token has/);
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent === 'Assets'));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);
+    assert.match(document.querySelector('.asset-table-head').textContent, /24H CHANGE/);
+    assert.equal(document.querySelector('.asset-row .asset-change').textContent, '+4.25%');
     await click(document.querySelector('.asset-filters summary'));
     await click(document.querySelector('input[aria-label="Show unpriced tokens"]'));
     await until(() => document.querySelectorAll('.asset-row').length === 2);

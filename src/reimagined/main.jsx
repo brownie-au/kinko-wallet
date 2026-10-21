@@ -30,6 +30,7 @@ import {
   Empty,
   NetworkBadge,
   TokenIcon,
+  PriceChange,
   Sparkline,
   shortAddress
 } from './ui.jsx';
@@ -2056,6 +2057,10 @@ export function App() {
               <dd>{money(modal.token.valueUsd)}</dd>
             </div>
             <div>
+              <dt>24h price change (USD)</dt>
+              <dd><PriceChange token={modal.token} /></dd>
+            </div>
+            <div>
               <dt>Price source</dt>
               <dd>{modal.token.priceSource || 'Unavailable'}</dd>
             </div>
@@ -2207,6 +2212,7 @@ function AssetTable({ tokens, money, price, quantity, onDetail, filteredEmpty = 
       <div className="asset-table-head">
         <span>ASSET</span>
         <span>PRICE</span>
+        <span title="Token price movement over 24 hours in USD, independent of wallet balance changes">24H CHANGE</span>
         <span>BALANCE</span>
         <span>VALUE</span>
         <span />
@@ -2224,6 +2230,7 @@ function AssetTable({ tokens, money, price, quantity, onDetail, filteredEmpty = 
             </span>
           </span>
           <span className="asset-price">{price(t.priceUsd)}</span>
+          <PriceChange token={t} />
           <span className="asset-quantity" title={quantity(t.amountExact, 4).includes('•') ? undefined : t.amountExact}>
             {quantity(t.amountExact, 4)}
           </span>

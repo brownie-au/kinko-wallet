@@ -2,6 +2,18 @@ import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { historyChartModel } from './historyChart.js';
 import { NETWORKS } from './networks.js';
 import { tokenIconUrl, tokenInitials } from './tokenIcons.js';
+export function PriceChange({ token }) {
+  const value = typeof token.priceChange24h === 'number' && Number.isFinite(token.priceChange24h) && token.priceUsd > 0
+    ? token.priceChange24h : null;
+  const rounded = value == null ? null : Number(value.toFixed(2));
+  const text = rounded == null ? '—' : `${rounded > 0 ? '+' : ''}${rounded.toFixed(2)}%`;
+  const label = rounded == null ? '24-hour price change unavailable' :
+    `24-hour price change: ${text}${token.stale ? ' (cached)' : ''}`;
+  return <span className={`asset-change ${rounded > 0 ? 'gain' : rounded < 0 ? 'loss' : 'neutral'}`}
+    aria-label={label} title={`${label}${value == null ? '' : ` · ${token.change24hSource || token.priceSource || 'Market data'} · USD price movement`}`}>
+    {text}{value != null && token.stale ? ' *' : ''}
+  </span>;
+}
 export function Icon({ name, size = 20, ...props }) {
   const paths = {
     grid: (
