@@ -1016,7 +1016,16 @@ export function App() {
             >
               <Icon name={data.theme === 'dark' ? 'sun' : 'moon'} size={18} />
             </button>
-            <Mark className="workspace-avatar" />
+            <button
+              type="button"
+              className="workspace-avatar"
+              aria-label="User profile"
+              aria-describedby="profile-coming-soon"
+              aria-disabled="true"
+            >
+              <Icon name="user" size={18} />
+              <span id="profile-coming-soon" className="profile-tooltip" role="tooltip">Coming soon!</span>
+            </button>
           </div>
         </header>
         <main className="workspace">

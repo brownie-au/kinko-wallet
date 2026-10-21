@@ -16,6 +16,12 @@ export function Icon({ name, size = 20, ...props }) {
         <path d="M20 12h-6v5h6M17 14.5h.1" />
       </>
     ),
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+      </>
+    ),
     layers: (
       <>
         <path d="m12 3 10 6-10 6L2 9l10-6ZM3 14l9 5 9-5M3 18l9 5 9-5" />
