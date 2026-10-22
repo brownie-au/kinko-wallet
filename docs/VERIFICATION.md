@@ -1,0 +1,247 @@
+# Verification · Kinko Reimagined
+
+## Story
+
+Create a browser-generated Access Key → encrypt a named public-address watchlist → persist ciphertext with a separately derived authorization credential → restore independently on another browser → read public balances/HEX stakes → display verified data, or explicit unavailable/partial states.
+
+## Completed checks
+
+- `npm test`: 13 focused tests passed, covering crypto, independent clients, API storage semantics and financial boundaries.
+- `npm run build`: production bundle succeeded using Vite 8.3.4 and ethers 6.17.0. Initial JavaScript about 220 KB (70 KB gzip) before final refinement; see final build output for exact size.
+- `npm audit`: zero known vulnerabilities after replacing legacy build dependencies and ethers 5.
+- Verified PulseChain contract source directly from Blockscout; `is_verified: true`, 102,819 source characters; confirmed `LAUNCH_TIME = 1575331200` and `(block.timestamp - LAUNCH_TIME) / 1 days`.
+- Live PulseChain public-address probe returned native PLS, token holdings including HEX, genuine available/unavailable prices, chain block and currentDay. Never converted failed balances to zero.
+- Ethereum endpoint checks found one old RPC returned HTTP 405; replaced it with a working `eth.drpc.org` fallback and implemented mid-read fallback with chain checks.
+
+## Evidence to append after deployment
+
+Live API create/restore/update/delete, independent client/browser restoration, rendered desktop/mobile QA, and any external-provider failures must be recorded below after those checks finish. Mocked unit tests alone do not establish deployed database or browser functionality.
+
+## Explicit limitations
+
+No independent penetration test. No guarantee of provider uptime. Ended-stake history and reward/penalty projections are absent. Real long-term portfolio history is not supplied; only current-session observations are drawn. Infrastructure allowance verification is distinct from confirmation of the owner's current account billing plan.
+
+## Deployed results
+
+Preview deployment `dpl_AdeYNVuzNDdsoJTcRkD9MuKGDn4j`, commit `e096f285e09c8a9587cc8ace95b237cb72bdfa7c`: Vercel returned **READY**; public application opened successfully without a ChatGPT/Vercel login.
+
+Real deployed `/api/vault` checks passed against the configured Redis integration:
+
+- Create a disposable encrypted account: HTTP 201.
+- Independently derive credentials in a second client; retrieve/decrypt the saved address and name: HTTP 200, exact data match.
+- Rename from the second client and restore from the first: persisted correctly.
+- Write using the old revision: HTTP 409, no overwrite.
+- Read using only the account identifier with an incorrect authorization credential: HTTP 401.
+- Delete the disposable integration-test record: HTTP 200; subsequent restore: HTTP 404. No test key or credential was logged or committed.
+
+Real deployed `/api/data` results:
+
+- PulseChain holdings: HTTP 200, 27 rows, five priced assets, no discovery issues for the tested public address; unpriced tokens remained unpriced.
+- PulseChain HEX stakes: HTTP 200, **18 open positions**, currentDay 2512.
+- Ethereum HEX stake query: HTTP 200, zero positions for a separately tested address (a successful empty result).
+- AUD FX: HTTP 200, USD/AUD 1.437, reference date 2026-10-16.
+- Additional live verified-contract event probe found a PulseChain address with **303 open stakes** and decoded principal, T-Shares and maturity correctly. This was a direct provider check, not a browser test.
+
+Desktop browser QA at 1348 CSS pixels verified the welcome page, demo dashboard, navigation, light/dark themes, wallet edit/save/renamed display, assets, HEX ladder, and stake detail dialog. No application-origin console errors were observed; the browser extension emitted unrelated metadata errors.
+
+**Verification limits:** The provided browser cannot change viewport/device emulation, so real mobile/tablet rendering remains unverified. Responsive breakpoints and mobile navigation/touch controls are implemented. Cross-device crypto/cloud restoration was verified with independent clients against the real API, not two physical devices or authenticated browser sessions. Browser sign-in/creation itself was not exercised with real user credentials. Existing account plan/billing settings could not be inspected; no plan changes, financial obligations or paid integrations were created.
+
+## Final delivery
+
+Final runtime commit: `cea969dab86314607738fa98cfa604fbc0c19207`. Vercel deployment `dpl_8SUiwxScwUrDnyN6edE1M4hY7iuE` returned READY and its public page was opened and inspected:
+
+https://kinko-wallet-v2-test-2w6waqaj0-rob-browns-projects.vercel.app/
+
+Final production build: 222.37 KB JavaScript / 70.08 KB gzip; 50.88 KB CSS / 10.65 KB gzip. All 13 focused tests passed. The final browser view also confirmed the corrected small-token price display (`0.018` rather than a rounded `0.02`).
+
+[Desktop screenshot — clearly labelled illustrative demo](screenshots/kinko-desktop.jpg)
+
+A requested-by-agent optional friendly alias was rejected by automatic approval review because it could displace existing public routing. No alias was changed. Delivery uses the verified Vercel-generated preview URL. The main domain and existing V2 test production URL retain their previous deployments.
+
+## Remember This Device · 20 October 2026
+
+- Added an unchecked-by-default Remember This Device control to existing access/create forms, plus automatic restoration before showing the welcome screen.
+- Checked: AES-GCM sealed derived credentials persist in origin-scoped IndexedDB across visits. Unchecked: the sealed credentials exist only in sessionStorage for the current tab session; refreshes restore that session. A non-extractable wrapping CryptoKey is structured-cloned through IndexedDB; the raw Kinko Access Key is never stored.
+- Explicit logout clears both authentication locations and the device key, invalidates in-flight restores, and notifies other tabs. Account deletion also forgets device access. If IndexedDB deletion is temporarily blocked, a non-secret logout marker prevents automatic restore; if Web Storage is blocked, IndexedDB deletion is still attempted.
+- Restored sessions fetch the current encrypted cloud watchlist. Offline cached data is explicitly local; missing or rejected cloud accounts require re-entry of the key.
+- Added 12 lifecycle tests using actual Web Crypto and fake-indexeddb's IndexedDB implementation: refresh/session-end separation, simulated browser restart, no raw key/auth material in stored JSON, non-extractable keys, switching from remembered to session-only, logout cleanup, blocked storage, tampering, logout races, stale tabs, and cloud/offline restoration.
+- Full suite: **25 tests passed**. Production build passed (228.28 KB JavaScript; 71.96 KB gzip). Production dependency audit: zero known vulnerabilities.
+- Lifecycle restart checks are automated storage-context simulations, not claims of physical-device or browser-process restart testing. Saved access is scoped to the exact origin; use the same URL and browser profile. Browser session-recovery settings may restore sessionStorage, so explicit logout is required on shared devices.
+
+Deployment for this feature: `dpl_2Bq3JouikPjj4ZE19M3krwTwfnxn`, runtime commit `d0960ed874a1b14337dfcdce7f7762cd651f9ce8`, status **READY**. Browser inspection verified the returning-user checkbox defaults off, is selectable, and switches between session-only and trusted-device help text. No real user key was entered during UI inspection.
+
+Use the stable branch preview for remembered access:
+https://kinko-wallet-v2-test-git-feature-kin-b1ea48-rob-browns-projects.vercel.app/
+
+[Login checkbox screenshot](screenshots/remember-this-device.jpg)
+
+## Opera / password-manager dialog compatibility · 20 October 2026
+
+The reported symptom was an access dialog that disappeared immediately in Opera with Dashlane, while Chrome without Dashlane worked. The supplied images were unavailable in this workspace, and Opera/Dashlane are not installed in the verification browser, so the exact cause remains unconfirmed.
+
+- Access/create dialogs now require their explicit Close control or Escape to dismiss; clicking outside cannot discard the form.
+- Shared dialogs only dismiss on an outside pointer gesture that starts and ends outside the dialog bounds. A standalone scripted click, padding click, inside-to-outside drag, or cancelled gesture does not dismiss them.
+- Access forms and both Access Key fields use Dashlane's documented `data-form-type="other"` hint. This requests no autofill for these custom key fields; it does not prevent extensions from inspecting the DOM or guarantee that every extension will respect the hint. Source: https://support.dashlane.com/hc/en-us/articles/4420122792594-Optimize-your-web-forms-for-Dashlane-autofill
+- Close controls explicitly use `type="button"`. Existing authentication, encryption and remembered-device storage are unchanged.
+- Added five React/DOM regression tests with jsdom. Full suite: **30 passed**. Production build passed: 228.69 KB JavaScript / 72.12 KB gzip. Production dependency audit: zero known vulnerabilities.
+- Native Escape/top-layer behaviour needs live-browser inspection; jsdom's dialog lifecycle is shimmed and does not establish Opera/Dashlane compatibility.
+
+Deployment `dpl_6NEyDnJx4YHbqz9ZMrdm7ggR1NA4`, runtime commit `8e6213a792eb4480f822a08d23b3df92581173bc`: **READY**. On the stable branch preview, live Chrome inspection confirmed the Dashlane field hint, persistent form after a real outside click, Close and native Escape dismissal, focus returning to the landing-page access button, and selectable Remember This Device help text. No key was entered. This verifies the updated Chromium UI but does not reproduce the user's Opera/Dashlane setup.
+
+[Verified access dialog](screenshots/access-dialog-compatibility.jpg)
+
+## Dashlane phishing warning follow-up · 20 October 2026
+
+New screenshots were available for inspection and show Dashlane's **Phishing risk detected** warning with its AI-model explanation. This establishes that the reported warning is phishing classification, not just autofill. The earlier autofill hint does not exempt a site from phishing checks. The warning appears dimmed behind Kinko's native modal. Native `showModal()` makes other document elements inert; a conflict with an injected extension prompt is plausible, but the exact Opera/Dashlane interaction is not reproduced here.
+
+Returning-user access now uses a normal document-flow screen, keeping the existing form, encrypted backup import and Remember This Device control. It has an accessible page heading and Back to Kinko control, with no modal top layer or focus trap blocking external extension UI. Creation retains its existing dialog. Authentication and encryption are unchanged. This is a UI interoperability fix, not a change to Dashlane's security verdict.
+
+Added a React/DOM regression for the access screen: no dialog or inert state, external security UI remains focusable/clickable without leaving access, heading focus and Back control work. All **31 tests pass** and production build passes. The browser suite does not reproduce the Opera/Dashlane extension environment.
+
+Dashlane's official resolution for incorrect phishing classifications is an owner report through Support Chat. A user may also choose the extension's site-specific trust control after independently verifying the URL. No extension settings were changed and no report was submitted on the user's behalf.
+
+References:
+- https://support.dashlane.com/hc/en-us/articles/33017283560594-I-own-a-website-that-is-being-flagged-for-phishing
+- https://support.dashlane.com/hc/en-us/articles/30786899404690-AI-Powered-Scam-Protection-for-personal-plans
+- https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal
+
+Deployment `dpl_CiXQGnxnx2WhnvL4MvjUxemwLzWG`, runtime commit `ae3366fdeb0062ef44832be5772b261e929f0932`: **READY**. Live Chrome inspection of the stable branch preview confirmed the normal access screen with zero open native dialogs, initial heading focus, selectable Remember This Device with updated help text, Back returning to the landing page and restoring focus to Access my Kinko, and successful reopening. The deployed script was `index--DWZcv9x.js`. No key was entered. Final build: 229.85 KB JavaScript / 72.33 KB gzip. This does not establish that Dashlane's classification has changed or reproduce Opera with Dashlane.
+
+[Access screen after compatibility update](screenshots/access-screen.jpg)
+
+## Network notices and portfolio observations · 20 October 2026
+
+The supplied screenshot shows a generic token-discovery warning and an unconfigured BNB discovery notice. Reproduced a concrete cause: Ethereum Blockscout returned HTTP 422 `Unexpected field: type` for `/token-balances?type=ERC-20`. The same address returned HTTP 200 without that parameter, and the documented `/tokens?type=ERC-20` endpoint returned paginated data.
+
+- Discovery now uses the documented filtered/paginated endpoint. Legacy HTTP 404/422 responses fall back to unfiltered `/token-balances` without the rejected parameter. Up to five pages are read, with an explicit partial-coverage notice at the limit.
+- Invalid metadata records are skipped with a notice, retaining valid tokens. Later-page failures retain earlier results. Optional on-chain name/symbol failures no longer discard verified contract quantities; decimals and balance remain required. Explorer-marked spam is excluded.
+- Structured notices retain legacy issue strings for compatibility. They distinguish manual discovery limitations, HTTP errors/rate limits, missing metadata, page limits and native/contract failures. Successful native balances are not marked stale simply because discovery failed.
+- UI notices identify the network and number of affected wallets, open with actionable explanations, and offer a retry or a token-contract shortcut with the right network selected. Known coverage limitations no longer claim that all providers/cached balances are stale. BNB automatic discovery remains unconfigured; native BNB and explicit contracts continue to be checked. No paid service or new provider account was created.
+- The chart now accepts clearly labelled partial observations from fresh, priced holdings, excluding stale and unpriced balances. Identical cached timestamps do not add points. Asset/read coverage is tracked and a changed coverage set begins a new series, preventing provider recovery from drawing a false portfolio gain/loss. The tile states whether it is loading, waiting for usable data, holding the first observation, or restarting for changed coverage. History still lives only in the current page session and is not backfilled.
+- **46 tests passed**, including eight discovery regressions, six quality/history regressions and a rendered React notice/action check. Production build passed: 233.83 KB JavaScript / 73.76 KB gzip. No authentication changes.
+
+Direct provider checks: a normal Ethereum test address returned five discovered tokens with complete status and no discovery issues using the corrected request. A high-token-count PulseChain address returned 250 tokens with the explicit page-limit notice. Some direct Base/Polygon calls received HTTP 403 challenge pages; these are retained as visible upstream failures, not bypassed. A separate high-token-count Ethereum call was temporarily unavailable, so provider uptime is not guaranteed.
+
+Reference: https://github.com/blockscout/blockscout-api-v2-swagger/blob/main/swagger.yaml (`/addresses/{address_hash}/tokens` supports type/pagination; `/token-balances` lists only the address parameter).
+
+Deployment `dpl_6DYNxYRL1cDMgtj732Ckg13zw9tv`, runtime commit `fba6eddc51c76840757feb30d4b960c5011d2835`: **READY**. Live deployed POST `/api/data` checks against the same public test address returned HTTP 200 on all five networks:
+
+- Ethereum: complete discovery, six balance rows, three priced, no discovery notices. The former HTTP 422 is resolved for this check.
+- PulseChain: 22 balance rows, four priced; valid records retained alongside the explicit incomplete-metadata notice.
+- Base and Polygon: native balances/prices returned; discovery is explicitly unavailable because each explorer returns HTTP 403 from the deployed service.
+- BNB: native balance/price returned; discovery correctly reported as manual/unconfigured rather than a temporary provider outage.
+- The production-response data produced valid, explicitly partial chart observations for all five network checks using the same observation helper as the UI.
+
+Browser inspection confirmed the stable branch URL serves the new `index-DUKetiZn.js` runtime. Notice rendering, network grouping, action routing and disabled states were verified through React/DOM tests. A real signed-in user session and two-point live chart rendering were not exercised in the browser; no user Access Key was requested or entered. Remaining upstream discovery limitations are retained visibly and are not claimed resolved.
+
+## First-reading display and encrypted browser history · 20 October 2026
+
+The follow-up screenshots show the updated notices and a recorded first observation, but the tile withheld its numeric reading until a second comparable point existed. History was also erased on page refresh. This was a display/persistence limitation, not a need to keep refreshing until every provider worked.
+
+- The first actual reading now displays immediately as a liquid value, real timestamp, partial/complete coverage label and table row. A single baseline marker is shown; no second point or performance line is fabricated. Up to five recent readings remain visible in the table, including readings from earlier coverage sets. The graph connects only the latest comparable coverage series.
+- History is encrypted on the current browser using AES-GCM with fresh IVs, the account's existing non-extractable encryption key, account binding and a distinct portfolio-history authenticated context. Coverage identities are SHA-256 hashed; neither raw Access Keys nor plaintext amounts/coverage are persisted. History is separate from cloud watchlist revisions and does not introduce cloud writes or new credentials.
+- On sign-in/restoration, saved history is loaded before live readings are added. Storage failures display an explicit page-only-history message. Data is bounded to 2,000 observations over 31 days. Account deletion clears this browser history; an in-flight write in the same store cannot recreate a cleared record. Chromium Web Locks serialize same-origin save operations when available; other browsers use best-effort merges.
+- An automatic refresh runs every two minutes while the app is signed in, idle and visible, and skips offline/hidden pages. No background collection while closed and no historical backfill. Saved history is browser-specific, not synchronized across devices or included in watchlist exports.
+- Coverage notices now start collapsed so they do not consume multiple mobile screens. Failed/stale balance notices remain expanded. Actual upstream Base/Polygon discovery blocks, BNB manual discovery and unpriced-token limitations are still reported; this change does not claim to resolve them.
+- **52 tests pass**. Added genuine Web Crypto history tests covering fresh-store restoration, account/purpose binding, tampering, bounded large payloads, blocked storage and clear/write races. A full React App integration test uses a generated disposable test session, actual encryption and fake IndexedDB, with simulated upstream responses: confirms first partial value/table row, automatic second reading and graph, encrypted persistence, and restoration on remount. Rendered component tests check first-point semantics, privacy masking, storage-error copy and collapsed/expanded notices. No real user credentials were entered or logged.
+- Production build passed: 238.17 KB JavaScript / 75.06 KB gzip. A narrow component HTML fixture was generated for QA, but file-protocol browser navigation is unsupported; no workaround was attempted. Rendered React/DOM verification passed. Physical Android rendering and real authenticated browser refresh/restart remain unverified.
+
+Deployment `dpl_57UDuvoUcDFGjkNMJ3L3QRgka5ka`, runtime commit `1881231a6bd1ab34b3c14a2d67d718b37cfbc1f0`: **READY**. Live Chrome inspection confirmed the stable branch preview loads Kinko and the expected `index-DRcegmXD.js` runtime. The signed-in observation lifecycle is covered by the full App integration test described above; this public-page check does not establish real Android or authenticated browser restart behaviour.
+
+## Provider recovery and optional authenticated discovery · 20 October 2026
+
+The new screenshot identifies six genuine coverage notices. This change targets the underlying metadata/price requests; it does not claim every upstream gap is fixed.
+
+- Explorer records with valid addresses/raw amounts but missing or unusable decimals are retained as recovery candidates. Holdings retries up to 12 candidate contracts with chain-verified, block-pinned balance/decimals calls. Only successfully recovered records reduce the metadata notice; irrecoverable or capped records retain it.
+- DEX price recovery now runs for all five networks, covers every batch of 30 missing/stale tokens, normalizes returned addresses, and rejects wrong-chain, quote-side, nonfinite/nonpositive and sub-$10,000-liquidity prices. Fresh DefiLlama prices remain preferred. Provider failure in one batch does not discard successful later batches.
+- Real high-token-count PulseChain testing exposed a read taking 75 seconds, longer than the client's 55-second window. Holdings now shares a 45-second request budget across provider calls; price batches have bounded concurrency of three. Native balance/price reads start concurrently with discovery. Existing successful observations remain partial rather than becoming invented zero balances.
+- Added a server-only Alchemy Token API adapter for Base, Polygon and BNB, activated only by `ALCHEMY_API_KEY` in the test project's Preview environment. It checks `eth_chainId` and response wallet identity; validates/deduplicates raw hex quantities, obtains validated decimals, reads at most five pages of 100, and limits metadata concurrency to four. Successful metadata has a bounded 24-hour in-process cache; balances are never cached there. Fixed provider hosts, encoded credentials, denied redirects and sanitized errors prevent caller-selected provider requests or accidental response disclosure.
+- Current Vercel configuration has no Alchemy key. The adapter is implemented but **not active or verified against a real provider account**. Base/Polygon public HTTP 403 and BNB manual-discovery notices therefore remain until the owner adds a valid free-plan key and enables these networks. No account, key, paid plan, overage or billing change was created. Alchemy's documented Free tier includes Token API access and 30 million monthly CUs; usage is finite and the owner's plan must remain free.
+- **63 tests pass**. Eleven added regressions cover all-network prices, batches past 30, market validation, failed batches, pinned metadata recovery, recovery bounds, native reads proceeding during discovery, chain/wallet rejection, authenticated API routing, sanitized errors, pagination limits and metadata caching without stale-balance caching. Alchemy responses are simulated; native/explorer pricing probes use live public providers.
+- Production build passed: 238.53 KB JavaScript / 75.23 KB gzip. Bundle inspection found no `ALCHEMY_API_KEY`, provider host or server adapter. No UI component or authentication change.
+- Live direct price probes returned recent DefiLlama prices for HEX on Ethereum and PulseChain. The PulseX probe had no usable DefiLlama price and DEX Screener returned HTTP 200 with an empty pair list; it remains unpriced. A high-token-count PulseChain public sample retained 248 rows, with explicit page/metadata notices. A bounded check returned at 45,002 ms with partial results. These checks do not establish that every token in the user's watchlist can be priced or recovered.
+
+References: https://www.alchemy.com/docs/data/token-api/token-api-endpoints/alchemy-get-token-balances ; https://www.alchemy.com/docs/data/token-api/token-api-endpoints/alchemy-get-token-metadata ; https://www.alchemy.com/docs/bnb-smart-chain/bnb-smart-chain-api-overview ; https://www.alchemy.com/docs/reference/pricing-plans ; https://docs.dexscreener.com/api/reference
+
+Deployment `dpl_5bAorFokVmDQc8mm9hHDVMSCigqU`, runtime commit `8643b91b9139de1771a7535a302667845f863e4a`: **READY**, Preview, project `kinko-wallet-v2-test`. Live Chrome confirmed Kinko loads on the stable branch preview with `index-B_gFReF2.js`. Deployed POST `/api/data` returned HTTP 200: BNB completed in 6,402 ms with one native priced row and the honest manual-discovery notice; PulseChain completed in 9,804 ms with 248 rows, five priced, native retained, and explicit page-limit / three-record metadata notices. No Alchemy key is configured, so authenticated discovery remains untested live and its Base/Polygon/BNB gaps are not claimed fixed. A separate direct Ethereum check returned two priced rows including native despite discovery failure.
+
+## Alchemy activation and free-tier pacing · 20 October 2026
+
+The owner saved `ALCHEMY_API_KEY` as a sensitive Preview-only variable and enabled Base/Polygon/BNB mainnets. No secret was read back, printed or committed. The first activation deployment `dpl_H9mySN2m7XEKQxczomCpPnPmYfCa` returned access rejection. After the owner replaced the key, deployment `dpl_53WP5yNPzdGLrGfUYhCVL5ycwYqi` served Kinko and real `/api/data` responses authenticated successfully: BNB 95 rows/eight priced, Polygon 100 rows/11 priced, Base 123 rows/18 priced. BNB and Polygon reported the indexer's rate/usage limit; Base reported some missing metadata. This establishes live authenticated token discovery, not complete coverage.
+
+Added a shared per-process pacer with 250 ms between indexer requests and one bounded retry after a one-second backoff for HTTP/JSON-RPC 429. Waiting and retrying respect the existing 45-second holdings abort budget. Failed metadata reads now remain a retryable read issue; they are not misclassified as invalid contract metadata. Successfully read rows are retained. Metadata caching still excludes balances. This is a process-local mitigation, not a distributed quota guarantee across all serverless instances or apps sharing the provider account. No paid plan or billing change.
+
+**66 tests pass**, including three new checks for shared pacing/queue cancellation, successful recovery from a temporary metadata 429, and exhausted throttling remaining retryable. Production build passes unchanged at 238.53 KB JavaScript / 75.23 KB gzip. The main production site remains untouched.
+
+Vercel's management connection rejected scoped deployment-status/log reads with HTTP 403 during activation. The CLI is unavailable. Verification therefore uses the independently public preview and its read-only API; it does not claim privileged build-log access or inspection of the owner's provider account plan.
+
+The first paced large-wallet probe (`dpl_54ox4GDYEX7YMuc2kPQopZb33snw`, commit `6117f5f4c5275a07adbf202bb5d212bcf1f722ee`) showed that a large discovery could consume the shared holdings window before token pricing: Polygon retained 149 rows in 46.6 seconds; Base retained 168 rows in 52.2 seconds but only native pricing remained; the BNB client probe timed out. The follow-up isolates authenticated discovery to a 15-second sub-budget, retains the overall 45-second limit for native/manual reads and pricing, and spaces provider calls by 125 ms. This bounds discovery without allowing it to cancel the parent pricing work. A dedicated hanging-metadata API regression checks that retained tokens still receive prices after discovery ends.
+
+Follow-up validation: **67 tests pass** (including the real 15-second hanging-metadata regression); production build remains 238.53 KB JavaScript / 75.23 KB gzip.
+
+The isolated-budget preview `dpl_HUTKvHr5yQ17z5RYYnhCmBVNnPrv` (runtime `2aff6c197209659dfe5813fccabe7537417a65dd`) returned HTTP 200 on all three large-wallet probes in 21.3–21.7 seconds: Polygon 45 rows/eight priced; Base 42 rows/five priced; BNB 70 rows/six priced. No access rejection or client timeout occurred; large-wallet discovery remained partial. Deadline exhaustion is now a single explicit `discovery-timeout` notice, without a misleading provider-invalid response or duplicate metadata-read timeout. Truly invalid metadata remains distinct.
+
+Final public verification: deployment `dpl_73KiSpBzZgDohZQw2Vv2yGXM66kx`, runtime `8c79819a457ef026330dbe253a2627f3f5afd080`, serves Kinko. POST `/api/data` against one previously supplied watch address returned HTTP 200 and **complete discovery with no indexer notices on all three networks**: Polygon two rows/one priced in 6,517 ms; Base one row/one priced in 6,885 ms; BNB one row/one priced in 6,945 ms. The remaining unpriced Polygon token is still excluded from known fiat totals. This verifies one watched address, not every wallet in the portfolio; large-wallet time limits and missing markets remain explicit. The owner has no further credential setup to do.
+
+
+## Cross-chain airdrop filtering — 20 October 2026 Brisbane
+
+75 automated tests pass, including exact financial aggregation, encrypted hidden-contract round trips, five-chain claim-link/provider filtering, small-wallet fallback, large-wallet batched metadata, cache isolation, partial pages, contract-based recovery, and real-mode Assets hide/restore/review/dust controls. The Vite release build passes. A synthetic page of 101 tokens quarantines 100 claim-link airdrops in one inline-metadata request with no individual metadata or pricing calls. Unpriced tokens and tiny balances are retained unless the user chooses a display filter or hides a contract.
+
+Live POST /api/data against a heavily airdropped, well-known public wallet on runtime commit 81d105de44af006bfa7e12fcd04a7d8ad658bcb4 returned HTTP 200 on all five chains. Polygon filtered 125 promotional/claim-link tokens in 8.4s, Base 18 in 8.8s, BNB 11 in 9.4s. Those reads retained hundreds of other balances and did not emit a discovery-timeout notice. All three reached the bounded page limit; Polygon also reported six invalid-metadata records. PulseChain retained 252 rows with a page-limit notice. Ethereum discovery was unavailable for this probe, with native/direct-read rows retained. These are single public-wallet measurements, not a guarantee for every wallet. Actual provider and coverage warnings are preserved.
+
+Browser demo QA found and removed a duplicated dust control on Overview; dust controls belong only to Assets. No production domain, billing plan or credentials were changed.
+
+
+## Broader spam screening and default asset visibility — 20 October 2026 Brisbane
+
+The owner's pasted list contained 224 rows, all marked Price unavailable. Applying the revised metadata rules to the displayed names/symbols catches 26 website/short-link/promotion patterns. The default Assets view hides the remaining unknown-price rows without deleting balances or asserting they are scams. Show unpriced tokens restores these positions for review; native and explicitly tracked contracts stay visible. This preference is encrypted and backward-compatible (off by default). Display-only filtering does not suppress financial coverage notices or change totals/history. Token symbols alone are not used to allowlist or denylist contracts.
+
+New regressions cover 20 missed link variants on all five chains, including bare domains, shortened links, uncommon suffixes and disguised claim wording. A 250-row unknown-token case verifies default hiding and reversible disclosure without mutations. The real-mode App test loads 200 unknown rows, verifies a two-row default Assets list, reveals/re-hides 202 rows, remounts and restores the encrypted preference, then exercises dust and manual hide/restore/review. No private wallet addresses or amounts from the pasted attachment were added to source or fixtures.
+
+## Discovery routing audit — 20 October 2026
+
+The latest supplied screenshot contains five missing-price notices, not HTTP 403. Before this change, the current branch Preview (runtime 399955fe906e9adcd8aa0991b74ce5adecb6d237, index-BrYcwEIs.js) returned HTTP 200 for the public test wallet on Base (375 rows, 27 filtered, 11.9s), Polygon (211 rows, 190 filtered, 11.0s), and BNB (461 rows, 15 filtered, 13.0s). All three retained a genuine page-limit notice; Polygon also retained two invalid-metadata records. No access restriction was reproduced. The latest screenshot's missing-price notices cannot be used as evidence of explorer denial.
+
+Code tracing identified a misleading missing-key path: Base/Polygon silently selected Blockscout, while BNB selected manual discovery. The API now uses explicit server-side routing and reports missing/blank ALCHEMY_API_KEY as unavailable discovery with a provider-setup notice. Native/manual reads still work. Safe discoveryProvider identifiers distinguish the actual Alchemy Token/Portfolio route from Blockscout or unconfigured routing. No keys, authenticated URLs or raw provider errors are returned. JSON-RPC 401/403 are now classified as access failures as well as HTTP 401/403.
+
+The Portfolio API documents HTTP 200 responses with error.partialErrors for failed networks. If this yields no usable tokens, discovery now continues through the already-working Token API instead of discarding its candidate balances. A fully successful alternative does not retain the obsolete failure notice. Price-only notices now say Price unavailable and explain how to reveal unpriced quantities.
+
+80 automated tests pass, including all three networks through the API with missing/blank keys, HTTP and JSON-RPC 403, successful discovery, no explorer fallback, exact quantities, native retention, secret sanitisation, and recovery from a failed Portfolio network. Existing pagination/timeouts/429/spam/history tests pass. Vite build and diff checks pass; client assets contain neither ALCHEMY_API_KEY nor Alchemy authenticated endpoint hosts. Release bundle: index-CvTVcvQZ.js.
+
+Vercel management configuration/log reads were denied in this session; no attempt was made to bypass that restriction or read credentials. Successful authenticated runtime responses establish effective key access on the tested Preview, but do not establish a privileged audit of all branch overrides, provider billing, or other deployments. No production promotion or plan change is authorised or performed.
+
+### Deployed verification
+
+Runtime commit `34382fc3824006f6bab1e79a309f33411caf61c8`, explicit Preview deployment `dpl_BEyWCj2ENAnhrVma8nC5s79yFUaV`, served `index-CvTVcvQZ.js` with HTTP 200. Immutable Preview: https://kinko-wallet-v2-test-7mt6de3wb-rob-browns-projects.vercel.app . Chrome loaded the same bundle on the stable branch URL. Browser console showed an extension-origin metadata error; no app-origin error was observed in the inspected entries.
+
+The isolated real-mode React/JSDOM integration rendered live `/api/data` responses from that deployment: Base 375 assets / 27 filtered; Polygon 211 / 190; BNB 461 / 15. All returned HTTP 200 and `discoveryProvider: alchemy-portfolio-api`, with no access/explorer rejection. Network selection rendered the exact retained asset count and Price unavailable labels. The first harness run stopped on a test-selector mismatch (BNB button is labelled BNB, not BNB Smart Chain); correcting the selector completed all three checks. Authentication and vault storage were test doubles; this is not a claim of signed-in Chrome testing of the owner's account. Chrome verified only public Preview loading. No user credentials or wallet state were changed.
+
+Independent chain-verified RPC reads matched balance and decimals for one returned Base token and one Polygon token. The separate BNB RPC spot-check failed with contract/balance read unavailable, so no independent BNB balance-match claim is made. Its live Alchemy response and React rendering passed. Genuine five-page truncation remained on all three large-wallet reads, plus two invalid-metadata records on Polygon.
+
+Reproduce the optional live UI integration (uses only the well-known public test wallet; does not create a remote account):
+
+```sh
+node scripts/verify-preview-discovery.mjs https://kinko-wallet-v2-test-7mt6de3wb-rob-browns-projects.vercel.app
+```
+
+It checks the React client against live holdings endpoints using isolated test authentication/storage and saves public test responses to `/tmp/kinko-routing-live.json` (override with KINKO_TEST_OUTPUT). Provider results and counts can change over time. This check is separate from the deterministic 80-test suite.
+
+## Price-warning eligibility — 20 October 2026
+
+The supplied screenshot shows price notices, not a token-level list. Source tracing confirmed that main.jsx already passed splitTokens(...).visible to dataNotices: classified spam and explicitly hidden contracts were excluded. The separate Show unpriced tokens display toggle did not exclude unresolved holdings from financial coverage notices, by design. The screenshot alone cannot establish that remaining unclassified tokens are spam. No new price-based spam classification was introduced.
+
+The warning builder now applies the shared spam/manual-hide/explicit-track rules itself, counts distinct eligible token contracts per network and affected wallets, and uses the same finite-positive numeric-price predicate as the Assets display policy. Counts deduplicate repeat rows and the same token held in multiple wallets. Native assets remain eligible. Price notices are rebuilt from current rows rather than retained provider notices. Pending refreshes suppress price notices; failed/stale reads retain their read-failure warning instead of showing old missing prices as current. The UI passes current wallet/network scope and loading state explicitly. Wallets, raw quantities, valuation, discovery, prices and persistence are unchanged.
+
+Focused regressions cover all five chains: spam-only, manual hides, mixed genuine/spam, all priced, tracked false positives, hide precedence, duplicate rows, zero/negative balances, invalid prices, native holdings, loading, stale/failed responses and changing scope. A real-mode React/JSDOM test with isolated authentication and mocked provider results verifies the actual Assets toggle, two-wallet selection, pending refresh, successful new prices and a different wallet's request completing after the selected scope changes. These are controlled UI tests, not access to the owner's signed-in account.
+
+Release client: index-DMWbQrBB.js. Vite build and git diff checks pass.
+
+All 84 deterministic tests pass, including the new real-mode UI lifecycle regression. No production promotion or provider/account configuration change was performed.
+
+
+## Transparent wallet logo — 20 October 2026
+
+Replaced the shared square K mark and workspace K badge with the owner-supplied transparent green wallet artwork. PNG exports preserve the original colours and alpha, normalize transparent padding, and provide a 256px UI asset plus 32px favicon and 192px/512px install icons. Removed the obsolete square K SVG and its rewrite exception; new artwork uses the existing static `/assets/` route.
+
+Validation: production build passes; all 84 existing tests pass. An isolated React/JSDOM check verifies the replacement on the welcome page, access page and demo workspace, including the separate workspace badge, successful dark-theme toggle, and existing manifest icon targets. Light/dark composites were visually inspected at 24px, 31px, 43px and 100px; the original dark green is subtler on dark backgrounds. This is asset/composition inspection plus DOM verification, not an actual browser screenshot: this runtime has no installed Chromium executable. No wallet data, authentication or pricing logic changed.

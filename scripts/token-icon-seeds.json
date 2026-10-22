@@ -1,0 +1,10 @@
+{
+  "ethereum": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+  "bnb": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
+  "polygon": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
+  "pulsechain": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0xA1077a294dDE1B09bB078844df40758a5D0f9a27/logo.png",
+  "hex": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39/logo.png",
+  "pulsex": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x95B303987A60C71504D99Aa1b13B4DA07b0790ab/logo.png",
+  "inc": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d/logo.png",
+  "usdc": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png"
+}

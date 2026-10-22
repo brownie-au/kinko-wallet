@@ -1,0 +1,50 @@
+[
+  {
+    "name": "ethereum",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+    "bytes": 2984,
+    "sha256": "c253d7c5d4203783e31bde1d33e143f6a9ce1defac24ab5e06948847696b80a1"
+  },
+  {
+    "name": "bnb",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
+    "bytes": 16072,
+    "sha256": "1ceadd0447350643dd0828120b3768ffad23c857d3e127a730217a3a1a03dbcc"
+  },
+  {
+    "name": "polygon",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
+    "bytes": 10248,
+    "sha256": "ba495a374776ab6cfaecc15b3e3d0f9b04743cd0309f99575b8599fc0112e030"
+  },
+  {
+    "name": "pulsechain",
+    "source": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0xA1077a294dDE1B09bB078844df40758a5D0f9a27/logo.png",
+    "bytes": 7518,
+    "sha256": "ac2a17883bcc8e8adcdc6dfe3ca0e1fd4a6fa95389b042893b199d83131fc995"
+  },
+  {
+    "name": "hex",
+    "source": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39/logo.png",
+    "bytes": 6362,
+    "sha256": "4e2a94099f470b2ed0688cbd4ecc28ffbb401c865d759f98f3ec215b29a0fafc"
+  },
+  {
+    "name": "pulsex",
+    "source": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x95B303987A60C71504D99Aa1b13B4DA07b0790ab/logo.png",
+    "bytes": 2480,
+    "sha256": "d6bc399c6c0616c82a8491783e3af8a7c8c03f90105e7ec404eb41e2561440f4"
+  },
+  {
+    "name": "inc",
+    "source": "https://raw.githubusercontent.com/PLS369/pulsechain-assets/main/blockchain/pulsechain/assets/0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d/logo.png",
+    "bytes": 3026,
+    "sha256": "34b30478f4867a69107267cafea9692796cbe437fc5d1450aaf45364c0f093c0"
+  },
+  {
+    "name": "usdc",
+    "source": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
+    "bytes": 9276,
+    "sha256": "6d14601d0b1109046e366592b8c0f256ffb075f69180b65dddd97ae665d49f9e"
+  }
+]
