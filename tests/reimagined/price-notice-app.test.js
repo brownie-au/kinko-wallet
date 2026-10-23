@@ -10,6 +10,8 @@ import { createDeviceSessions } from '../../src/reimagined/deviceSession.js';
 test('real-mode warnings follow spam/hide rules, display toggles, wallet scope and completed refreshes', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://kinko.test/', pretendToBeVisual: true });
   dom.window.scrollTo = () => {};
+  let scrolledTo;
+  dom.window.HTMLElement.prototype.scrollIntoView = function () { scrolledTo = this; };
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage,
     sessionStorage: dom.window.sessionStorage, indexedDB, IS_REACT_ACT_ENVIRONMENT: true });
   const { createRoot } = await import('react-dom/client');
@@ -54,11 +56,25 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
   const refreshButton = () => [...document.querySelectorAll('button')].find(b => b.textContent === 'Refresh');
   try {
     await act(async () => root.render(React.createElement(App)));
-    await until(() => warning().includes('1 held token has'));
+    await until(() => document.querySelector('.data-notice-link'));
     assert.equal(reads, 2);
+    assert.equal(warning(), '', 'Overview keeps the detailed block off the page');
+    const overview = () => [...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent === 'Overview');
+    await click(document.querySelector('.data-notice-link'));
+    const section = document.querySelector('.settings-data-notices');
+    assert.equal(section, document.querySelector('.settings-grid').lastElementChild);
+    assert.equal(scrolledTo, section);
+    assert.equal(section.querySelector('details').open, true);
+    assert.equal(document.activeElement, section.querySelector('summary'));
+    assert.match(section.textContent, /All wallets · All networks/);
+    assert.equal(document.querySelector('.data-notice-link'), null, 'compact link appears only on Overview');
     assert.match(warning(), /Base · 1 wallet · Price unavailable/);
-    await selectWallet(first); assert.equal(warning(), '');
-    await selectWallet(second); assert.match(warning(), /1 held token has/);
+    await click(overview());
+    await selectWallet(first); assert.equal(document.querySelector('.data-notice-link'), null);
+    await selectWallet(second); assert.ok(document.querySelector('.data-notice-link'));
+    await click(document.querySelector('.data-notice-link'));
+    assert.equal(document.querySelector('.provider-notice').open, true, 'repeated navigation reopens notices');
+    assert.match(document.querySelector('.settings-data-notices').textContent, /Genuine unpriced · All networks/);
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent === 'Assets'));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);
     assert.match(document.querySelector('.asset-table-head').textContent, /24H CHANGE/);

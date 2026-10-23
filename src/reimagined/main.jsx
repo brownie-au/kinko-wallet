@@ -455,6 +455,7 @@ export function App() {
     [flow, setFlow] = useState(null),
     [restoring, setRestoring] = useState(true),
     [page, setPage] = useState('overview'),
+    [jumpToDataNotices, setJumpToDataNotices] = useState(false),
     [walletFilter, setWalletFilter] = useState('all'),
     [chainFilter, setChainFilter] = useState('all'),
     [privacy, setPrivacy] = useState(false),
@@ -479,6 +480,7 @@ export function App() {
     [range, setRange] = useState('1M'),
     [backfillStatus, setBackfillStatus] = useState('');
   const savingRef = useRef(false),
+    dataNoticesRef = useRef(null),
     noticeTimer = useRef(),
     generation = useRef(0);
   const demo = session === 'demo';
@@ -488,6 +490,16 @@ export function App() {
     noticeTimer.current = setTimeout(() => setNotice(''), 4000);
   };
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  useEffect(() => {
+    if (page !== 'settings' || !jumpToDataNotices) return;
+    const section = dataNoticesRef.current;
+    const details = section?.querySelector('details');
+    if (details) details.open = true;
+    const target = section?.querySelector('summary') || section?.querySelector('h2');
+    target?.focus({ preventScroll: true });
+    section?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
+    setJumpToDataNotices(false);
+  }, [page, jumpToDataNotices]);
   useEffect(() => {
     document.documentElement.dataset.theme = data.theme;
   }, [data.theme]);
@@ -973,6 +985,19 @@ export function App() {
     setSearch('');
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
+  const noticePanel = (
+    <DataNotices
+      notices={notices}
+      staleBalances={staleBalances}
+      loading={loading}
+      saving={saving || dirty}
+      onTrackToken={(chain) => setModal({ kind: 'token', chain })}
+      onRetry={(chain) => {
+        setChainFilter(chain);
+        setRefresh((v) => v + 1);
+      }}
+    />
+  );
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -1209,21 +1234,25 @@ export function App() {
                     : observedAt
                       ? `Updated ${new Date(observedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`
                       : 'Ready to monitor'}
+                {page === 'overview' && notices.length > 0 && (
+                  <button
+                    type="button"
+                    className="data-notice-link"
+                    aria-label={`View ${notices.length} data ${notices.length === 1 ? 'notice' : 'notices'} in Settings & security`}
+                    title="View network data notices in Settings & security"
+                    onClick={() => {
+                      navTo('settings');
+                      setJumpToDataNotices(true);
+                    }}
+                  >
+                    <Icon name="info" size={16} />
+                  </button>
+                )}
               </div>
             </div>
           )}
           {data.currency === 'AUD' && !fx && <p className="small muted">AUD conversion is unavailable. Values are shown in USD.</p>}
-          <DataNotices
-            notices={notices}
-            staleBalances={staleBalances}
-            loading={loading}
-            saving={saving || dirty}
-            onTrackToken={(chain) => setModal({ kind: 'token', chain })}
-            onRetry={(chain) => {
-              setChainFilter(chain);
-              setRefresh((v) => v + 1);
-            }}
-          />
+          {!['overview', 'settings'].includes(page) && noticePanel}
           {page === 'overview' && (
             <>
               <section className="summary-grid">
@@ -1950,6 +1979,14 @@ export function App() {
                     Delete encrypted watchlist
                   </button>
                 </div>
+              </section>
+              <section className="settings-data-notices" ref={dataNoticesRef} aria-labelledby="data-notices-heading">
+                <h2 id="data-notices-heading" tabIndex={-1}>Network data notices</h2>
+                <p className="small muted">
+                  {walletFilter === 'all' ? 'All wallets' : selectedWallets[0]?.name || shortAddress(walletFilter)}
+                  {' · '}{chainFilter === 'all' ? 'All networks' : NETWORKS[chainFilter].name}
+                </p>
+                {notices.length ? noticePanel : <p className="small muted">{loading ? 'Checking network data…' : 'No data notices for this selection.'}</p>}
               </section>
             </div>
           )}

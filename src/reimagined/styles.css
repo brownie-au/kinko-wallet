@@ -824,6 +824,42 @@ h1 {
   background: #8a9baf;
   animation: pulse 1s infinite;
 }
+.data-notice-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c774c;
+}
+.data-notice-link:hover {
+  background: #f6efdf;
+}
+.data-notice-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+[data-theme='dark'] .data-notice-link {
+  color: #d3c299;
+}
+[data-theme='dark'] .data-notice-link:hover {
+  background: #3a3323;
+}
+.settings-data-notices {
+  grid-column: 1 / -1;
+  min-width: 0;
+  scroll-margin-top: 24px;
+}
+.settings-data-notices > h2 {
+  font-size: 15px;
+}
+.settings-data-notices .provider-notice {
+  margin-bottom: 0;
+}
 .summary-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr;

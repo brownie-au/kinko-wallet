@@ -107,7 +107,8 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await act(async () => root.render(React.createElement(App)));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length === 1);
     assert.match(document.querySelector('.chart-amount').textContent, /200\.00/);
-    assert.equal(document.querySelector('.provider-notice').open, false);
+    assert.equal(document.querySelector('.provider-notice'), null);
+    assert.ok(document.querySelector('.data-status .data-notice-link'));
     assert.match(document.querySelector('.reading-table').textContent, /Partial/);
     await act(async () => t.mock.timers.tick(120000));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length === 2);
