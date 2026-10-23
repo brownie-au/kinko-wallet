@@ -142,3 +142,14 @@ test('invalid duplicate and late lower-quality backfill cannot erase a valid obs
   const normalized=normalizeHistory([first,{...first,value:NaN},{...first,value:999,provenance:{kind:'backfill'}}]);
   assert.deepEqual(normalized,[first]);
 });
+test('a year of representative provenance remains compact inside authenticated encryption',async()=>{
+  const access=await deriveAccess(generateAccessKey()), storage=memory(), store=createPortfolioHistory(storage);
+  const baseline=await sample(),now=Date.now();
+  const assets=Array.from({length:100},(_,i)=>'0x'+i.toString(16).padStart(40,'0'));
+  const points=Array.from({length:365*4},(_,i)=>({...baseline,time:now-i*6*3600000,value:100+i%31,
+    provenance:{kind:'observation',quotes:[{chain:'eth',source:'DefiLlama',priceTime:now-i*6*3600000,assets}]}}));
+  await store.save(access,points);
+  const raw=[...storage.map.values()][0];
+  assert.ok(raw.length<1000000,`representative year envelope ${raw.length} bytes`);
+  assert.ok((await store.load(access)).some(s=>s.time<now-360*86400000));
+});

@@ -58,11 +58,11 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
           return d.result;
         };
         const identity = `${chain}:${url}`;
+        if (verifiedRPC.has(identity) && now() - verifiedRPC.get(identity) > 3600000) verifiedRPC.delete(identity);
         if (!verifiedRPC.has(identity)) {
           if (Number(BigInt(await call('eth_chainId', []))) !== NETWORKS[chain].id) continue;
           verifiedRPC.set(identity, now());
         }
-        if (now() - verifiedRPC.get(identity) > 3600000) { verifiedRPC.delete(identity); continue; }
         return { value: await call(method, params), source: url };
       } catch { if (signal?.aborted) throw Error('Historical request timed out'); }
     }

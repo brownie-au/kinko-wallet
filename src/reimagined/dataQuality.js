@@ -76,14 +76,21 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
       .map((r) => `${r.wallet}:${r.chain}:${r.error || r.stale ? 'stale' : r.discovery || (r.issues?.length ? 'partial' : 'complete')}`)
       .sort()
   });
+  const quoteGroups = new Map();
+  for (const r of eligible) {
+    const key = JSON.stringify([r.chain, r.priceSource || 'legacy-unspecified', r.priceTime || null]);
+    if (!quoteGroups.has(key)) quoteGroups.set(key, { chain: r.chain, source: r.priceSource || 'legacy-unspecified', priceTime: r.priceTime || null, assets: new Set() });
+    quoteGroups.get(key).assets.add(r.address?.toLowerCase() || 'native');
+  }
   return { scope, time, value, coverage, partial: !!(incomplete || excluded || eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000)), excluded,
     method: 'observed-liquid-v2', provenance: { kind: 'observation', staking: 'excluded',
-      positions: eligible.map((r) => ({ chain: r.chain, address: r.address || 'native', wallet: r.wallet,
-        amount: r.amountExact, price: r.priceUsd, source: r.priceSource || 'legacy-unspecified', priceTime: r.priceTime || null,
-        balanceTime: results.find((x) => x.chain === r.chain && x.wallet?.toLowerCase() === r.wallet.toLowerCase())?.asOf || null,
-        block: r.balanceBlock || null })),
+      quotes: [...quoteGroups.values()].map(({ assets, ...group }) => ({ ...group, assets: [...assets].sort() })),
+      balances: results.map((r) => ({ chain: r.chain, wallet: r.wallet, balanceTime: r.asOf || null,
+        block: r.block || null, status: r.stale || r.error ? 'unavailable' : r.discovery || 'unspecified',
+        source: r.discoveryProvider || 'RPC / explorer', pinnedBlocks: [...new Set(eligible.filter((p) => p.chain === r.chain && p.wallet.toLowerCase() === r.wallet?.toLowerCase()).map((p) => p.balanceBlock).filter(Boolean))] })),
       timestampQuality: eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000) ? 'price-time-outside-5m-or-unknown' : 'within-5m'
     } };
+
 }
 export function appendObservation(prior, sample) {
   if (!sample || prior.some((s) => s.scope === sample.scope && s.time === sample.time && s.coverage === sample.coverage)) return prior;

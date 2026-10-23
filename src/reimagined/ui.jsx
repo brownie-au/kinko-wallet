@@ -504,7 +504,7 @@ export function HistoryChart({ observations, money, model }) {
 
 function HistoryInfo({ readings, range, error, backfillStatus, demo, money }) {
   const id = useId();
-  const sources = [...new Set(readings.flatMap((s) => s.provenance?.positions?.map((p) => p.source || p.balanceSource).filter(Boolean) || []))];
+  const sources = [...new Set(readings.flatMap((s) => [...(s.provenance?.positions || []), ...(s.provenance?.quotes || [])].map((p) => p.source || p.balanceSource).filter(Boolean)))];
   return <details className="history-info" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary').focus(); } }}>
     <summary aria-label="About portfolio history" aria-controls={id}><Icon name="info" size={18} /></summary>
     <div className="history-info-popover" id={id}>

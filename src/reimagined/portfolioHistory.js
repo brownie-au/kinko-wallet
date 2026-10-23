@@ -11,20 +11,27 @@ const encode = (bytes) => {
 const decode = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
 async function sealHistory(access, samples, attempts = []) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  let plaintext = new TextEncoder().encode(JSON.stringify({ version: 2, samples, attempts }));
+  const compressed = typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
+  if (compressed) plaintext = new Uint8Array(await new Response(new Blob([plaintext]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(`kinko:portfolio-history:v1:${access.id}`) },
     access.encryptionKey,
-    new TextEncoder().encode(JSON.stringify({ version: 2, samples, attempts }))
+    plaintext
   );
-  return { version: 1, type: 'portfolio-history', iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext)) };
+  return { version: 1, type: 'portfolio-history', ...(compressed ? { compression: 'gzip' } : {}), iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext)) };
 }
 async function unsealHistory(access, envelope) {
   if (envelope?.version !== 1 || envelope.type !== 'portfolio-history') throw new Error('Saved portfolio history is unsupported.');
-  const plaintext = await crypto.subtle.decrypt(
+  let plaintext = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: decode(envelope.iv), additionalData: new TextEncoder().encode(`kinko:portfolio-history:v1:${access.id}`) },
     access.encryptionKey,
     decode(envelope.ciphertext)
   );
+  if (envelope.compression) {
+    if (envelope.compression !== 'gzip' || typeof DecompressionStream === 'undefined') throw new Error('This browser cannot decompress saved history.');
+    plaintext = await new Response(new Blob([plaintext]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  }
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 

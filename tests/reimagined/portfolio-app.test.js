@@ -36,6 +36,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
   await createDeviceSessions().save(key, true, 'cloud');
   const previousFetch = global.fetch;
   let failHoldings = false, holdHoldings = false, releaseHoldings;
+  let historyReads = 0;
   let reads = 0,
     root;
   const now = Date.now() - 600000;
@@ -47,6 +48,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
         return { envelope, revision: 1 };
       }
       const request = JSON.parse(options.body);
+      if (request.action === 'history') { historyReads++; return { value: null, positions: [], excluded: 0, partial: true }; }
       if (request.action === 'fx') return { rate: 1.5, date: '2026-10-20' };
       if (request.action === 'holdings') {
         if (holdHoldings) await new Promise((resolve) => { releaseHoldings = resolve; });
@@ -123,6 +125,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await until(() => document.querySelector('.history-footer')?.textContent.includes('Some networks unavailable'));
     assert.ok(document.querySelector('.history-panel .history-chart'), 'failed refresh retains saved history');
     assert.equal(document.querySelectorAll('.reading-table tbody tr').length, 2);
+    const backfillCallsBeforeReopen = historyReads;
     failHoldings = false;
     holdHoldings = true;
     act(() => root.unmount());
@@ -142,6 +145,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     holdHoldings = false;
     await act(async () => releaseHoldings());
     await until(() => !document.querySelector('.history-status').textContent.includes('Updating'));
+    assert.equal(historyReads, backfillCallsBeforeReopen, 'reopening within 24 hours does not repeat the same backfill');
     const click = async (element) => { assert.ok(element); await act(async () => element.click()); };
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find((b) => b.textContent.includes('Assets')));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);
