@@ -811,7 +811,17 @@ export function App() {
           );
   const quantity = (value, dp = 4) => (privacy ? '••••' : number(value, dp));
   const issues = scopedResults.flatMap((r) => [...(r.issues || []), ...(r.error ? [r.error] : [])]);
-  const notices = dataNotices(scopedResults, rawRows.filter(matches), {
+  const supplementalNotices = [
+    ...Object.entries(stakeResults).map(([key, result]) => ({
+      ...result, wallet: key.split(':')[0], chain: key.split(':')[1], source: 'HEX staking'
+    })),
+    ...Object.values(activities).map((result) => ({ ...result, source: 'Activity' }))
+  ].filter((result) => result.error && matches(result)).map((result) => ({
+    chain: result.chain, wallet: result.wallet,
+    notices: [{ code: `${result.source}:${result.error}`, kind: 'warning',
+      message: `${result.source}: ${result.error}${result.stale ? ' Retained data may be stale.' : ''}` }]
+  }));
+  const notices = dataNotices([...scopedResults, ...supplementalNotices], rawRows.filter(matches), {
     tracked: data.tokens, hidden: data.hiddenTokens, loading
   });
   const unknown = rows.filter((t) => Number(t.amountExact) > 0 && t.priceUsd == null).length;
@@ -1244,7 +1254,7 @@ export function App() {
                     : observedAt
                       ? `Updated ${new Date(observedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`
                       : 'Ready to monitor'}
-                {page === 'overview' && notices.length > 0 && (
+                {notices.length > 0 && (
                   <button
                     type="button"
                     className="data-notice-link"
@@ -1262,7 +1272,6 @@ export function App() {
             </div>
           )}
           {data.currency === 'AUD' && !fx && <p className="small muted">AUD conversion is unavailable. Values are shown in USD.</p>}
-          {!['overview', 'settings'].includes(page) && noticePanel}
           {page === 'overview' && (
             <>
               <section className="summary-grid">
@@ -1636,19 +1645,6 @@ export function App() {
                   penalties are not estimated. Ended stakes require a historical index and are not included.
                 </p>
               </div>
-              {Object.entries(stakeResults)
-                .filter(
-                  ([k]) =>
-                    selectedWallets.some((w) => k.startsWith(w.address.toLowerCase() + ':')) &&
-                    (chainFilter === 'all' || k.endsWith(':' + chainFilter))
-                )
-                .filter(([, r]) => r.error)
-                .map(([k, r]) => (
-                  <p className="error small" key={k}>
-                    {NETWORKS[k.split(':')[1]].name} · {r.error}
-                    {r.stale ? ' Cached stakes may be stale.' : ''}
-                  </p>
-                ))}
               <section className="panel">
                 <div className="panel-header">
                   <div>
@@ -1733,19 +1729,6 @@ export function App() {
                 </Empty>
               ) : (
                 <>
-                  {Object.values(activities)
-                    .filter(
-                      (a) =>
-                        a.wallet &&
-                        selectedWallets.some((w) => w.address.toLowerCase() === a.wallet.toLowerCase()) &&
-                        (chainFilter === 'all' || chainFilter === a.chain) &&
-                        a.error
-                    )
-                    .map((a) => (
-                      <p className="error small" key={`${a.chain}:${a.wallet}`}>
-                        {NETWORKS[a.chain].name}: {a.error}
-                      </p>
-                    ))}
                   {Object.values(activities)
                     .flatMap((a) => a.items || [])
                     .filter(matches)
