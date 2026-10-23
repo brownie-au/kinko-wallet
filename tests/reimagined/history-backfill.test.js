@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Interface } from 'ethers';
 import { createHistoryProviders, coalesce, boundedMap } from '../../src/server/historyProviders.js';
-import { collectBackfill, backfillAnchor } from '../../src/reimagined/historyBackfill.js';
+import { collectBackfill, backfillAnchor, backfillTimes } from '../../src/reimagined/historyBackfill.js';
 const address = '0x' + '1'.repeat(40), token = '0x' + '2'.repeat(40), sold = '0x' + '3'.repeat(40);
 const abi = new Interface(['function balanceOf(address) view returns(uint256)', 'function decimals() view returns(uint8)']);
 const time = Date.now() - 20 * 86400000;
@@ -87,4 +87,28 @@ test('API history validation, private request coalescing and in-flight budget fa
     release({value:12,partial:true,positions:[],time});
     assert.equal((await a).data.value,12);assert.equal((await b).status,200);assert.equal(calls,1);
   }finally{historyProviders.snapshot=prior;}
+});
+
+test('historical sampling stays within eight reads and spans the selected period', () => {
+  for (const range of ['1H','1D','1W','1M','1Y','MAX']) for (let jobs=1; jobs<=8; jobs++) {
+    const times=backfillTimes(range,jobs,time);
+    assert.ok(times.length*jobs<=8);
+    assert.ok(times.every(t=>t<time));
+    assert.deepEqual(times,[...times].sort((a,b)=>a-b));
+    assert.equal(times[0],backfillAnchor(range,time));
+  }
+  assert.deepEqual(backfillTimes('1M',0),[]);
+});
+
+test('an unpriced held token plus zero native balance is not a zero portfolio', async () => {
+  const sample = await collectBackfill({jobs:[{chain:'pulse',address}],time,range:'1D',scope:'s',
+    request:async j=>({...j,value:0,excluded:1,positions:[{asset:'native',valueExact:'0'},{asset:token,valueExact:null}]})});
+  assert.equal(sample,null);
+});
+test('empty historical quote responses are retried instead of cached for a day', async () => {
+  let calls=0;
+  const provider=createHistoryProviders({fetcher:async()=>{calls++;return ok({coins:{}});}});
+  await provider.prices('eth',['native'],time,'1D');
+  await provider.prices('eth',['native'],time,'1D');
+  assert.equal(calls,2);
 });

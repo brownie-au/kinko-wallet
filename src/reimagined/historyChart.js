@@ -7,9 +7,18 @@ export function bucketWidth(time, now = Date.now()) {
 export function compatible(a, b) {
   return a.scope === b.scope && a.coverage === b.coverage && (a.method || 'saved-v1') === (b.method || 'saved-v1') && !!a.partial === !!b.partial && !!a.priceOutOfTolerance === !!b.priceOutOfTolerance;
 }
+// Same observed positions may change price provider/quote age without changing
+// the portfolio being measured. Keep that uncertainty visible in the readout.
+export function trendCompatible(a, b) {
+  if (a.scope !== b.scope || b.breakBefore || a.method !== b.method) return false;
+  if (compatible(a, b)) return true;
+  const x = a.provenance?.valuedPositions, y = b.provenance?.valuedPositions;
+  return !!x?.length && !!y?.length && JSON.stringify(x) === JSON.stringify(y) &&
+    JSON.stringify(a.provenance?.readCoverage) === JSON.stringify(b.provenance?.readCoverage);
+}
 // Absence is a gap, never a zero or an inferred valuation. Backfill retains its real cadence.
 export function historyChartModel(observations, now = Date.now()) {
-  const segments = [], gaps = [];
+  const segments = [], gaps = [], bridges = [];
   let sessionCount = 0;
   for (const [index, sample] of observations.entries()) {
     const previous = observations[index - 1];
@@ -17,10 +26,12 @@ export function historyChartModel(observations, now = Date.now()) {
     const gap = previous && sample.time - previous.time > threshold;
     if (!previous || gap) sessionCount++;
     if (gap) gaps.push({ from: previous.time, to: sample.time });
+    if (previous && (gap || !compatible(previous, sample)) && trendCompatible(previous, sample))
+      bridges.push([previous, sample]);
     if (!previous || gap || sample.breakBefore || !compatible(previous, sample)) segments.push([]);
     segments.at(-1).push({ ...sample, index });
   }
-  return { segments, gaps, sessionCount, sparse: observations.length < 2 };
+  return { segments, gaps, bridges, sessionCount, sparse: observations.length < 2 };
 }
 export function historyWindow(history, scope, range = '1M', now = Date.now()) {
   const duration = HISTORY_RANGES[range] ?? Number(range) * 86400000;

@@ -4082,3 +4082,18 @@ h1 {
 }
 .portfolio-readings { --history-line: #237d60; }
 [data-theme="dark"] .portfolio-readings { --history-line: #75cfaa; }
+
+/* A single inspection readout, quiet metadata and room for the trend. */
+.portfolio-readings .history-value-row { margin-bottom: 0; }
+.portfolio-readings .history-inspection { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 65px; margin: 12px 0 18px; }
+.portfolio-readings .history-inspection .chart-amount { font-size: 28px; font-weight: 500; line-height: 1.25; }
+.portfolio-readings .history-inspection span { color: var(--muted); font-size: 11px; }
+.portfolio-readings .history-chart { height: 180px; }
+.portfolio-readings .history-footer { flex-direction: row; flex-wrap: wrap; column-gap: 14px; row-gap: 3px; }
+.portfolio-readings .history-interval { font-size: 10px; }
+.portfolio-readings .portfolio-plot-input { touch-action: pan-y; }
+@media (max-width: 600px) {
+  .portfolio-readings .history-chart { height: 160px; }
+  .portfolio-readings .history-inspection .chart-amount { font-size: 25px; }
+  .portfolio-readings .history-inspection span { font-size: 10px; }
+}

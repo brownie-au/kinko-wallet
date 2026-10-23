@@ -40,11 +40,13 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
       return r.json();
     }
   }
-  async function publicData(url) {
+  async function publicData(url, signal) {
     const old = market.get(url);
     if (old && now() - old.at < 86400000) return old.data;
     return coalesce(url, async () => {
-      const data = await request(url); market.set(url, { data, at: now() });
+      const data = await request(url, { signal });
+      // Empty historical price responses are often transient; do not freeze a miss for a day.
+      if (!data.coins || Object.keys(data.coins).length) market.set(url, { data, at: now() });
       if (market.size > 1000) market.delete(market.keys().next().value);
       return data;
     }, publicPending);
@@ -71,10 +73,10 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
   async function block(chain, time, signal) {
     let d;
     if (chain === 'pulse') {
-      const scan = await publicData(`https://api.scan.pulsechain.com/api?module=block&action=getblocknobytime&timestamp=${Math.floor(time / 1000)}&closest=before`);
+      const scan = await publicData(`https://api.scan.pulsechain.com/api?module=block&action=getblocknobytime&timestamp=${Math.floor(time / 1000)}&closest=before`, signal);
       const height = scan.result?.blockNumber ?? scan.result;
       d = { height: (typeof height === 'string' || typeof height === 'number') && /^\d+$/.test(String(height)) ? Number(height) : NaN };
-    } else d = await publicData(`https://coins.llama.fi/block/${NETWORKS[chain].llama}/${Math.floor(time / 1000)}`);
+    } else d = await publicData(`https://coins.llama.fi/block/${NETWORKS[chain].llama}/${Math.floor(time / 1000)}`, signal);
     if (!Number.isSafeInteger(d.height) || d.height < 0) throw Error('No historical block');
     let tag = '0x' + d.height.toString(16);
     let read = await rpc(chain, 'eth_getBlockByNumber', [tag, false], signal);

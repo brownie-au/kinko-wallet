@@ -228,9 +228,9 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     act(() => root.render(React.createElement(PortfolioReadings, { ...props, loading: true })));
     const segments = [...document.querySelectorAll('[data-history-segment]')];
     assert.equal(segments.length, 2);
-    assert.ok(document.querySelector('[data-history-gap]'));
+    assert.equal(document.querySelector('[data-history-bridge]'), null, 'different asset coverage stays disconnected');
     assert.match(document.querySelector('.portfolio-axis-y').textContent, /USD/);
-    assert.match(document.querySelector('.portfolio-plot').textContent, /No readings recorded/);
+    assert.match(document.querySelector('.portfolio-plot').textContent, /Move over the chart/);
     assert.equal(segments[1].getAttribute('stroke-dasharray'), null);
     const xs = segments[0].getAttribute('points').split(' ').map((p) => Number(p.split(',')[0]));
     assert.ok(xs[1] - xs[0] < 10, 'two minutes occupies the correct fraction of a three-hour range');
@@ -245,6 +245,10 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, clientX: 692 })));
     assert.equal(slider.getAttribute('aria-valuenow'), String(observations.length - 1));
     assert.match(document.querySelector('.history-inspection').textContent, /USD 110.00.*Partial coverage/);
+    assert.equal(document.querySelectorAll('.portfolio-readings .chart-amount').length, 1);
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 110.00');
+    act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointerout', { bubbles: true })));
+    assert.equal(document.querySelector('.chart-amount').textContent, '—');
     assert.equal(document.querySelector('.history-saved-readings').open, false);
     act(() => document.querySelector('.history-saved-readings summary').click());
     assert.equal(document.querySelector('.history-saved-readings').open, true);
@@ -265,7 +269,7 @@ test('sparse history stays visible with separated readings and opt-in informatio
     act(() => root.render(React.createElement(PortfolioReadings, { observations, money: String, coverageChanged: true })));
     assert.ok(document.querySelector('.history-chart'));
     assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
-    assert.match(document.querySelector('.chart-amount').textContent, /8061.01/);
+    assert.equal(document.querySelector('.chart-amount').textContent, '—');
     assert.equal(document.querySelectorAll('tbody tr').length, 21);
     assert.equal(document.querySelector('.history-saved-readings').open, false);
     assert.match(document.querySelector('.history-interval').textContent, /unavailable/);
@@ -280,7 +284,7 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
   const first = { scope: 'all:all', time: Date.now(), value: 7090.72, coverage: 'first', partial: true };
   try {
     act(() => root.render(React.createElement(PortfolioReadings, { observations: [first], money: (v) => `USD ${v.toFixed(2)}` })));
-    assert.match(document.querySelector('.chart-amount').textContent, /USD 7090.72/);
+    assert.equal(document.querySelector('.chart-amount').textContent, '—');
     assert.equal(document.querySelectorAll('tbody tr').length, 1);
     assert.match(document.querySelector('tbody').textContent, /7090.72.*Partial/);
     assert.ok(document.querySelector('.history-chart'));

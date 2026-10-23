@@ -84,6 +84,8 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
   }
   return { scope, time, value, coverage, partial: !!(incomplete || excluded || eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000)), excluded,
     method: 'observed-liquid-v2', provenance: { kind: 'observation', staking: 'excluded',
+      valuedPositions: [...new Set(eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}`))].sort(),
+      readCoverage: results.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.error || r.stale ? 'unavailable' : 'available'}`).sort(),
       quotes: [...quoteGroups.values()].map(({ assets, ...group }) => ({ ...group, assets: [...assets].sort() })),
       balances: results.map((r) => ({ chain: r.chain, wallet: r.wallet, balanceTime: r.asOf || null,
         block: r.block || null, status: r.stale || r.error ? 'unavailable' : r.discovery || 'unspecified',

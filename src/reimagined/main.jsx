@@ -14,7 +14,7 @@ import {
 } from './vault.js';
 import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
 import { NETWORKS, HEX_ADDRESS } from './networks.js';
-import { backfillAnchor, collectBackfill } from './historyBackfill.js';
+import { backfillTimes, collectBackfill } from './historyBackfill.js';
 import { portfolioHistory, identifyObservation } from './portfolioHistory.js';
 import { dataNotices, portfolioObservation, appendObservation, observationSeries } from './dataQuality.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
@@ -877,29 +877,39 @@ export function App() {
   useEffect(() => {
     if (!session || demo || loading || !historicalJobs.length) return;
     let cancelled = false;
-    const access = session, key = `${historicalKey}:${range}:v2`, time = backfillAnchor(range);
+    const controller = new AbortController();
+    const access = session, key = `${historicalKey}:${range}:v3`;
     const run = async () => {
       try {
         const attempts = await portfolioHistory.attempts(access);
-        if (cancelled || attempts.some((a) => a.key === key && Date.now() - a.time < 86400000)) return;
-        await portfolioHistory.save(access, [], { key, time: Date.now() });
+        if (cancelled || attempts.some((a) => a.key === key && Date.now() - a.time < (a.retryAfter || 86400000))) return;
+
+        await portfolioHistory.save(access, [], { key, time: Date.now(), retryAfter: 900000 });
         if (cancelled) return;
         setBackfillStatus('Checking earlier history…');
-        const sample = await collectBackfill({ jobs: historicalJobs, time, range, scope: scopeKey, request: async (body) => {
-          const r = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'history', ...body }), signal: AbortSignal.timeout(55000) });
-          if (!r.ok) throw Error('Historical provider unavailable');
-          return r.json();
-        } });
-        if (cancelled) return;
-        if (sample) {
-          await portfolioHistory.save(access, [sample]);
-          if (!cancelled) setHistory((prior) => appendObservation(prior, sample));
+        let added = 0;
+        for (const time of backfillTimes(range, historicalJobs.length)) {
+          if (cancelled) return;
+          const sample = await collectBackfill({ jobs: historicalJobs, time, range, scope: scopeKey, request: async (body) => {
+            const r = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'history', ...body }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55000)]) });
+            if (!r.ok) throw Error('Historical provider unavailable');
+            return r.json();
+          } });
+          if (cancelled) return;
+          if (sample) {
+            added++;
+            await portfolioHistory.save(access, [sample]);
+            if (!cancelled) setHistory((prior) => appendObservation(prior, sample));
+          } else break; // An unavailable first anchor should not trigger a slow request cascade.
         }
-        if (!cancelled) setBackfillStatus(sample ? 'Partial backfill · sold assets and stakes may be missing' : 'Earlier history unavailable · Saved history retained');
+        if (!cancelled) {
+          await portfolioHistory.save(access, [], { key, time: Date.now(), retryAfter: added ? 86400000 : 900000 });
+          setBackfillStatus(added ? `${added} earlier readings added · Partial coverage` : 'Earlier history unavailable · Saved history retained');
+        }
       } catch { if (!cancelled) setBackfillStatus('Earlier history unavailable · Saved history retained'); }
     };
     run();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [session, demo, loading, historicalKey, range]);
   const series = observationSeries(history, scopeKey, range);
   const { observations } = series;

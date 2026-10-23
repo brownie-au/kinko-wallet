@@ -16,7 +16,8 @@ export async function collectBackfill({ jobs, time, range, scope, request }) {
       catch { responses[i] = { ...jobs[i], value: null, positions: [], excluded: 0, error: true }; }
     }
   }));
-  const successful = responses.filter((r) => Number.isFinite(r.value));
+  const successful = responses.filter((r) => Number.isFinite(r.value) &&
+    (r.value !== 0 || r.positions.length > 0 && r.positions.every((p) => p.valueExact != null)));
   if (!successful.length) return null;
   // Coverage includes requested membership, exact valued identities, sources and methodology.
   const coverage = JSON.stringify({ method: 'archive-liquid-v2', membership: jobs.map((j) => `${j.chain}:${j.address.toLowerCase()}`).sort(),
@@ -26,4 +27,13 @@ export async function collectBackfill({ jobs, time, range, scope, request }) {
     excluded: responses.reduce((n, r) => n + r.excluded, 0), method: 'archive-liquid-v2', cadence: 0,
     provenance: { kind: 'backfill', staking: 'excluded', networksUnavailable: responses.filter((r) => r.error).length,
       discovery: 'bounded-seeds-only', positions: responses.flatMap((r) => r.positions.map((p) => ({ ...p, wallet: r.address }))) } });
+}
+
+// At most eight archive requests per run. More selected wallets means fewer anchors.
+export function backfillTimes(range, jobCount, now = Date.now()) {
+  if (!jobCount) return [];
+  const count = Math.max(1, Math.min(4, Math.floor(8 / jobCount)));
+  const first = backfillAnchor(range, now);
+  const end = now - Math.min(HISTORY_RANGES[range] === Infinity ? 86400000 : HISTORY_RANGES[range] * .05, 86400000);
+  return Array.from({ length: count }, (_, i) => Math.floor((first + (end - first) * i / count) / 60000) * 60000);
 }
