@@ -203,6 +203,7 @@ async function tokenFromContract(r, address, wallet) {
     address: address.toLowerCase(),
     symbol: symbol.status === 'fulfilled' ? String(symbol.value[0]).slice(0, 30) : 'TOKEN',
     name: name.status === 'fulfilled' ? String(name.value[0]).slice(0, 100) : 'Tracked token',
+    balanceBlock: r.block,
     decimals: precision,
     amountExact: formatTokenUnits(amount[0].toString(), precision)
   };
@@ -297,7 +298,7 @@ export async function holdings(chain, address, contracts = [], options = {}) {
   const nativePromise = rpcPromise.then(async (r) => {
     const raw = await r.rpc('eth_getBalance', [address, r.block]);
     const [row] = await addPrices(chain, [{
-      address: null, symbol: NETWORKS[chain].symbol, name: NETWORKS[chain].name,
+      address: null, balanceBlock: r.block, symbol: NETWORKS[chain].symbol, name: NETWORKS[chain].name,
       decimals: 18, amountExact: formatTokenUnits(BigInt(raw), 18)
     }], signal);
     return row;

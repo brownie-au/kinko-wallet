@@ -1,0 +1,50 @@
+{
+  "runAt": "2026-10-23T00:22:59.713Z",
+  "ms": 26981,
+  "snapshot": {
+    "time": 1722124800000,
+    "chain": "base",
+    "address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    "value": null,
+    "valueExact": null,
+    "partial": true,
+    "excluded": 2,
+    "positions": [
+      {
+        "asset": "native",
+        "amount": null,
+        "issue": "Historical balance unavailable",
+        "chainId": 8453,
+        "block": "0x10d968e",
+        "balanceTime": 1722124799000,
+        "price": 3244.01,
+        "time": 1722124922000,
+        "source": "DefiLlama",
+        "key": "coingecko:ethereum",
+        "valueExact": null
+      },
+      {
+        "asset": "0x4200000000000000000000000000000000000006",
+        "amount": null,
+        "issue": "Historical balance unavailable",
+        "chainId": 8453,
+        "block": "0x10d968e",
+        "balanceTime": 1722124799000,
+        "price": 3243.32,
+        "time": 1722124915000,
+        "source": "DefiLlama",
+        "key": "base:0x4200000000000000000000000000000000000006",
+        "valueExact": null
+      }
+    ],
+    "discovery": "bounded-seeds-only",
+    "method": "archive-liquid-v2",
+    "limitations": [
+      "Previously sold asset discovery is incomplete",
+      "HEX stakes, NFTs and protocol positions excluded"
+    ],
+    "block": "0x10d968e",
+    "balanceTime": 1722124799000,
+    "blockSource": "https://mainnet.base.org"
+  }
+}

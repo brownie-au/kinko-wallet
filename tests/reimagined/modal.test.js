@@ -231,7 +231,7 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     assert.ok(document.querySelector('[data-history-gap]'));
     assert.match(document.querySelector('.portfolio-axis-y').textContent, /USD/);
     assert.match(document.querySelector('.portfolio-plot').textContent, /No readings recorded/);
-    assert.equal(segments[1].getAttribute('stroke-dasharray'), '5 4');
+    assert.equal(segments[1].getAttribute('stroke-dasharray'), null);
     const xs = segments[0].getAttribute('points').split(' ').map((p) => Number(p.split(',')[0]));
     assert.ok(xs[1] - xs[0] < 10, 'two minutes occupies the correct fraction of a three-hour range');
     assert.match(document.querySelector('.history-status').textContent, /Updating/);
@@ -250,29 +250,28 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     assert.equal(document.querySelector('.history-saved-readings').open, true);
     act(() => root.render(React.createElement(PortfolioReadings, { ...props, unavailable: true, money: () => '••••' })));
     assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
-    assert.match(document.querySelector('.history-status').textContent, /Previous history retained/);
+    assert.match(document.querySelector('.history-footer').textContent, /Saved history retained/);
     assert.ok(!document.querySelector('.portfolio-axis-y').textContent.includes('USD'));
     assert.ok(!slider.getAttribute('aria-valuetext').includes('USD'));
   } finally { act(() => root.unmount()); }
 });
 
-test('screenshot-shaped sparse history gets a compact summary with retained, collapsible readings', () => {
+test('sparse history stays visible with separated readings and opt-in information', () => {
   const root = createRoot(document.querySelector('#root'));
   const first = { scope: 'all:all', time: Date.now() - 30 * 3600000, value: 7061.29, coverage: 'a', partial: true };
   const observations = Array.from({ length: 20 }, (_, i) => ({ ...first, time: first.time + i * 120000 }));
   observations.push({ ...first, time: Date.now(), value: 8061.01, coverage: 'b' });
   try {
     act(() => root.render(React.createElement(PortfolioReadings, { observations, money: String, coverageChanged: true })));
-    assert.equal(document.querySelector('.history-chart'), null);
-    assert.match(document.querySelector('.history-building').textContent, /History building.*21 saved readings · 2 recording sessions/);
+    assert.ok(document.querySelector('.history-chart'));
+    assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
     assert.match(document.querySelector('.chart-amount').textContent, /8061.01/);
-    assert.equal(document.querySelectorAll('.history-recent > div').length, 3);
     assert.equal(document.querySelectorAll('tbody tr').length, 21);
     assert.equal(document.querySelector('.history-saved-readings').open, false);
-    assert.match(document.querySelector('.history-coverage-note').textContent, /cannot be compared/);
-    act(() => document.querySelector('.history-info button').click());
-    assert.equal(document.querySelector('.history-info button').getAttribute('aria-expanded'), 'true');
-    assert.match(document.querySelector('.history-info-popover').textContent, /32 days/);
+    assert.match(document.querySelector('.history-interval').textContent, /unavailable/);
+    act(() => document.querySelector('.history-info > summary').click());
+    assert.equal(document.querySelector('.history-info').open, true);
+    assert.match(document.querySelector('.history-info-popover').textContent, /No age-based deletion/);
   } finally { act(() => root.unmount()); }
 });
 
@@ -284,8 +283,8 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
     assert.match(document.querySelector('.chart-amount').textContent, /USD 7090.72/);
     assert.equal(document.querySelectorAll('tbody tr').length, 1);
     assert.match(document.querySelector('tbody').textContent, /7090.72.*Partial/);
-    assert.ok(document.querySelector('.history-building'));
-    assert.equal(document.querySelector('.history-chart'), null, 'a second point is not fabricated');
+    assert.ok(document.querySelector('.history-chart'));
+    assert.equal(document.querySelectorAll('.history-chart circle').length, 1, 'a second point is not fabricated');
     act(() =>
       root.render(
         React.createElement(PortfolioReadings, {
@@ -295,7 +294,7 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
       )
     );
     assert.equal(document.querySelectorAll('tbody tr').length, 2);
-    assert.ok(document.querySelector('.history-building'));
+    assert.ok(document.querySelector('.history-chart'));
     act(() =>
       root.render(
         React.createElement(PortfolioReadings, {
@@ -306,7 +305,7 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
       )
     );
     assert.ok(!document.querySelector('#root').textContent.includes('7090.72'));
-    assert.match(document.querySelector('.history-note').textContent, /storage is unavailable/);
+    assert.match(document.querySelector('.history-info-popover').textContent, /storage is unavailable/);
   } finally {
     act(() => root.unmount());
   }

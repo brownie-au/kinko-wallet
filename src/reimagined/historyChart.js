@@ -1,26 +1,37 @@
-// A gap is an absence of observations, never a zero balance or an inferred return.
+export const HISTORY_RANGES = { '1H': 3600000, '1D': 86400000, '1W': 7 * 86400000, '1M': 30 * 86400000, '1Y': 365 * 86400000, MAX: Infinity };
+export const PRICE_TOLERANCE = { '1H': 60000, '1D': 300000, '1W': 1800000, '1M': 7200000, '1Y': 43200000, MAX: 43200000 };
+export function bucketWidth(time, now = Date.now()) {
+  const age = now - time;
+  return age < 86400000 ? 120000 : age < 7 * 86400000 ? 900000 : age < 90 * 86400000 ? 3600000 : age < 2 * 365 * 86400000 ? 86400000 : 7 * 86400000;
+}
+export function compatible(a, b) {
+  return a.scope === b.scope && a.coverage === b.coverage && (a.method || 'saved-v1') === (b.method || 'saved-v1') && !!a.partial === !!b.partial;
+}
+// Absence is a gap, never a zero or an inferred valuation. Backfill retains its real cadence.
 export function historyChartModel(observations, now = Date.now()) {
   const segments = [], gaps = [];
-  let sessionCount = 0, largestGap = 0;
+  let sessionCount = 0;
   for (const [index, sample] of observations.entries()) {
     const previous = observations[index - 1];
-    const threshold = now - sample.time >= 7 * 86400000 ? 2 * 3600000 : 30 * 60000;
+    const threshold = Math.max(1800000, bucketWidth(sample.time, now) * 2, Math.min(sample.cadence || 0, 31 * 86400000) * 1.5);
     const gap = previous && sample.time - previous.time > threshold;
     if (!previous || gap) sessionCount++;
-    if (gap) {
-      gaps.push({ from: previous.time, to: sample.time });
-      largestGap = Math.max(largestGap, sample.time - previous.time);
-    }
-    if (!previous || gap || sample.breakBefore || sample.coverage !== previous.coverage) segments.push([]);
+    if (gap) gaps.push({ from: previous.time, to: sample.time });
+    if (!previous || gap || sample.breakBefore || !compatible(previous, sample)) segments.push([]);
     segments.at(-1).push({ ...sample, index });
   }
-  const span = observations.length > 1 ? observations.at(-1).time - observations[0].time : 0;
-  const comparableCount = segments.filter((s) => s.length >= 5 && s.at(-1).time - s[0].time >= 4 * 60000)
-    .reduce((count, s) => count + s.length, 0);
-  const comparable = comparableCount > 0 && comparableCount / observations.length >= 0.6;
-  return {
-    segments, gaps, sessionCount,
-    // Avoid the compressed cluster + solitary dot seen with a mostly unrecorded range.
-    sparse: !comparable || (span > 0 && largestGap / span > 0.65)
-  };
+  return { segments, gaps, sessionCount, sparse: observations.length < 2 };
+}
+export function historyWindow(history, scope, range = '1M', now = Date.now()) {
+  const duration = HISTORY_RANGES[range] ?? Number(range) * 86400000;
+  const all = history.filter((s) => s.scope === scope && s.time <= now).sort((a, b) => a.time - b.time);
+  const observations = all.filter((s) => s.time >= now - duration);
+  const model = historyChartModel(observations, now);
+  const start = observations[0], end = observations.at(-1);
+  // Only compare an uninterrupted, like-for-like segment. Always label the actual interval.
+  const comparable = observations.length > 1 && model.segments.length === 1;
+  const dollar = comparable ? end.value - start.value : null;
+  return { observations, readings: observations, model, coverageChanged: model.segments.length > 1,
+    availableSince: all[0]?.time, short: !!start && duration !== Infinity && start.time > now - duration + Math.min(duration * .05, 3600000),
+    comparison: { dollar, percent: comparable && start.value > 0 ? dollar / start.value * 100 : null, from: start?.time, to: end?.time } };
 }

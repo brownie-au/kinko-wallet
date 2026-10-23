@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
-import { historyChartModel } from './historyChart.js';
+import { historyChartModel, historyWindow, HISTORY_RANGES, PRICE_TOLERANCE } from './historyChart.js';
 import { NETWORKS } from './networks.js';
 import { tokenIconUrl, tokenInitials } from './tokenIcons.js';
 export function PriceChange({ token }) {
@@ -433,18 +433,19 @@ export function Sparkline({ values, label, large = false }) {
 }
 
 const historyStamp = (time) => new Date(time).toLocaleString('en-AU', {
-  day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit'
+  day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit'
 });
 
 export function HistoryChart({ observations, money, model }) {
   const [selectedTime, setSelectedTime] = useState(null);
+  const fillId = useId();
   const width = 700, height = 160, pad = 8;
   const first = observations[0].time, elapsed = observations.at(-1).time - first || 1;
   let min = Infinity, max = -Infinity;
   for (const s of observations) { min = Math.min(min, s.value); max = Math.max(max, s.value); }
   const padding = (max - min) * 0.12 || Math.max(max * 0.005, 1);
   min = Math.max(0, min - padding); max += padding;
-  const x = (time) => pad + (time - first) / elapsed * (width - 2 * pad);
+  const x = (time) => observations.length === 1 ? width / 2 : pad + (time - first) / elapsed * (width - 2 * pad);
   const y = (value) => height - pad - (value - min) / (max - min) * (height - 2 * pad);
   const selectedIndex = Math.max(0, observations.findIndex((s) => s.time === selectedTime));
   const selected = selectedTime === null ? null : observations[selectedIndex];
@@ -471,19 +472,21 @@ export function HistoryChart({ observations, money, model }) {
           : <span>Hover or tap to inspect · arrow keys to browse</span>}
       </div>
       <div className="portfolio-axis-y" aria-label="Portfolio value scale">
-        {[max, (min + max) / 2, min].map((v, i) => <span key={i}>{money(v)}</span>)}
+        {[max, (min + max) / 2, min].map((v, i) => <span key={i}>{Math.abs(v) >= 1e6 ? `${money(v / 1e6)}M` : Math.abs(v) >= 10000 ? `${money(v / 1000)}K` : money(v)}</span>)}
       </div>
       <div className="portfolio-plot-input" tabIndex="0" role="slider" aria-label="Portfolio reading"
         aria-valuemin={0} aria-valuemax={observations.length - 1} aria-valuenow={selectedTime === null ? observations.length - 1 : selectedIndex}
         aria-valuetext={`${historyStamp((selected || observations.at(-1)).time)}, ${money((selected || observations.at(-1)).value)}, ${(selected || observations.at(-1)).partial ? 'partial' : 'complete'} coverage`}
-        onPointerMove={selectAt} onPointerDown={selectAt} onKeyDown={keyboard} onFocus={() => setSelectedTime(observations.at(-1).time)}>
+        onPointerMove={selectAt} onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); selectAt(event); }} onKeyDown={keyboard} onFocus={() => setSelectedTime(observations.at(-1).time)}>
         <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
           aria-label="Saved portfolio readings spaced by time. Shaded gaps have no readings; different asset coverage is not connected." preserveAspectRatio="none">
+          <defs><linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".17" /><stop offset="100%" stopColor="var(--accent)" stopOpacity=".015" /></linearGradient></defs>
           {[pad, height / 2, height - pad].map((v) => <path key={v} d={`M0 ${v}H${width}`} stroke="var(--line)" strokeDasharray="3 5" />)}
           {model.gaps.map((gap) => <rect key={gap.from} data-history-gap x={x(gap.from)} y="0" width={x(gap.to) - x(gap.from)} height={height} fill="var(--history-gap)" />)}
           {model.segments.map((points, i) => <g key={i}>
+            {points.length > 1 && <polygon points={`${x(points[0].time)},${height} ${points.map((p) => `${x(p.time)},${y(p.value)}`).join(' ')} ${x(points.at(-1).time)},${height}`} fill={`url(#${fillId})`} />}
             <polyline data-history-segment points={points.map((p) => `${x(p.time).toFixed(2)},${y(p.value).toFixed(2)}`).join(' ')}
-              fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeDasharray={points[0].partial ? '5 4' : undefined}
+              fill="none" stroke="var(--accent)" strokeWidth="2.5"
               vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
             {points.length === 1 && <circle cx={x(points[0].time)} cy={y(points[0].value)} r="3" fill="var(--accent)" />}
           </g>)}
@@ -494,63 +497,58 @@ export function HistoryChart({ observations, money, model }) {
           <span key={gap.from} className="history-gap-label" style={{ left: `${(x((gap.from + gap.to) / 2) / width) * 100}%` }}>No readings recorded</span>)}
       </div>
       <div className="portfolio-axis-x"><span>{historyStamp(first)}</span><span>{historyStamp(first + elapsed / 2)}</span><span>{historyStamp(observations.at(-1).time)}</span></div>
-      <div className="history-legend"><span className="legend-complete">Complete</span><span className="legend-partial">Partial</span>
-        {model.gaps.length > 0 && <span className="legend-gap">No readings recorded</span>}</div>
+
     </div>
   );
 }
 
-function HistoryInfo() {
-  const [open, setOpen] = useState(false);
-  const tooltipId = useId();
-  return <div className="history-info" data-open={open} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
-    onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
-    <button type="button" aria-label="About portfolio history" aria-expanded={open} aria-describedby={tooltipId}
-      onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}><Icon name="info" size={16} /></button>
-    <div className="history-info-popover" id={tooltipId} role="tooltip">Readings are saved encrypted in this browser for 32 days. Older readings are condensed.
-      Collection runs every two minutes while Kinko is open and visible. Partial values exclude stale and unpriced assets.
-      Different asset coverage is not comparable. These readings are not investment returns.</div>
-  </div>;
-}
-
-export function PortfolioReadings({ observations, readings = observations, money, coverageChanged, historyError, historySaving, loading = false, unavailable = false }) {
-  const model = useMemo(() => historyChartModel(observations), [observations]);
-  const latest = observations.at(-1);
-  if (!latest) return null;
-  return (
-    <div className="portfolio-readings">
-      <div className="history-value-row">
-        <div className="chart-amount">{money(latest.value)}<span>{latest.partial ? 'Partial value' : 'Liquid value'}</span></div>
-        <HistoryInfo />
-      </div>
-      <p className="history-status" role="status">
-        <span className={loading || historySaving ? 'history-status-dot updating' : 'history-status-dot'} />
-        {historySaving ? 'Saving reading…' : `${historyError ? 'Last reading' : 'Last saved'} ${historyStamp(latest.time)}`}
-        {loading ? ' · Updating…' : unavailable ? ' · Some networks unavailable · Previous history retained' : ''}
-      </p>
-      {model.sparse ? (
-        <div className="history-building">
-          <div className="history-building-heading"><span className="history-building-icon"><Icon name="activity" size={20} /></span>
-            <div><h3>History building</h3><p>{readings.length} saved reading{readings.length === 1 ? '' : 's'} · {model.sessionCount} recording session{model.sessionCount === 1 ? '' : 's'}</p></div>
-          </div>
-          <p>{model.gaps.length ? 'Readings are separated by time away. More comparable readings will build a useful trend.' : 'A trend appears as more readings with the same asset coverage are recorded.'}</p>
-          <div className="history-recent">
-            {readings.slice(-3).reverse().map((s) => <div key={`${s.time}:${s.coverage}`}><time dateTime={new Date(s.time).toISOString()}>{historyStamp(s.time)}</time><strong>{money(s.value)}</strong><span>{s.partial ? 'Partial' : 'Complete'}</span></div>)}
-          </div>
-        </div>
-      ) : <HistoryChart key={latest.scope} observations={observations} money={money} model={model} />}
-      {coverageChanged && <p className="history-coverage-note"><Icon name="info" size={13} />Asset coverage changed. Values across different coverage cannot be compared.</p>}
-      {historyError && <p className="history-note" role="alert">{historyError}</p>}
-      <details className="history-saved-readings">
-        <summary>View saved readings <span>{readings.length}</span></summary>
-        <div className="reading-table-wrap"><table className="reading-table">
-          <caption className="sr-only">Most recent saved portfolio readings</caption>
-          <thead><tr><th>Recorded</th><th>Liquid value</th><th>Coverage</th></tr></thead>
-          <tbody>{readings.slice(-50).reverse().map((s) => <tr key={`${s.scope}:${s.time}:${s.coverage}`}>
-            <td>{historyStamp(s.time)}</td><td>{money(s.value)}</td><td>{s.partial ? 'Partial' : 'Complete'}</td>
-          </tr>)}</tbody>
-        </table>{readings.length > 50 && <p className="history-note">Showing the latest 50 readings in this range.</p>}</div>
+function HistoryInfo({ readings, range, error, backfillStatus, demo, money }) {
+  const id = useId();
+  const sources = [...new Set(readings.flatMap((s) => s.provenance?.positions?.map((p) => p.source || p.balanceSource).filter(Boolean) || []))];
+  return <details className="history-info" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary').focus(); } }}>
+    <summary aria-label="About portfolio history" aria-controls={id}><Icon name="info" size={18} /></summary>
+    <div className="history-info-popover" id={id}>
+      <h3>About this history</h3>
+      {demo ? <p>Illustrative demo only. These are fictional values, not verified wallet history.</p> : <p>{readings.length} retained reading{readings.length === 1 ? '' : 's'} in this window. {readings[0] ? `Available since ${historyStamp(readings[0].time)}.` : 'History begins with your first usable valuation.'}</p>}
+      <p>Value change compares the labelled start and end times. Deposits and withdrawals affect this number; it is not investment return. Missing intervals or changes to wallet membership, priced assets or valuation method break the line and disable comparison.</p>
+      <p>Windows trail now: 1 hour, 24 hours, 7 days, 30 days, 365 days; MAX shows all retained readings. Times are displayed in your local timezone. A shorter history never fills an entire selected period.</p>
+      <p>Saved liquid readings use balances and prices observed then. Archive backfill reads balances at a historical block, never today’s balances. Sold-asset discovery is bounded and incomplete. HEX stakes, NFTs and protocol positions are excluded; no underlying positions are added to liquid tokens.</p>
+      <p>Backfill prices must be within {PRICE_TOLERANCE[range] / 60000} minutes of the requested time; blocks within 2 minutes before it. Observed quotes outside 5 minutes or with unknown timestamps are flagged partial. Earlier v1 readings have limited provenance.</p>
+      <p>Sources: {sources.length ? sources.join(', ') : 'See individual readings; legacy source metadata may be unavailable'}. Public RPC / Blockscout discovery and <a href="https://defillama.com/" target="_blank" rel="noreferrer">DefiLlama prices</a>. Missing or out-of-tolerance prices remain unknown, never zero.</p>
+      <p>Encrypted on this browser, included in encrypted exports. No age-based deletion: first, last, minimum and maximum observations are retained in progressively wider buckets, preserving coverage and time gaps. History is not automatically synced to other devices; import an encrypted backup there.</p>
+      {backfillStatus && <p>{backfillStatus}. Background attempts are cached for 24 hours; at most 8 wallet/network pairs and 12 contracts per pair per visit/range. More pairs need narrower filters. Public sources have no availability guarantee.</p>}
+      {error && <p role="alert">{error}</p>}
+      <details className="history-saved-readings"><summary>View saved readings ({readings.length})</summary>
+        <div className="reading-table-wrap"><table className="reading-table"><caption className="sr-only">Latest 50 readings in this range</caption>
+          <thead><tr><th>Local time</th><th>Value</th><th>Coverage</th></tr></thead>
+          <tbody>{readings.slice(-50).reverse().map((s) => <tr key={`${s.scope}:${s.time}:${s.coverage}`}><td>{historyStamp(s.time)}</td><td>{s.value == null ? '—' : money(s.value)}</td><td>{s.partial ? 'Partial' : 'Liquid'} · {s.method || 'Legacy'}</td></tr>)}</tbody>
+        </table></div>
       </details>
     </div>
-  );
+  </details>;
+}
+
+export function PortfolioReadings({ observations, series, range = '1M', onRangeChange, money, historyError, historySaving, loading = false, unavailable = false, backfillStatus, demo = false }) {
+  const computed = useMemo(() => historyWindow(observations, observations[0]?.scope, range), [observations, range]);
+  const { comparison, short, availableSince } = series || computed;
+  const model = useMemo(() => historyChartModel(observations), [observations]);
+  const latest = observations.at(-1), change = demo ? null : comparison.dollar;
+  return <div className="portfolio-readings">
+    <div className="history-value-row"><h2>Portfolio history</h2><HistoryInfo readings={observations} range={range} error={historyError} backfillStatus={backfillStatus} demo={demo} money={money} /></div>
+    <div className="chart-amount">{latest ? money(latest.value) : '—'}</div>
+    <div className={`history-change ${change > 0 ? 'gain' : change < 0 ? 'loss' : ''}`}>
+      {demo ? 'Illustrative demo · fictional values' : <>Value change <strong>{change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${money(Math.abs(change))}`} {change == null ? '' : comparison.percent == null ? '(percentage unavailable)' : `(${comparison.percent > 0 ? '+' : ''}${comparison.percent.toFixed(2)}%)`}</strong></>}
+    </div>
+    {!demo && change != null && <p className="history-interval">{historyStamp(comparison.from)} – {historyStamp(comparison.to)}</p>}
+    {!demo && change == null && observations.length > 1 && <p className="history-interval">Comparison unavailable across gaps or coverage changes</p>}
+    {latest ? <HistoryChart key={latest.scope} observations={observations} money={money} model={model} /> : <div className="history-empty"><Icon name="activity" size={30} /><h3>{loading ? 'Reading your portfolio…' : 'No valued history in this range'}</h3><p>{availableSince ? 'Choose a longer range to see saved readings.' : 'History starts with your first usable valuation. Missing prices are never recorded as zero.'}</p></div>}
+    <div className="history-ranges" role="group" aria-label="History time range">{Object.keys(HISTORY_RANGES).map((r) => <button type="button" key={r} aria-pressed={r === range} onClick={() => onRangeChange?.(r)}>{r}</button>)}</div>
+    <div className="history-footer" role="status">
+      <span className="history-status">{latest ? `Last updated ${historyStamp(latest.time)}` : 'No valid valuation yet'}{loading ? ' · Updating…' : historySaving ? ' · Saving…' : ''}</span>
+      {unavailable ? <span>Some networks unavailable · Saved history retained</span> : latest && !latest.method ? <span>Legacy reading · Sources unverified</span> : latest?.partial ? <span>Partial value{latest.excluded ? ` · ${latest.excluded} assets unpriced or unavailable` : ' · Limited coverage'}</span> : !demo ? <span>Liquid assets · Stakes excluded</span> : null}
+      {short && !demo && <span>History available since {historyStamp(availableSince)}</span>}
+      {historyError && <span role="alert">History could not be saved · See information</span>}
+    </div>
+    <p className="sr-only">{observations.length} readings. {model.segments.length} separate segments. {model.gaps.length} time gaps. Use left and right arrow keys on the chart to inspect exact values and local timestamps.</p>
+  </div>;
 }

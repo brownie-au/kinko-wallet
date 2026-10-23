@@ -1,8 +1,11 @@
 import { holdings, stakes, activity, isAddress, json } from '../src/reimagined/blockchain.js';
 import { configuredDiscovery } from '../src/server/tokenDiscovery.js';
+import { historyProviders } from '../src/server/historyProviders.js';
+import { HISTORY_RANGES } from '../src/reimagined/historyChart.js';
 import { NETWORKS } from '../src/reimagined/networks.js';
 const cache = new Map();
 const limits = new Map();
+let activeHistory = 0;
 const reply = (res, status, data) => {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -33,13 +36,29 @@ export default async function handler(req, res) {
     }
     if (typeof body === 'string') body = JSON.parse(body);
     const { action, chain, address, contracts = [], excludedContracts = [] } = body || {};
-    if (!['holdings', 'stakes', 'activity', 'fx'].includes(action)) return reply(res, 400, { error: 'Unsupported action' });
+    if (!['holdings', 'stakes', 'activity', 'fx', 'history'].includes(action)) return reply(res, 400, { error: 'Unsupported action' });
     if (action !== 'fx' && (!NETWORKS[chain] || !isAddress(address)))
       return reply(res, 400, { error: 'Invalid network or public wallet address' });
     if (!Array.isArray(contracts) || contracts.length > 30 || contracts.some((c) => !isAddress(c)))
       return reply(res, 400, { error: 'Invalid token contracts' });
     if (!Array.isArray(excludedContracts) || excludedContracts.length > 100 || excludedContracts.some((c) => !isAddress(c)))
       return reply(res, 400, { error: 'Invalid hidden token contracts' });
+    if (action === 'history') {
+      rate.history = (rate.history || 0) + 1;
+      if (rate.history > 12) return reply(res, 429, { error: 'Historical quota reached; saved history retained. Retry later.' });
+      if (!Object.hasOwn(HISTORY_RANGES, body.range) || !Number.isSafeInteger(body.time) || body.time < 1438269988000 || body.time > now - 60000 || contracts.length > 12)
+        return reply(res, 400, { error: 'Invalid historical time, range or contract limit' });
+      // Promise only: coalesce concurrent private reads, then discard all wallet data.
+      const privateKey = JSON.stringify(['history', chain, address.toLowerCase(), [...contracts].sort(), [...excludedContracts].sort(), body.time, body.range]);
+      let pending = cache.get(privateKey)?.promise;
+      if (!pending) {
+        if (activeHistory >= 2) return reply(res, 429, { error: 'Historical providers busy; retry later.' });
+        activeHistory++;
+        pending = historyProviders.snapshot({ chain, address, contracts, excludedContracts, time: body.time, range: body.range }).finally(() => { activeHistory--; });
+        cache.set(privateKey, { time: now, promise: pending });
+      }
+      try { return reply(res, 200, await pending); } finally { if (cache.get(privateKey)?.promise === pending) cache.delete(privateKey); }
+    }
     const key = JSON.stringify([action, chain, address?.toLowerCase(), contracts.map((c) => c.toLowerCase()).sort(), excludedContracts.map((c) => c.toLowerCase()).sort()]);
     const prior = cache.get(key);
     if (prior && now - prior.time < (action === 'fx' ? 3600000 : 60000)) return reply(res, 200, await prior.promise);

@@ -1,5 +1,6 @@
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { compactHistory } from './portfolioHistory.js';
+import { historyWindow } from './historyChart.js';
 import { splitTokens, tokenKey, hasUsablePrice } from './tokenFilter.js';
 
 export function dataNotices(results, rows = [], { tracked = [], hidden = [], loading = false } = {}) {
@@ -68,21 +69,25 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
     (r) => r.error || r.stale || r.issues?.length || r.notices?.length || (r.discovery && r.discovery !== 'complete')
   );
   const coverage = JSON.stringify({
+    method: 'observed-liquid-v2',
     positions: [...new Set(eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}`))].sort(),
     reads: results
       .map((r) => `${r.wallet}:${r.chain}:${r.error || r.stale ? 'stale' : r.discovery || (r.issues?.length ? 'partial' : 'complete')}`)
       .sort()
   });
-  return { scope, time, value, coverage, partial: !!(incomplete || excluded), excluded };
+  return { scope, time, value, coverage, partial: !!(incomplete || excluded || eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000)), excluded,
+    method: 'observed-liquid-v2', provenance: { kind: 'observation', staking: 'excluded',
+      positions: eligible.map((r) => ({ chain: r.chain, address: r.address || 'native', wallet: r.wallet,
+        amount: r.amountExact, price: r.priceUsd, source: r.priceSource || 'legacy-unspecified', priceTime: r.priceTime || null,
+        balanceTime: results.find((x) => x.chain === r.chain && x.wallet?.toLowerCase() === r.wallet.toLowerCase())?.asOf || null,
+        block: r.balanceBlock || null })),
+      timestampQuality: eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000) ? 'price-time-outside-5m-or-unknown' : 'within-5m'
+    } };
 }
 export function appendObservation(prior, sample) {
   if (!sample || prior.some((s) => s.scope === sample.scope && s.time === sample.time && s.coverage === sample.coverage)) return prior;
   return compactHistory([...prior, sample].sort((a, b) => a.time - b.time));
 }
-export function observationSeries(history, scope, days, now = Date.now()) {
-  const samples = history.filter((s) => s.scope === scope && s.time > now - days * 86400000);
-  const latest = samples.at(-1);
-  if (!latest) return { observations: [], readings: [], coverageChanged: false };
-  const coverageChanged = samples.some((s, i) => i > 0 && (s.breakBefore || s.coverage !== samples[i - 1].coverage));
-  return { observations: samples, readings: samples, coverageChanged };
+export function observationSeries(history, scope, range, now = Date.now()) {
+  return historyWindow(history, scope, range, now);
 }

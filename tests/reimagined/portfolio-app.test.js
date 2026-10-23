@@ -38,7 +38,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
   let failHoldings = false, holdHoldings = false, releaseHoldings;
   let reads = 0,
     root;
-  const now = Date.now();
+  const now = Date.now() - 600000;
   global.fetch = async (url, options) => ({
     ok: true,
     json: async () => {
@@ -110,7 +110,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await act(async () => t.mock.timers.tick(120000));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length === 2);
     assert.equal(reads, 2);
-    assert.ok(document.querySelector('.history-panel .history-building'));
+    assert.ok(document.querySelector('.history-panel .history-chart'));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
     });
@@ -120,17 +120,21 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.ok(!localStorage.getItem(stored).includes('all:all'));
     failHoldings = true;
     await act(async () => t.mock.timers.tick(120000));
-    await until(() => document.querySelector('.history-status')?.textContent.includes('Some networks unavailable'));
-    assert.ok(document.querySelector('.history-panel .history-building'), 'failed refresh retains saved history');
+    await until(() => document.querySelector('.history-footer')?.textContent.includes('Some networks unavailable'));
+    assert.ok(document.querySelector('.history-panel .history-chart'), 'failed refresh retains saved history');
     assert.equal(document.querySelectorAll('.reading-table tbody tr').length, 2);
     failHoldings = false;
     holdHoldings = true;
     act(() => root.unmount());
     t.mock.timers.reset();
     root = createRoot(document.querySelector('#root'));
+    const restoreStarted = performance.now();
     await act(async () => root.render(React.createElement(App)));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length >= 2);
-    assert.ok(document.querySelector('.history-panel .history-building'));
+    const restoreMs = performance.now() - restoreStarted;
+    assert.ok(restoreMs < 1000, `cached chart restored in ${restoreMs.toFixed(1)}ms`);
+    console.log(`Cached chart restore: ${restoreMs.toFixed(1)}ms, Node ${process.version}, JSDOM, providers held pending`);
+    assert.ok(document.querySelector('.history-panel .history-chart'));
     assert.ok(!document.querySelector('.history-panel').textContent.includes('Your history starts here'));
     await until(() => !!releaseHoldings);
     assert.match(document.querySelector('.history-status').textContent, /Updating/);
