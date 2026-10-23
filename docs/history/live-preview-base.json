@@ -1,0 +1,52 @@
+{
+  "runAt": "2026-10-23T00:29:07.329Z",
+  "origin": "https://kinko-wallet-v2-test-git-feature-por-3fd008-rob-browns-projects.vercel.app",
+  "status": 200,
+  "ms": 7624,
+  "response": {
+    "time": 1722124800000,
+    "chain": "base",
+    "address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    "value": 309.05489659276645,
+    "valueExact": "309.05489659276643499146",
+    "partial": true,
+    "excluded": 0,
+    "positions": [
+      {
+        "asset": "native",
+        "amount": "0.079652185659096746",
+        "balanceSource": "https://mainnet.base.org",
+        "chainId": 8453,
+        "block": "0x10d968e",
+        "balanceTime": 1722124799000,
+        "price": 3244.01,
+        "time": 1722124922000,
+        "source": "DefiLlama",
+        "key": "coingecko:ethereum",
+        "valueExact": "258.39248679996643499146"
+      },
+      {
+        "asset": "0x4200000000000000000000000000000000000006",
+        "amount": "0.01562054",
+        "balanceSource": "https://mainnet.base.org",
+        "chainId": 8453,
+        "block": "0x10d968e",
+        "balanceTime": 1722124799000,
+        "price": 3243.32,
+        "time": 1722124915000,
+        "source": "DefiLlama",
+        "key": "base:0x4200000000000000000000000000000000000006",
+        "valueExact": "50.6624097928"
+      }
+    ],
+    "discovery": "bounded-seeds-only",
+    "method": "archive-liquid-v2",
+    "limitations": [
+      "Previously sold asset discovery is incomplete",
+      "HEX stakes, NFTs and protocol positions excluded"
+    ],
+    "block": "0x10d968e",
+    "balanceTime": 1722124799000,
+    "blockSource": "https://mainnet.base.org"
+  }
+}

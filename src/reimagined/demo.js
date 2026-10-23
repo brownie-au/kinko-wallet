@@ -65,3 +65,11 @@ export const demoStakes = [
     unlockedDay: 0
   }
 ].map((s) => stakeMetrics(s, nowDay));
+
+// Illustrative fixture only. This is never stored as actual wallet history.
+export function demoHistory(range, total) {
+  const duration = { '1H': 3600000, '1D': 86400000, '1W': 604800000, '1M': 2592000000, '1Y': 31536000000, MAX: 400 * 86400000 }[range];
+  const now = Date.now();
+  return Array.from({ length: 40 }, (_, i) => ({ scope: 'demo', coverage: 'demo', time: now - duration * (39 - i) / 39,
+    value: i === 39 ? total : total * (.7 + i / 130 + Math.sin(i * 1.6) * .025), partial: false, cadence: duration / 39, method: 'illustration' }));
+}

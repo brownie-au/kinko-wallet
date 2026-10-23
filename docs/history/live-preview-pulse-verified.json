@@ -1,0 +1,53 @@
+{
+  "runAt": "2026-10-23T00:36:02.229Z",
+  "commit": "bafbe4d2ee3e2cd583c46797f6ecc8c73ecd0cbd",
+  "origin": "https://kinko-wallet-v2-test-git-feature-por-3fd008-rob-browns-projects.vercel.app",
+  "status": 200,
+  "ms": 12720,
+  "response": {
+    "time": 1722124800000,
+    "chain": "pulse",
+    "address": "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+    "value": 3.334860217794182,
+    "valueExact": "3.33486021779418209245250308",
+    "partial": true,
+    "excluded": 0,
+    "positions": [
+      {
+        "asset": "native",
+        "amount": "70638.852315064225639748",
+        "balanceSource": "https://rpc.pulsechain.com",
+        "chainId": 369,
+        "block": "0x1406ad3",
+        "balanceTime": 1722124795000,
+        "price": 0.00004721,
+        "time": 1722124792000,
+        "source": "DefiLlama",
+        "key": "pulsechain:0xa1077a294dde1b09bb078844df40758a5d0f9a27",
+        "valueExact": "3.33486021779418209245250308"
+      },
+      {
+        "asset": "0xa1077a294dde1b09bb078844df40758a5d0f9a27",
+        "amount": "0",
+        "balanceSource": "https://rpc.pulsechain.com",
+        "chainId": 369,
+        "block": "0x1406ad3",
+        "balanceTime": 1722124795000,
+        "price": 0.00004721,
+        "time": 1722124792000,
+        "source": "DefiLlama",
+        "key": "pulsechain:0xa1077a294dde1b09bb078844df40758a5d0f9a27",
+        "valueExact": "0"
+      }
+    ],
+    "discovery": "bounded-seeds-only",
+    "method": "archive-liquid-v2",
+    "limitations": [
+      "Previously sold asset discovery is incomplete",
+      "HEX stakes, NFTs and protocol positions excluded"
+    ],
+    "block": "0x1406ad3",
+    "balanceTime": 1722124795000,
+    "blockSource": "https://rpc.pulsechain.com"
+  }
+}

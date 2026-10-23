@@ -47,6 +47,46 @@ test('DEX changes use the chosen liquid base-token market on all networks includ
   } finally { global.fetch=original; }
 });
 
+test('DEX fills missing history independently while preserving Llama prices and valid changes', async () => {
+  const original = global.fetch, now = Math.floor(Date.now() / 1000);
+  try {
+    for (const [chain, n] of Object.entries(NETWORKS)) {
+      const requests = [];
+      const tokens = Array.from({length: 65}, (_, i) => ({address: i === 0 ? null : address(i), amountExact: '2'}));
+      const key = t => t.address ? `${n.llama}:${t.address}` : n.nativePrice;
+      global.fetch = async url => {
+        if (url.includes('/current/')) return ok({coins: Object.fromEntries(tokens.map(t => [key(t), {price: 100, timestamp: now}]))});
+        if (url.includes('/historical/')) return ok({coins: {
+          [key(tokens[1])]: {price: 80, timestamp: now - 86400},
+          [key(tokens[2])]: {price: 80, timestamp: now - 93600}
+        }});
+        const batch = url.split('/').at(-1).split(',');
+        requests.push(batch);
+        return ok(batch.map(a => ({chainId: n.dex, baseToken: {address: a}, priceUsd: '50',
+          liquidity: {usd: 20000}, priceChange: {h24: a === address(3) ? 0 : -7.25}})));
+      };
+      const rows = await addPrices(chain, tokens);
+      assert.equal(rows[0].priceChange24h, -7.25);
+      assert.equal(rows[0].change24hSource, 'Dexscreener');
+      assert.equal(rows[1].priceChange24h, 25);
+      assert.equal(rows[1].change24hSource, 'DefiLlama');
+      assert.equal(rows[2].priceChange24h, -7.25);
+      assert.equal(rows[3].priceChange24h, 0);
+      assert.equal(rows[64].priceChange24h, -7.25);
+      assert.ok(rows.every(r => r.priceUsd === 100 && r.valueUsd === 200 && r.priceSource === 'DefiLlama'));
+      assert.equal(requests.flat().length, 64);
+      assert.ok(requests.every(batch => batch.length <= 30));
+      assert.ok(!requests.flat().includes(address(1)));
+      global.fetch = async url => url.includes('/current/')
+        ? ok({coins: {[n.nativePrice]: {price: 100, timestamp: now}}}) : {ok: false, status: 503};
+      const [unavailable] = await addPrices(chain, [tokens[0]]);
+      assert.equal(unavailable.priceUsd, 100);
+      assert.equal(unavailable.priceChange24h, null);
+      assert.equal(unavailable.change24hSource, null);
+    }
+  } finally { global.fetch = original; }
+});
+
 test('24h display distinguishes gains, losses, unchanged and missing data without negative zero', async () => {
   const vite=await createServer({server:{middlewareMode:true,hmr:false},appType:'custom'});
   let PriceChange; try { ({PriceChange}=await vite.ssrLoadModule('/src/reimagined/ui.jsx')); } finally { await vite.close(); }

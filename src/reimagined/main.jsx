@@ -14,6 +14,7 @@ import {
 } from './vault.js';
 import { createDeviceSessions, forgetDeviceAccess, resumeWatchlist, LOGOUT_STORAGE_KEY } from './deviceSession.js';
 import { NETWORKS, HEX_ADDRESS } from './networks.js';
+import { backfillTimes, collectBackfill } from './historyBackfill.js';
 import { portfolioHistory, identifyObservation } from './portfolioHistory.js';
 import { dataNotices, portfolioObservation, appendObservation, observationSeries } from './dataQuality.js';
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
@@ -34,7 +35,7 @@ import {
   Sparkline,
   shortAddress
 } from './ui.jsx';
-import { demoRows, demoWatchlist, demoStakes } from './demo.js';
+import { demoHistory, demoRows, demoWatchlist, demoStakes } from './demo.js';
 import './styles.css';
 const date = (v) => new Date(v).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 const number = (v, dp = 2) => Number(v).toLocaleString('en-AU', { maximumFractionDigits: dp });
@@ -208,6 +209,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
       const access = await deriveAccess(normalized);
       if (backup) {
         const data = validateWatchlist(await decryptWatchlist(access, backup.envelope));
+        if (backup.history) await portfolioHistory.import(access, backup.history);
         await completeOpen(access, data, backup.revision || 0, 'local');
         return;
       }
@@ -311,7 +313,7 @@ function AccessFlow({ mode, onClose, onOpen, toast }) {
                   try {
                     const f = e.target.files?.[0];
                     if (!f) return;
-                    if (f.size > 180000) throw new Error('Backup is too large.');
+                    if (f.size > 12000000) throw new Error('Backup is too large.');
                     const d = JSON.parse(await f.text());
                     if (d.app !== 'Kinko Wallet' || d.version !== 2 || !d.envelope) throw new Error('Choose a Kinko encrypted backup.');
                     setBackup(d);
@@ -453,6 +455,7 @@ export function App() {
     [flow, setFlow] = useState(null),
     [restoring, setRestoring] = useState(true),
     [page, setPage] = useState('overview'),
+    [jumpToDataNotices, setJumpToDataNotices] = useState(false),
     [walletFilter, setWalletFilter] = useState('all'),
     [chainFilter, setChainFilter] = useState('all'),
     [privacy, setPrivacy] = useState(false),
@@ -474,8 +477,10 @@ export function App() {
     [history, setHistory] = useState([]),
     [historyError, setHistoryError] = useState(''),
     [historySaving, setHistorySaving] = useState(false),
-    [range, setRange] = useState(30);
+    [range, setRange] = useState('1M'),
+    [backfillStatus, setBackfillStatus] = useState('');
   const savingRef = useRef(false),
+    dataNoticesRef = useRef(null),
     noticeTimer = useRef(),
     generation = useRef(0);
   const demo = session === 'demo';
@@ -485,6 +490,16 @@ export function App() {
     noticeTimer.current = setTimeout(() => setNotice(''), 4000);
   };
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  useEffect(() => {
+    if (page !== 'settings' || !jumpToDataNotices) return;
+    const section = dataNoticesRef.current;
+    const details = section?.querySelector('details');
+    if (details) details.open = true;
+    const target = section?.querySelector('summary') || section?.querySelector('h2');
+    target?.focus({ preventScroll: true });
+    section?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
+    setJumpToDataNotices(false);
+  }, [page, jumpToDataNotices]);
   useEffect(() => {
     document.documentElement.dataset.theme = data.theme;
   }, [data.theme]);
@@ -505,7 +520,7 @@ export function App() {
     try {
       savedHistory = await portfolioHistory.load(access);
     } catch {
-      historyMessage = 'Previous browser history could not be restored. New readings will start here.';
+      historyMessage = 'Saved history could not be unlocked. The original encrypted records have been retained; export a backup before clearing browser data.';
     }
     if (generation.current !== openedGeneration) return;
     setHistory(savedHistory);
@@ -535,6 +550,7 @@ export function App() {
     setHistory([]);
     setHistoryError('');
     setHistorySaving(false);
+    setBackfillStatus('');
     setSyncError('');
     setDirty(false);
     setWalletFilter('all');
@@ -795,7 +811,17 @@ export function App() {
           );
   const quantity = (value, dp = 4) => (privacy ? '••••' : number(value, dp));
   const issues = scopedResults.flatMap((r) => [...(r.issues || []), ...(r.error ? [r.error] : [])]);
-  const notices = dataNotices(scopedResults, rawRows.filter(matches), {
+  const supplementalNotices = [
+    ...Object.entries(stakeResults).map(([key, result]) => ({
+      ...result, wallet: key.split(':')[0], chain: key.split(':')[1], source: 'HEX staking'
+    })),
+    ...Object.values(activities).map((result) => ({ ...result, source: 'Activity' }))
+  ].filter((result) => result.error && matches(result)).map((result) => ({
+    chain: result.chain, wallet: result.wallet,
+    notices: [{ code: `${result.source}:${result.error}`, kind: 'warning',
+      message: `${result.source}: ${result.error}${result.stale ? ' Retained data may be stale.' : ''}` }]
+  }));
+  const notices = dataNotices([...scopedResults, ...supplementalNotices], rawRows.filter(matches), {
     tracked: data.tokens, hidden: data.hiddenTokens, loading
   });
   const unknown = rows.filter((t) => Number(t.amountExact) > 0 && t.priceUsd == null).length;
@@ -852,8 +878,52 @@ export function App() {
     }, 120000);
     return () => clearInterval(timer);
   }, [session, demo, loading]);
-  const { observations, readings, coverageChanged } = observationSeries(history, scopeKey, range);
-  const lastObservation = observations.at(-1);
+  const historicalJobs = selectedWallets.flatMap((w) => w.networks.filter((c) => chainFilter === 'all' || c === chainFilter).map((chain) => ({
+    chain, address: w.address.toLowerCase(), excludedContracts: (data.hiddenTokens || []).filter((t) => t.chain === chain).map((t) => t.address.toLowerCase()), contracts: [...new Set([...(data.tokens || []).filter((t) => t.chain === chain).map((t) => t.address.toLowerCase()),
+      ...rows.filter((r) => r.chain === chain && r.wallet.toLowerCase() === w.address.toLowerCase() && r.address).map((r) => r.address.toLowerCase())])]
+      .filter((a) => !(data.hiddenTokens || []).some((t) => t.chain === chain && t.address.toLowerCase() === a)).sort().slice(0, 12)
+  }))).slice(0, 8);
+  const historicalKey = JSON.stringify([scopeKey, historicalJobs, contractSignature]);
+  useEffect(() => {
+    if (!session || demo || loading || !historicalJobs.length) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const access = session, key = `${historicalKey}:${range}:v3`;
+    const run = async () => {
+      try {
+        const attempts = await portfolioHistory.attempts(access);
+        if (cancelled || attempts.some((a) => a.key === key && Date.now() - a.time < (a.retryAfter || 86400000))) return;
+
+        await portfolioHistory.save(access, [], { key, time: Date.now(), retryAfter: 900000 });
+        if (cancelled) return;
+        setBackfillStatus('Checking earlier history…');
+        let added = 0;
+        for (const time of backfillTimes(range, historicalJobs.length)) {
+          if (cancelled) return;
+          const sample = await collectBackfill({ jobs: historicalJobs, time, range, scope: scopeKey, request: async (body) => {
+            const r = await fetch('/api/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'history', ...body }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55000)]) });
+            if (!r.ok) throw Error('Historical provider unavailable');
+            return r.json();
+          } });
+          if (cancelled) return;
+          if (sample) {
+            added++;
+            await portfolioHistory.save(access, [sample]);
+            if (!cancelled) setHistory((prior) => appendObservation(prior, sample));
+          } else break; // An unavailable first anchor should not trigger a slow request cascade.
+        }
+        if (!cancelled) {
+          await portfolioHistory.save(access, [], { key, time: Date.now(), retryAfter: added ? 86400000 : 900000 });
+          setBackfillStatus(added ? `${added} earlier readings added · Partial coverage` : 'Earlier history unavailable · Saved history retained');
+        }
+      } catch { if (!cancelled) setBackfillStatus('Earlier history unavailable · Saved history retained'); }
+    };
+    run();
+    return () => { cancelled = true; controller.abort(); };
+  }, [session, demo, loading, historicalKey, range]);
+  const series = observationSeries(history, scopeKey, range);
+  const { observations } = series;
+
   const tokens = aggregate.tokens
     .filter((t) => `${t.name} ${t.symbol} ${t.address || ''}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sort === 'name' ? a.symbol.localeCompare(b.symbol) : (b.valueUsd || 0) - (a.valueUsd || 0)));
@@ -883,13 +953,16 @@ export function App() {
       toast('Create your own watchlist to export an encrypted backup.');
       return;
     }
+    try {
     download('kinko-encrypted-watchlist.json', {
       app: 'Kinko Wallet',
       version: 2,
       revision,
-      envelope: await encryptWatchlist(session, data)
+      envelope: await encryptWatchlist(session, data),
+      history: await portfolioHistory.export(session, history)
     });
     toast('Encrypted backup downloaded. Keep your Access Key separately.');
+    } catch (error) { toast('Backup could not be exported: ' + error.message); }
   };
   const addWallet = () => setModal({ kind: 'wallet' });
   if (restoring)
@@ -932,6 +1005,19 @@ export function App() {
     setSearch('');
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
+  const noticePanel = (
+    <DataNotices
+      notices={notices}
+      staleBalances={staleBalances}
+      loading={loading}
+      saving={saving || dirty}
+      onTrackToken={(chain) => setModal({ kind: 'token', chain })}
+      onRetry={(chain) => {
+        setChainFilter(chain);
+        setRefresh((v) => v + 1);
+      }}
+    />
+  );
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -1168,21 +1254,24 @@ export function App() {
                     : observedAt
                       ? `Updated ${new Date(observedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`
                       : 'Ready to monitor'}
+                {notices.length > 0 && (
+                  <button
+                    type="button"
+                    className="data-notice-link"
+                    aria-label={`View ${notices.length} data ${notices.length === 1 ? 'notice' : 'notices'} in Settings & security`}
+                    title="View network data notices in Settings & security"
+                    onClick={() => {
+                      navTo('settings');
+                      setJumpToDataNotices(true);
+                    }}
+                  >
+                    <Icon name="info" size={16} />
+                  </button>
+                )}
               </div>
             </div>
           )}
           {data.currency === 'AUD' && !fx && <p className="small muted">AUD conversion is unavailable. Values are shown in USD.</p>}
-          <DataNotices
-            notices={notices}
-            staleBalances={staleBalances}
-            loading={loading}
-            saving={saving || dirty}
-            onTrackToken={(chain) => setModal({ kind: 'token', chain })}
-            onRetry={(chain) => {
-              setChainFilter(chain);
-              setRefresh((v) => v + 1);
-            }}
-          />
           {page === 'overview' && (
             <>
               <section className="summary-grid">
@@ -1252,75 +1341,11 @@ export function App() {
                 </div>
               </section>
               <div className="dashboard-grid">
-                <section className="panel history-panel">
-                  <div className="panel-header">
-                    <div>
-                      <h2>Portfolio perspective</h2>
-                      <p>
-                        {demo
-                          ? 'Illustrative portfolio trend'
-                          : observations.length > 0
-                            ? lastObservation?.partial
-                              ? 'Partial liquid values · fresh, priced assets only'
-                              : 'Saved liquid portfolio readings'
-                            : 'Your history starts here'}
-                      </p>
-                    </div>
-                    <div className="segmented">
-                      {[1, 7, 30].map((r) => (
-                        <button key={r} className={range === r ? 'selected' : ''} onClick={() => setRange(r)}>
-                          {r === 1 ? '1D' : r === 7 ? '1W' : '1M'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {demo ? (
-                    <>
-                      <div className="chart-amount">
-                        {money(aggregate.totalUsd)} <span className="positive">Sample view</span>
-                      </div>
-                      <Sparkline
-                        values={
-                          range === 1
-                            ? [93, 94, 96, 95, 98, 99, 101, 100, 104, 106, 105, 109, 112]
-                            : range === 7
-                              ? [72, 75, 74, 79, 81, 78, 84, 88, 86, 94, 93, 99, 104, 101, 112]
-                              : [45, 49, 47, 56, 55, 63, 60, 70, 72, 67, 75, 82, 78, 86, 84, 95, 92, 101, 98, 112]
-                        }
-                        large
-                        label="Illustrative demo trend. This is not historical market data."
-                      />
-                      <div className="chart-labels">
-                        <span>{range === 1 ? '00:00' : range === 7 ? '7 days ago' : '30 days ago'}</span>
-                        <span>ILLUSTRATIVE DEMO</span>
-                        <span>Today</span>
-                      </div>
-                    </>
-                  ) : observations.length > 0 ? (
-                    <PortfolioReadings
-                      observations={observations}
-                      readings={readings}
-                      money={money}
-                      coverageChanged={coverageChanged}
-                      historyError={historyError}
-                      historySaving={historySaving}
-                      loading={loading}
-                      unavailable={unavailable}
-                    />
-                  ) : (
-                    <div className="history-empty">
-                      <span className="history-symbol">
-                        <Icon name="activity" size={37} />
-                      </span>
-                      <h3>{loading ? 'Reading your portfolio…' : 'Waiting for a usable reading.'}</h3>
-                      <p>
-                        Fresh balances with a market price are needed. Check the network notices above.
-                        <br />
-                        Kinko never invents your past performance.
-                      </p>
-                      <span>Real readings are saved encrypted on this browser.</span>
-                    </div>
-                  )}
+                <section className="panel history-panel" aria-label="Portfolio history">
+                  <PortfolioReadings observations={demo ? demoHistory(range, aggregate.totalUsd) : observations}
+                    series={demo ? undefined : series} range={range} onRangeChange={setRange} money={money}
+                    historyError={historyError} historySaving={historySaving} loading={loading}
+                    unavailable={unavailable} backfillStatus={backfillStatus} demo={demo} />
                 </section>
                 <section className="panel allocation-panel">
                   <div className="panel-header">
@@ -1620,19 +1645,6 @@ export function App() {
                   penalties are not estimated. Ended stakes require a historical index and are not included.
                 </p>
               </div>
-              {Object.entries(stakeResults)
-                .filter(
-                  ([k]) =>
-                    selectedWallets.some((w) => k.startsWith(w.address.toLowerCase() + ':')) &&
-                    (chainFilter === 'all' || k.endsWith(':' + chainFilter))
-                )
-                .filter(([, r]) => r.error)
-                .map(([k, r]) => (
-                  <p className="error small" key={k}>
-                    {NETWORKS[k.split(':')[1]].name} · {r.error}
-                    {r.stale ? ' Cached stakes may be stale.' : ''}
-                  </p>
-                ))}
               <section className="panel">
                 <div className="panel-header">
                   <div>
@@ -1717,19 +1729,6 @@ export function App() {
                 </Empty>
               ) : (
                 <>
-                  {Object.values(activities)
-                    .filter(
-                      (a) =>
-                        a.wallet &&
-                        selectedWallets.some((w) => w.address.toLowerCase() === a.wallet.toLowerCase()) &&
-                        (chainFilter === 'all' || chainFilter === a.chain) &&
-                        a.error
-                    )
-                    .map((a) => (
-                      <p className="error small" key={`${a.chain}:${a.wallet}`}>
-                        {NETWORKS[a.chain].name}: {a.error}
-                      </p>
-                    ))}
                   {Object.values(activities)
                     .flatMap((a) => a.items || [])
                     .filter(matches)
@@ -1882,7 +1881,7 @@ export function App() {
                       try {
                         const f = e.target.files?.[0];
                         if (!f) return;
-                        if (f.size > 150000) throw new Error('Backup is too large.');
+                        if (f.size > 12000000) throw new Error('Backup is too large.');
                         const d = JSON.parse(await f.text());
                         const list = Array.isArray(d) ? d : d.wallets;
                         if (!Array.isArray(list))
@@ -1973,6 +1972,14 @@ export function App() {
                     Delete encrypted watchlist
                   </button>
                 </div>
+              </section>
+              <section className="settings-data-notices" ref={dataNoticesRef} aria-labelledby="data-notices-heading">
+                <h2 id="data-notices-heading" tabIndex={-1}>Network data notices</h2>
+                <p className="small muted">
+                  {walletFilter === 'all' ? 'All wallets' : selectedWallets[0]?.name || shortAddress(walletFilter)}
+                  {' · '}{chainFilter === 'all' ? 'All networks' : NETWORKS[chainFilter].name}
+                </p>
+                {notices.length ? noticePanel : <p className="small muted">{loading ? 'Checking network data…' : 'No data notices for this selection.'}</p>}
               </section>
             </div>
           )}

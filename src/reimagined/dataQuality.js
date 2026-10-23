@@ -1,5 +1,6 @@
 import { aggregateHoldings } from '../services/portfolioAggregation.js';
 import { compactHistory } from './portfolioHistory.js';
+import { historyWindow } from './historyChart.js';
 import { splitTokens, tokenKey, hasUsablePrice } from './tokenFilter.js';
 
 export function dataNotices(results, rows = [], { tracked = [], hidden = [], loading = false } = {}) {
@@ -68,21 +69,35 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
     (r) => r.error || r.stale || r.issues?.length || r.notices?.length || (r.discovery && r.discovery !== 'complete')
   );
   const coverage = JSON.stringify({
+    method: 'observed-liquid-v2',
+    priceQuality: eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}:${r.priceSource || 'unknown'}:${!r.priceTime || Math.abs(r.priceTime - time) > 300000 ? 'outside-5m' : 'within-5m'}`).sort(),
     positions: [...new Set(eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}`))].sort(),
     reads: results
       .map((r) => `${r.wallet}:${r.chain}:${r.error || r.stale ? 'stale' : r.discovery || (r.issues?.length ? 'partial' : 'complete')}`)
       .sort()
   });
-  return { scope, time, value, coverage, partial: !!(incomplete || excluded), excluded };
+  const quoteGroups = new Map();
+  for (const r of eligible) {
+    const key = JSON.stringify([r.chain, r.priceSource || 'legacy-unspecified', r.priceTime || null]);
+    if (!quoteGroups.has(key)) quoteGroups.set(key, { chain: r.chain, source: r.priceSource || 'legacy-unspecified', priceTime: r.priceTime || null, assets: new Set() });
+    quoteGroups.get(key).assets.add(r.address?.toLowerCase() || 'native');
+  }
+  return { scope, time, value, coverage, partial: !!(incomplete || excluded || eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000)), excluded,
+    method: 'observed-liquid-v2', provenance: { kind: 'observation', staking: 'excluded',
+      valuedPositions: [...new Set(eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}`))].sort(),
+      readCoverage: results.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.error || r.stale ? 'unavailable' : 'available'}`).sort(),
+      quotes: [...quoteGroups.values()].map(({ assets, ...group }) => ({ ...group, assets: [...assets].sort() })),
+      balances: results.map((r) => ({ chain: r.chain, wallet: r.wallet, balanceTime: r.asOf || null,
+        block: r.block || null, status: r.stale || r.error ? 'unavailable' : r.discovery || 'unspecified',
+        source: r.discoveryProvider || 'RPC / explorer', pinnedBlocks: [...new Set(eligible.filter((p) => p.chain === r.chain && p.wallet.toLowerCase() === r.wallet?.toLowerCase()).map((p) => p.balanceBlock).filter(Boolean))] })),
+      timestampQuality: eligible.some((r) => !r.priceTime || Math.abs(r.priceTime - time) > 300000) ? 'price-time-outside-5m-or-unknown' : 'within-5m'
+    } };
+
 }
 export function appendObservation(prior, sample) {
   if (!sample || prior.some((s) => s.scope === sample.scope && s.time === sample.time && s.coverage === sample.coverage)) return prior;
   return compactHistory([...prior, sample].sort((a, b) => a.time - b.time));
 }
-export function observationSeries(history, scope, days, now = Date.now()) {
-  const samples = history.filter((s) => s.scope === scope && s.time > now - days * 86400000);
-  const latest = samples.at(-1);
-  if (!latest) return { observations: [], readings: [], coverageChanged: false };
-  const coverageChanged = samples.some((s, i) => i > 0 && (s.breakBefore || s.coverage !== samples[i - 1].coverage));
-  return { observations: samples, readings: samples, coverageChanged };
+export function observationSeries(history, scope, range, now = Date.now()) {
+  return historyWindow(history, scope, range, now);
 }

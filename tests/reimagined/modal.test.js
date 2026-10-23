@@ -218,7 +218,7 @@ test('returning-user access stays in document flow and leaves external security 
   assert.equal(document.activeElement, opener);
 });
 
-test('dense history uses real time spacing, visible gaps, and keyboard/tap inspection without connecting coverage', () => {
+test('dense history uses real time spacing, visible gaps, and keyboard/tap inspection with approximate coverage transitions', () => {
   const root = createRoot(document.querySelector('#root'));
   const first = { scope: 'all:all', time: Date.now() - 3 * 3600000, value: 100, coverage: 'a', partial: false };
   const observations = Array.from({ length: 31 }, (_, i) => ({ ...first, time: first.time + i * 120000, value: 100 + i }));
@@ -228,10 +228,10 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     act(() => root.render(React.createElement(PortfolioReadings, { ...props, loading: true })));
     const segments = [...document.querySelectorAll('[data-history-segment]')];
     assert.equal(segments.length, 2);
-    assert.ok(document.querySelector('[data-history-gap]'));
+    assert.ok(document.querySelector('[data-history-bridge]'), 'coverage changes have a visible approximate connector');
     assert.match(document.querySelector('.portfolio-axis-y').textContent, /USD/);
-    assert.match(document.querySelector('.portfolio-plot').textContent, /No readings recorded/);
-    assert.equal(segments[1].getAttribute('stroke-dasharray'), '5 4');
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 110.00');
+    assert.equal(segments[1].getAttribute('stroke-dasharray'), null);
     const xs = segments[0].getAttribute('points').split(' ').map((p) => Number(p.split(',')[0]));
     assert.ok(xs[1] - xs[0] < 10, 'two minutes occupies the correct fraction of a three-hour range');
     assert.match(document.querySelector('.history-status').textContent, /Updating/);
@@ -245,34 +245,37 @@ test('dense history uses real time spacing, visible gaps, and keyboard/tap inspe
     act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, clientX: 692 })));
     assert.equal(slider.getAttribute('aria-valuenow'), String(observations.length - 1));
     assert.match(document.querySelector('.history-inspection').textContent, /USD 110.00.*Partial coverage/);
+    assert.equal(document.querySelectorAll('.portfolio-readings .chart-amount').length, 1);
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 110.00');
+    act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointerout', { bubbles: true })));
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 110.00');
     assert.equal(document.querySelector('.history-saved-readings').open, false);
     act(() => document.querySelector('.history-saved-readings summary').click());
     assert.equal(document.querySelector('.history-saved-readings').open, true);
     act(() => root.render(React.createElement(PortfolioReadings, { ...props, unavailable: true, money: () => '••••' })));
     assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
-    assert.match(document.querySelector('.history-status').textContent, /Previous history retained/);
+    assert.match(document.querySelector('.history-footer').textContent, /Saved history retained/);
     assert.ok(!document.querySelector('.portfolio-axis-y').textContent.includes('USD'));
     assert.ok(!slider.getAttribute('aria-valuetext').includes('USD'));
   } finally { act(() => root.unmount()); }
 });
 
-test('screenshot-shaped sparse history gets a compact summary with retained, collapsible readings', () => {
+test('sparse history stays visible with separated readings and opt-in information', () => {
   const root = createRoot(document.querySelector('#root'));
   const first = { scope: 'all:all', time: Date.now() - 30 * 3600000, value: 7061.29, coverage: 'a', partial: true };
   const observations = Array.from({ length: 20 }, (_, i) => ({ ...first, time: first.time + i * 120000 }));
   observations.push({ ...first, time: Date.now(), value: 8061.01, coverage: 'b' });
   try {
     act(() => root.render(React.createElement(PortfolioReadings, { observations, money: String, coverageChanged: true })));
-    assert.equal(document.querySelector('.history-chart'), null);
-    assert.match(document.querySelector('.history-building').textContent, /History building.*21 saved readings · 2 recording sessions/);
-    assert.match(document.querySelector('.chart-amount').textContent, /8061.01/);
-    assert.equal(document.querySelectorAll('.history-recent > div').length, 3);
+    assert.ok(document.querySelector('.history-chart'));
+    assert.equal(document.querySelectorAll('[data-history-segment]').length, 2);
+    assert.equal(document.querySelector('.chart-amount').textContent, '8061.01');
     assert.equal(document.querySelectorAll('tbody tr').length, 21);
     assert.equal(document.querySelector('.history-saved-readings').open, false);
-    assert.match(document.querySelector('.history-coverage-note').textContent, /cannot be compared/);
-    act(() => document.querySelector('.history-info button').click());
-    assert.equal(document.querySelector('.history-info button').getAttribute('aria-expanded'), 'true');
-    assert.match(document.querySelector('.history-info-popover').textContent, /32 days/);
+    assert.match(document.querySelector('.history-interval').textContent, /unavailable/);
+    act(() => document.querySelector('.history-info > summary').click());
+    assert.equal(document.querySelector('.history-info').open, true);
+    assert.match(document.querySelector('.history-info-popover').textContent, /No age-based deletion/);
   } finally { act(() => root.unmount()); }
 });
 
@@ -281,11 +284,11 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
   const first = { scope: 'all:all', time: Date.now(), value: 7090.72, coverage: 'first', partial: true };
   try {
     act(() => root.render(React.createElement(PortfolioReadings, { observations: [first], money: (v) => `USD ${v.toFixed(2)}` })));
-    assert.match(document.querySelector('.chart-amount').textContent, /USD 7090.72/);
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 7090.72');
     assert.equal(document.querySelectorAll('tbody tr').length, 1);
     assert.match(document.querySelector('tbody').textContent, /7090.72.*Partial/);
-    assert.ok(document.querySelector('.history-building'));
-    assert.equal(document.querySelector('.history-chart'), null, 'a second point is not fabricated');
+    assert.ok(document.querySelector('.history-chart'));
+    assert.equal(document.querySelectorAll('[data-history-segment]')[0].getAttribute('points').split(' ').length, 1, 'a second point is not fabricated');
     act(() =>
       root.render(
         React.createElement(PortfolioReadings, {
@@ -295,7 +298,21 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
       )
     );
     assert.equal(document.querySelectorAll('tbody tr').length, 2);
-    assert.ok(document.querySelector('.history-building'));
+    assert.ok(document.querySelector('.history-chart'));
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 7100.00', 'fresh readings advance the default price');
+    const slider = document.querySelector('[role="slider"]');
+    slider.getBoundingClientRect = () => ({ left: 0, width: 700 });
+    act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 8 })));
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 7090.72');
+    assert.equal(slider.getAttribute('aria-valuenow'), '0', 'the picker and price move together');
+    act(() => root.render(React.createElement(PortfolioReadings, {
+      observations: [first, { ...first, time: first.time + 61000, value: 7100 }, { ...first, time: first.time + 122000, value: 7200 }],
+      money: (v) => `USD ${v.toFixed(2)}`
+    })));
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 7090.72', 'refresh preserves the inspected point');
+    act(() => slider.dispatchEvent(new dom.window.MouseEvent('pointerout', { bubbles: true })));
+    assert.equal(document.querySelector('.chart-amount').textContent, 'USD 7200.00', 'leaving returns to the latest fetched reading');
+    assert.equal(slider.getAttribute('aria-valuenow'), '2');
     act(() =>
       root.render(
         React.createElement(PortfolioReadings, {
@@ -306,7 +323,7 @@ test('the first actual portfolio reading shows its value, timestamp and table ro
       )
     );
     assert.ok(!document.querySelector('#root').textContent.includes('7090.72'));
-    assert.match(document.querySelector('.history-note').textContent, /storage is unavailable/);
+    assert.match(document.querySelector('.history-info-popover').textContent, /storage is unavailable/);
   } finally {
     act(() => root.unmount());
   }

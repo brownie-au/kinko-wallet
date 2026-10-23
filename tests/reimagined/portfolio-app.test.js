@@ -36,9 +36,10 @@ test('real-mode app displays its first partial reading, refreshes automatically,
   await createDeviceSessions().save(key, true, 'cloud');
   const previousFetch = global.fetch;
   let failHoldings = false, holdHoldings = false, releaseHoldings;
+  let historyReads = 0;
   let reads = 0,
     root;
-  const now = Date.now();
+  const now = Date.now() - 600000;
   global.fetch = async (url, options) => ({
     ok: true,
     json: async () => {
@@ -47,6 +48,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
         return { envelope, revision: 1 };
       }
       const request = JSON.parse(options.body);
+      if (request.action === 'history') { historyReads++; return { value: null, positions: [], excluded: 0, partial: true }; }
       if (request.action === 'fx') return { rate: 1.5, date: '2026-10-20' };
       if (request.action === 'holdings') {
         if (holdHoldings) await new Promise((resolve) => { releaseHoldings = resolve; });
@@ -105,12 +107,14 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     await act(async () => root.render(React.createElement(App)));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length === 1);
     assert.match(document.querySelector('.chart-amount').textContent, /200\.00/);
-    assert.equal(document.querySelector('.provider-notice').open, false);
+    assert.match(document.querySelector('.reading-table').textContent, /200\.00/);
+    assert.equal(document.querySelector('.provider-notice'), null);
+    assert.ok(document.querySelector('.data-status .data-notice-link'));
     assert.match(document.querySelector('.reading-table').textContent, /Partial/);
     await act(async () => t.mock.timers.tick(120000));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length === 2);
     assert.equal(reads, 2);
-    assert.ok(document.querySelector('.history-panel .history-building'));
+    assert.ok(document.querySelector('.history-panel .history-chart'));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
     });
@@ -120,17 +124,22 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     assert.ok(!localStorage.getItem(stored).includes('all:all'));
     failHoldings = true;
     await act(async () => t.mock.timers.tick(120000));
-    await until(() => document.querySelector('.history-status')?.textContent.includes('Some networks unavailable'));
-    assert.ok(document.querySelector('.history-panel .history-building'), 'failed refresh retains saved history');
+    await until(() => document.querySelector('.history-footer')?.textContent.includes('Some networks unavailable'));
+    assert.ok(document.querySelector('.history-panel .history-chart'), 'failed refresh retains saved history');
     assert.equal(document.querySelectorAll('.reading-table tbody tr').length, 2);
+    const backfillCallsBeforeReopen = historyReads;
     failHoldings = false;
     holdHoldings = true;
     act(() => root.unmount());
     t.mock.timers.reset();
     root = createRoot(document.querySelector('#root'));
+    const restoreStarted = performance.now();
     await act(async () => root.render(React.createElement(App)));
     await until(() => document.querySelectorAll('.reading-table tbody tr').length >= 2);
-    assert.ok(document.querySelector('.history-panel .history-building'));
+    const restoreMs = performance.now() - restoreStarted;
+    assert.ok(restoreMs < 1000, `cached chart restored in ${restoreMs.toFixed(1)}ms`);
+    console.log(`Cached chart restore: ${restoreMs.toFixed(1)}ms, Node ${process.version}, JSDOM, providers held pending`);
+    assert.ok(document.querySelector('.history-panel .history-chart'));
     assert.ok(!document.querySelector('.history-panel').textContent.includes('Your history starts here'));
     await until(() => !!releaseHoldings);
     assert.match(document.querySelector('.history-status').textContent, /Updating/);
@@ -138,6 +147,7 @@ test('real-mode app displays its first partial reading, refreshes automatically,
     holdHoldings = false;
     await act(async () => releaseHoldings());
     await until(() => !document.querySelector('.history-status').textContent.includes('Updating'));
+    assert.equal(historyReads, backfillCallsBeforeReopen, 'reopening within 24 hours does not repeat the same backfill');
     const click = async (element) => { assert.ok(element); await act(async () => element.click()); };
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find((b) => b.textContent.includes('Assets')));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);

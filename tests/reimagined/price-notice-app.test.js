@@ -10,6 +10,8 @@ import { createDeviceSessions } from '../../src/reimagined/deviceSession.js';
 test('real-mode warnings follow spam/hide rules, display toggles, wallet scope and completed refreshes', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://kinko.test/', pretendToBeVisual: true });
   dom.window.scrollTo = () => {};
+  let scrolledTo;
+  dom.window.HTMLElement.prototype.scrollIntoView = function () { scrolledTo = this; };
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage,
     sessionStorage: dom.window.sessionStorage, indexedDB, IS_REACT_ACT_ENVIRONMENT: true });
   const { createRoot } = await import('react-dom/client');
@@ -28,6 +30,7 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
     }
     const req = JSON.parse(opts.body);
     if (req.action === 'fx') return { ok: true, json: async () => ({ rate: 1.5 }) };
+    if (req.action === 'activity') throw new Error('Provider unavailable (403)');
     assert.equal(req.action, 'holdings');
     reads++;
     if (gate) await gate;
@@ -54,11 +57,25 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
   const refreshButton = () => [...document.querySelectorAll('button')].find(b => b.textContent === 'Refresh');
   try {
     await act(async () => root.render(React.createElement(App)));
-    await until(() => warning().includes('1 held token has'));
+    await until(() => document.querySelector('.data-notice-link'));
     assert.equal(reads, 2);
+    assert.equal(warning(), '', 'Overview keeps the detailed block off the page');
+    const overview = () => [...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent === 'Overview');
+    await click(document.querySelector('.data-notice-link'));
+    const section = document.querySelector('.settings-data-notices');
+    assert.equal(section, document.querySelector('.settings-grid').lastElementChild);
+    assert.equal(scrolledTo, section);
+    assert.equal(section.querySelector('details').open, true);
+    assert.equal(document.activeElement, section.querySelector('summary'));
+    assert.match(section.textContent, /All wallets · All networks/);
+    assert.equal(document.querySelector('.data-notice-link'), null, 'compact link appears only on Overview');
     assert.match(warning(), /Base · 1 wallet · Price unavailable/);
-    await selectWallet(first); assert.equal(warning(), '');
-    await selectWallet(second); assert.match(warning(), /1 held token has/);
+    await click(overview());
+    await selectWallet(first); assert.equal(document.querySelector('.data-notice-link'), null);
+    await selectWallet(second); assert.ok(document.querySelector('.data-notice-link'));
+    await click(document.querySelector('.data-notice-link'));
+    assert.equal(document.querySelector('.provider-notice').open, true, 'repeated navigation reopens notices');
+    assert.match(document.querySelector('.settings-data-notices').textContent, /Genuine unpriced · All networks/);
     await click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent === 'Assets'));
     assert.equal(document.querySelectorAll('.asset-row').length, 1);
     assert.match(document.querySelector('.asset-table-head').textContent, /24H CHANGE/);
@@ -66,26 +83,41 @@ test('real-mode warnings follow spam/hide rules, display toggles, wallet scope a
     await click(document.querySelector('.asset-filters summary'));
     await click(document.querySelector('input[aria-label="Show unpriced tokens"]'));
     await until(() => document.querySelectorAll('.asset-row').length === 2);
-    assert.match(warning(), /1 held token has/);
+    assert.ok(document.querySelector('.data-notice-link'));
+    assert.equal(warning(), '', 'detailed notices stay in Settings');
     await until(() => !document.querySelector('input[aria-label="Show unpriced tokens"]').disabled);
     await click(document.querySelector('input[aria-label="Show unpriced tokens"]'));
     await until(() => document.querySelectorAll('.asset-row').length === 1);
-    assert.match(warning(), /1 held token has/);
+    assert.ok(document.querySelector('.data-notice-link'));
+    assert.equal(warning(), '', 'detailed notices stay in Settings');
     gate = new Promise(r => { release = r; });
     await click(refreshButton());
     await until(() => reads === 4);
-    assert.equal(warning(), '', 'old unpriced rows must not warn while refresh is pending');
+    assert.equal(document.querySelector('.data-notice-link'), null, 'old unpriced rows must not warn while refresh is pending');
     priceUsd = 3; await act(async () => { release(); }); gate = null;
     await until(() => !!refreshButton());
-    assert.equal(warning(), '', 'successful new prices must clear the warning');
+    assert.equal(document.querySelector('.data-notice-link'), null, 'successful new prices must clear the warning');
     gate = new Promise(r => { release = r; });
     await click(refreshButton()); await until(() => reads === 6);
     await selectWallet(first);
     priceUsd = null; await act(async () => { release(); }); gate = null;
     await until(() => !!refreshButton());
-    assert.equal(warning(), '', 'a different wallet completing must not leak a warning into this scope');
-    await selectWallet(second); assert.match(warning(), /1 held token has/);
+    assert.equal(document.querySelector('.data-notice-link'), null, 'a different wallet completing must not leak a warning into this scope');
+    await selectWallet(second); assert.ok(document.querySelector('.data-notice-link'));
     assert.equal(document.querySelectorAll('.asset-row').length, 1, 'unpriced toggle remains off');
+    const navigate = async label => click([...document.querySelectorAll('nav[aria-label="Main navigation"] button')].find(b => b.textContent.startsWith(label)));
+    for (const label of ['Overview', 'Assets', 'Watch wallets', 'HEX staking', 'Activity']) {
+      await navigate(label);
+      assert.ok(document.querySelector('.data-status .data-notice-link'), `${label} has the compact notice link`);
+      assert.equal(document.querySelector('.provider-notice'), null, `${label} has no detailed notice block`);
+      assert.equal(document.querySelector('.error.small'), null, `${label} has no repeated provider errors`);
+    }
+    await until(() => document.querySelector('.data-notice-link')?.getAttribute('aria-label').includes('2 data notices'));
+    await click(document.querySelector('.data-notice-link'));
+    assert.match(warning(), /Activity: Provider unavailable \(403\)/);
+    assert.match(warning(), /1 held token has/);
+    assert.equal(document.querySelectorAll('.provider-notice li').length, 2, 'repeated activity errors are grouped by network');
+    assert.equal(document.querySelector('.settings-data-notices'), document.querySelector('.settings-grid').lastElementChild);
   } finally {
     release?.(); act(() => root.unmount()); global.fetch = originalFetch; dom.window.close();
   }

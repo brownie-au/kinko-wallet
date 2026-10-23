@@ -1,0 +1,1 @@
+Python Decimal independent check: 309.05489659276643499146 USD matches deployed Base exact value.
