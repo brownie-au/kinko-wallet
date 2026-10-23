@@ -43,14 +43,15 @@ test('selected-range timestamp tolerance flags observed quotes and breaks incomp
   assert.equal(historyWindow([a,b],'all:all','1D',now).comparison.dollar,10);
 });
 
-test('approximate bridges join comparable sparse readings but never bridge different holdings', () => {
+test('approximate bridges keep the line visible through sparse readings and coverage changes within one scope', () => {
   const a = point(day), b = point(0, 110);
   assert.equal(historyChartModel([a, b], now).bridges.length, 1);
-  assert.equal(historyChartModel([a, {...b, coverage: 'different'}], now).bridges.length, 0);
+  assert.equal(historyChartModel([a, {...b, coverage: 'different'}], now).bridges.length, 1);
   const provenance = {valuedPositions: ['wallet:eth:native'], readCoverage: ['wallet:eth:available']};
   const observed = {...a, method: 'observed-liquid-v2', provenance};
   const changedQuote = {...b, method: 'observed-liquid-v2', coverage: 'new-source', partial: true, provenance};
   assert.equal(historyChartModel([observed, changedQuote], now).bridges.length, 1);
-  assert.equal(historyChartModel([observed, {...changedQuote, provenance: {...provenance, valuedPositions: ['wallet:eth:other']}}], now).bridges.length, 0);
-  assert.equal(historyChartModel([observed, {...changedQuote, breakBefore: true}], now).bridges.length, 0);
+  assert.equal(historyChartModel([observed, {...changedQuote, provenance: {...provenance, valuedPositions: ['wallet:eth:other']}}], now).bridges.length, 1);
+  assert.equal(historyChartModel([observed, {...changedQuote, breakBefore: true}], now).bridges.length, 1);
+  assert.equal(historyChartModel([observed, {...changedQuote, scope: 'another:scope'}], now).bridges.length, 0);
 });

@@ -447,8 +447,9 @@ export function HistoryChart({ observations, money, model }) {
   min = Math.max(0, min - padding); max += padding;
   const x = (time) => observations.length === 1 ? width / 2 : pad + (time - first) / elapsed * (width - 2 * pad);
   const y = (value) => height - pad - (value - min) / (max - min) * (height - 2 * pad);
-  const selectedIndex = observations.findIndex((s) => s.time === selectedTime);
-  const selected = selectedIndex < 0 ? null : observations[selectedIndex];
+  const inspectedIndex = observations.findIndex((s) => s.time === selectedTime);
+  const selectedIndex = inspectedIndex < 0 ? observations.length - 1 : inspectedIndex;
+  const selected = observations[selectedIndex];
   const selectAt = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
@@ -468,8 +469,8 @@ export function HistoryChart({ observations, money, model }) {
   return (
     <div className="portfolio-plot">
       <div className="history-inspection" aria-live="polite">
-        <strong className="chart-amount">{selected ? money(selected.value) : '—'}</strong>
-        <span>{selected ? <>{historyStamp(selected.time)} · {selected.partial ? 'Partial coverage' : 'Complete coverage'}</> : 'Move over the chart or drag to explore'}</span>
+        <strong className="chart-amount">{money(selected.value)}</strong>
+        <span>{historyStamp(selected.time)} · {selected.partial ? 'Partial coverage' : 'Complete coverage'}</span>
       </div>
       <div className="portfolio-axis-y" aria-label="Portfolio value scale">
         {[max, (min + max) / 2, min].map((v, i) => <span key={i}>{Math.abs(v) >= 1e6 ? `${money(v / 1e6)}M` : Math.abs(v) >= 10000 ? `${money(v / 1000)}K` : money(v)}</span>)}
@@ -477,9 +478,9 @@ export function HistoryChart({ observations, money, model }) {
       <div className="portfolio-plot-input" tabIndex="0" role="slider" aria-label="Portfolio reading"
         aria-valuemin={0} aria-valuemax={observations.length - 1} aria-valuenow={!selected ? observations.length - 1 : selectedIndex}
         aria-valuetext={`${historyStamp((selected || observations.at(-1)).time)}, ${money((selected || observations.at(-1)).value)}, ${(selected || observations.at(-1)).partial ? 'partial' : 'complete'} coverage`}
-        onPointerLeave={(event) => { if (event.pointerType !== 'touch') setSelectedTime(null); }} onPointerMove={selectAt} onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); selectAt(event); }} onKeyDown={keyboard} onFocus={() => setSelectedTime(observations.at(-1).time)}>
+        onPointerLeave={(event) => { if (event.pointerType !== 'touch') setSelectedTime(null); }} onPointerMove={selectAt} onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); selectAt(event); }} onKeyDown={keyboard} onFocus={() => setSelectedTime(null)}>
         <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
-          aria-label="Portfolio readings spaced by time. Dashed lines connect comparable readings across unsampled intervals; different asset coverage is not connected." preserveAspectRatio="none">
+          aria-label="Portfolio readings spaced by time. Dashed lines connect saved readings across gaps or changes in coverage; these transitions are approximate, not investment returns." preserveAspectRatio="none">
           <defs><linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--history-line, var(--accent))" stopOpacity=".17" /><stop offset="100%" stopColor="var(--history-line, var(--accent))" stopOpacity=".015" /></linearGradient></defs>
           {[pad, height / 2, height - pad].map((v) => <path key={v} d={`M0 ${v}H${width}`} stroke="var(--line)" strokeDasharray="3 5" />)}
           {model.bridges?.map(([a, b]) => <path key={`${a.time}:${b.time}`} data-history-bridge d={`M${x(a.time)} ${y(a.value)}L${x(b.time)} ${y(b.value)}`} fill="none" stroke="var(--history-line, var(--accent))" strokeWidth="2" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />)}
@@ -509,7 +510,7 @@ function HistoryInfo({ readings, range, error, backfillStatus, demo, money }) {
     <div className="history-info-popover" id={id}>
       <h3>About this history</h3>
       {demo ? <p>Illustrative demo only. These are fictional values, not verified wallet history.</p> : <p>{readings.length} retained reading{readings.length === 1 ? '' : 's'} in this window. {readings[0] ? `Available since ${historyStamp(readings[0].time)}.` : 'History begins with your first usable valuation.'}</p>}
-      <p>Value change compares the labelled start and end times. Deposits and withdrawals affect this number; it is not investment return. Dashed lines show approximate trends between comparable readings, not measured values between them. Changes to wallet membership, priced assets or valuation method stay disconnected. Period comparisons require uninterrupted, matching coverage.</p>
+      <p>Value change compares the labelled start and end times. Deposits and withdrawals affect this number; it is not investment return. Dashed lines connect saved readings across gaps or changes in priced assets, coverage or valuation method. They show approximate value transitions, not measured values between readings or investment returns. Only readings for the selected wallet and network scope are connected. Period comparisons require uninterrupted, matching coverage.</p>
       <p>Windows trail now: 1 hour, 24 hours, 7 days, 30 days, 365 days; MAX shows all retained readings. Times are displayed in your local timezone. Values are stored in USD; AUD display converts every point at the current reference FX rate, not historical AUD exchange rates. A shorter history never fills an entire selected period.</p>
       <p>Saved liquid readings use balances and prices observed then. Archive backfill reads balances at a historical block, never today’s balances. Sold-asset discovery is bounded and incomplete. HEX stakes, NFTs and protocol positions are excluded; no underlying positions are added to liquid tokens.</p>
       <p>Backfill prices must be within {PRICE_TOLERANCE[range] / 60000} minutes of the requested time; blocks within 2 minutes before it. Observed quotes outside 5 minutes or the tighter selected-range tolerance, or with unknown timestamps, are flagged partial. Earlier v1 readings have limited provenance.</p>
@@ -555,7 +556,7 @@ export function PortfolioReadings({ observations, series, range = '1M', onRangeC
       <span className="history-status">{latest ? `Last updated ${historyStamp(latest.time)}` : 'No valid valuation yet'}{loading ? ' · Updating…' : historySaving ? ' · Saving…' : ''}</span>
       {unavailable ? <span>Some networks unavailable · Saved history retained</span> : latest && !latest.method ? <span>Legacy reading · Sources unverified</span> : latest?.partial ? <span>Partial value{latest.excluded ? ` · ${latest.excluded} assets unpriced or unavailable` : ' · Limited coverage'}</span> : !demo ? <span>Liquid assets · Stakes excluded</span> : null}
       {plotReadings.length < observations.length && <span>Earlier partial samples · See information</span>}
-      {model.bridges?.length > 0 && <span>Dashed line · Approximate trend between saved readings</span>}
+      {model.bridges?.length > 0 && <span>Dashed line · Gap or coverage change</span>}
       {observations.length === 1 && <span>One reading saved · The line appears after the next reading</span>}
       {historyError && <span role="alert">History could not be saved · See information</span>}
     </div>

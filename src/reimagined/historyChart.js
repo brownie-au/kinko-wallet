@@ -26,7 +26,7 @@ export function historyChartModel(observations, now = Date.now()) {
     const gap = previous && sample.time - previous.time > threshold;
     if (!previous || gap) sessionCount++;
     if (gap) gaps.push({ from: previous.time, to: sample.time });
-    if (previous && (gap || !compatible(previous, sample)) && trendCompatible(previous, sample))
+    if (previous && previous.scope === sample.scope && (gap || sample.breakBefore || !compatible(previous, sample)))
       bridges.push([previous, sample]);
     if (!previous || gap || sample.breakBefore || !compatible(previous, sample)) segments.push([]);
     segments.at(-1).push({ ...sample, index });
