@@ -189,6 +189,7 @@ test('native balance and price complete while discovery is still waiting',async(
   try{
     await withFetch(async(url,opts)=>{
       if(url.includes('/addresses/')){await gate;events.push('discovery-returned');return ok({items:[]});}
+      if(url.includes('dexscreener.com')) return ok([]);
       if (url.includes('/historical/')) return ok({coins:{}});
       if(!opts?.body){events.push('native-price');release();return ok({coins:{'coingecko:ethereum':{price:2000,timestamp:Date.now()/1000}}});}
       const req=request(opts);
