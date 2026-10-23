@@ -5,7 +5,7 @@ export function bucketWidth(time, now = Date.now()) {
   return age < 86400000 ? 120000 : age < 7 * 86400000 ? 900000 : age < 90 * 86400000 ? 3600000 : age < 2 * 365 * 86400000 ? 86400000 : 7 * 86400000;
 }
 export function compatible(a, b) {
-  return a.scope === b.scope && a.coverage === b.coverage && (a.method || 'saved-v1') === (b.method || 'saved-v1') && !!a.partial === !!b.partial;
+  return a.scope === b.scope && a.coverage === b.coverage && (a.method || 'saved-v1') === (b.method || 'saved-v1') && !!a.partial === !!b.partial && !!a.priceOutOfTolerance === !!b.priceOutOfTolerance;
 }
 // Absence is a gap, never a zero or an inferred valuation. Backfill retains its real cadence.
 export function historyChartModel(observations, now = Date.now()) {
@@ -25,7 +25,12 @@ export function historyChartModel(observations, now = Date.now()) {
 export function historyWindow(history, scope, range = '1M', now = Date.now()) {
   const duration = HISTORY_RANGES[range] ?? Number(range) * 86400000;
   const all = history.filter((s) => s.scope === scope && s.time <= now).sort((a, b) => a.time - b.time);
-  const observations = all.filter((s) => s.time >= now - duration);
+  const observations = all.filter((s) => s.time >= now - duration).map((s) => {
+    const quotes = s.provenance?.quotes || s.provenance?.positions || [];
+    const tolerance = PRICE_TOLERANCE[range] ?? 300000;
+    const outside = quotes.some((q) => !Number.isFinite(q.priceTime ?? q.time) || Math.abs((q.priceTime ?? q.time) - s.time) > tolerance);
+    return outside ? { ...s, partial: true, priceOutOfTolerance: true } : s;
+  });
   const model = historyChartModel(observations, now);
   const start = observations[0], end = observations.at(-1);
   // Only compare an uninterrupted, like-for-like segment. Always label the actual interval.

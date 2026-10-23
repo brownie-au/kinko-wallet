@@ -34,3 +34,11 @@ test('membership, coverage, partial state, method boundaries and voids disable t
   const m = historyChartModel([point(day),point(0)],now);
   assert.equal(m.gaps.length,1); assert.equal(m.segments.length,2);
 });
+test('selected-range timestamp tolerance flags observed quotes and breaks incompatible quality',()=>{
+  const a=point(120000,100,{method:'observed-liquid-v2',provenance:{quotes:[{priceTime:now-120000}]}});
+  const b=point(0,110,{method:'observed-liquid-v2',provenance:{quotes:[{priceTime:now-90000}]}});
+  const hour=historyWindow([a,b],'all:all','1H',now);
+  assert.equal(hour.observations[1].partial,true);assert.equal(hour.model.segments.length,2);assert.equal(hour.comparison.dollar,null);
+  assert.equal(b.partial,undefined,'display quality does not mutate saved history');
+  assert.equal(historyWindow([a,b],'all:all','1D',now).comparison.dollar,10);
+});

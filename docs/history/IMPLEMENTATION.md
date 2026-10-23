@@ -28,7 +28,7 @@ USD is the stored valuation currency. Existing AUD preference converts all point
 | 1M | 2 hours | same |
 | 1Y / MAX | 12 hours | same |
 
-Prices need finite positive values, explicit timestamps and confidence ≥0.8. Provider search windows round up to whole hours, but acceptance uses the stricter table. No out-of-tolerance archive quote is used. Observed quotes inherit the existing six-hour live-price acceptance, **flagged partial** if timestamp unknown or outside five minutes; the information panel explains this. These flags/source changes enter comparability coverage. This is deliberately more conservative than the headline asset total.
+Prices need finite positive values, explicit timestamps and confidence ≥0.8. Provider search windows round up to whole hours, but acceptance uses the stricter table. No out-of-tolerance archive quote is used. Observed quotes inherit the existing six-hour live-price acceptance, **flagged partial** if timestamp unknown or outside five minutes; the information panel explains this. The selected-range model additionally flags quotes outside its tighter tolerance (notably the one-minute 1H view), and splits comparisons at that quality boundary. These flags/source changes enter comparability coverage. This is deliberately more conservative than the headline asset total.
 
 ## Providers, backfill and cost
 
