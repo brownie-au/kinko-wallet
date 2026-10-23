@@ -480,18 +480,18 @@ export function HistoryChart({ observations, money, model }) {
         onPointerMove={selectAt} onPointerDown={(event) => { event.currentTarget.setPointerCapture?.(event.pointerId); selectAt(event); }} onKeyDown={keyboard} onFocus={() => setSelectedTime(observations.at(-1).time)}>
         <svg className="history-chart" viewBox={`0 0 ${width} ${height}`} role="img"
           aria-label="Saved portfolio readings spaced by time. Shaded gaps have no readings; different asset coverage is not connected." preserveAspectRatio="none">
-          <defs><linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".17" /><stop offset="100%" stopColor="var(--accent)" stopOpacity=".015" /></linearGradient></defs>
+          <defs><linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--history-line, var(--accent))" stopOpacity=".17" /><stop offset="100%" stopColor="var(--history-line, var(--accent))" stopOpacity=".015" /></linearGradient></defs>
           {[pad, height / 2, height - pad].map((v) => <path key={v} d={`M0 ${v}H${width}`} stroke="var(--line)" strokeDasharray="3 5" />)}
           {model.gaps.map((gap) => <rect key={gap.from} data-history-gap x={x(gap.from)} y="0" width={x(gap.to) - x(gap.from)} height={height} fill="var(--history-gap)" />)}
           {model.segments.map((points, i) => <g key={i}>
             {points.length > 1 && <polygon points={`${x(points[0].time)},${height} ${points.map((p) => `${x(p.time)},${y(p.value)}`).join(' ')} ${x(points.at(-1).time)},${height}`} fill={`url(#${fillId})`} />}
             <polyline data-history-segment points={points.map((p) => `${x(p.time).toFixed(2)},${y(p.value).toFixed(2)}`).join(' ')}
-              fill="none" stroke="var(--accent)" strokeWidth="2.5"
+              fill="none" stroke="var(--history-line, var(--accent))" strokeWidth="2.5"
               vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-            {points.length === 1 && <circle cx={x(points[0].time)} cy={y(points[0].value)} r="3" fill="var(--accent)" />}
+            {points.length === 1 && <circle cx={x(points[0].time)} cy={y(points[0].value)} r="3" fill="var(--history-line, var(--accent))" />}
           </g>)}
           {selected && <g><path d={`M${x(selected.time)} 0V${height}`} stroke="var(--muted)" strokeDasharray="3 4" />
-            <circle cx={x(selected.time)} cy={y(selected.value)} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" /></g>}
+            <circle cx={x(selected.time)} cy={y(selected.value)} r="4" fill="var(--history-line, var(--accent))" stroke="var(--surface)" strokeWidth="2" /></g>}
         </svg>
         {model.gaps.filter((gap) => (gap.to - gap.from) / elapsed > 0.18).map((gap) =>
           <span key={gap.from} className="history-gap-label" style={{ left: `${(x((gap.from + gap.to) / 2) / width) * 100}%` }}>No readings recorded</span>)}
@@ -511,7 +511,7 @@ function HistoryInfo({ readings, range, error, backfillStatus, demo, money }) {
       <h3>About this history</h3>
       {demo ? <p>Illustrative demo only. These are fictional values, not verified wallet history.</p> : <p>{readings.length} retained reading{readings.length === 1 ? '' : 's'} in this window. {readings[0] ? `Available since ${historyStamp(readings[0].time)}.` : 'History begins with your first usable valuation.'}</p>}
       <p>Value change compares the labelled start and end times. Deposits and withdrawals affect this number; it is not investment return. Missing intervals or changes to wallet membership, priced assets or valuation method break the line and disable comparison.</p>
-      <p>Windows trail now: 1 hour, 24 hours, 7 days, 30 days, 365 days; MAX shows all retained readings. Times are displayed in your local timezone. A shorter history never fills an entire selected period.</p>
+      <p>Windows trail now: 1 hour, 24 hours, 7 days, 30 days, 365 days; MAX shows all retained readings. Times are displayed in your local timezone. Values are stored in USD; AUD display converts every point at the current reference FX rate, not historical AUD exchange rates. A shorter history never fills an entire selected period.</p>
       <p>Saved liquid readings use balances and prices observed then. Archive backfill reads balances at a historical block, never today’s balances. Sold-asset discovery is bounded and incomplete. HEX stakes, NFTs and protocol positions are excluded; no underlying positions are added to liquid tokens.</p>
       <p>Backfill prices must be within {PRICE_TOLERANCE[range] / 60000} minutes of the requested time; blocks within 2 minutes before it. Observed quotes outside 5 minutes or with unknown timestamps are flagged partial. Earlier v1 readings have limited provenance.</p>
       <p>Sources: {sources.length ? sources.join(', ') : 'See individual readings; legacy source metadata may be unavailable'}. Public RPC / Blockscout discovery and <a href="https://defillama.com/" target="_blank" rel="noreferrer">DefiLlama prices</a>. Missing or out-of-tolerance prices remain unknown, never zero.</p>
@@ -537,7 +537,7 @@ export function PortfolioReadings({ observations, series, range = '1M', onRangeC
     <div className="history-value-row"><h2>Portfolio history</h2><HistoryInfo readings={observations} range={range} error={historyError} backfillStatus={backfillStatus} demo={demo} money={money} /></div>
     <div className="chart-amount">{latest ? money(latest.value) : '—'}</div>
     <div className={`history-change ${change > 0 ? 'gain' : change < 0 ? 'loss' : ''}`}>
-      {demo ? 'Illustrative demo · fictional values' : <>Value change <strong>{change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${money(Math.abs(change))}`} {change == null ? '' : comparison.percent == null ? '(percentage unavailable)' : `(${comparison.percent > 0 ? '+' : ''}${comparison.percent.toFixed(2)}%)`}</strong></>}
+      {demo ? 'Illustrative demo · fictional values' : <>Value change <strong>{change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${money(Math.abs(change))}`} {change == null ? '' : money(0).includes('•') ? '(••••)' : comparison.percent == null ? '(percentage unavailable)' : `(${comparison.percent > 0 ? '+' : ''}${comparison.percent.toFixed(2)}%)`}</strong></>}
     </div>
     {!demo && change != null && <p className="history-interval">{historyStamp(comparison.from)} – {historyStamp(comparison.to)}</p>}
     {!demo && change == null && observations.length > 1 && <p className="history-interval">Comparison unavailable across gaps or coverage changes</p>}
@@ -546,7 +546,7 @@ export function PortfolioReadings({ observations, series, range = '1M', onRangeC
     <div className="history-footer" role="status">
       <span className="history-status">{latest ? `Last updated ${historyStamp(latest.time)}` : 'No valid valuation yet'}{loading ? ' · Updating…' : historySaving ? ' · Saving…' : ''}</span>
       {unavailable ? <span>Some networks unavailable · Saved history retained</span> : latest && !latest.method ? <span>Legacy reading · Sources unverified</span> : latest?.partial ? <span>Partial value{latest.excluded ? ` · ${latest.excluded} assets unpriced or unavailable` : ' · Limited coverage'}</span> : !demo ? <span>Liquid assets · Stakes excluded</span> : null}
-      {short && !demo && <span>History available since {historyStamp(availableSince)}</span>}
+      {short && !demo && <span>History available since {historyStamp(observations[0]?.time || availableSince)}</span>}
       {historyError && <span role="alert">History could not be saved · See information</span>}
     </div>
     <p className="sr-only">{observations.length} readings. {model.segments.length} separate segments. {model.gaps.length} time gaps. Use left and right arrow keys on the chart to inspect exact values and local timestamps.</p>

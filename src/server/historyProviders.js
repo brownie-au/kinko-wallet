@@ -4,9 +4,7 @@ import { NETWORKS } from '../reimagined/networks.js';
 import { PRICE_TOLERANCE } from '../reimagined/historyChart.js';
 import { formatTokenUnits, multiplyDecimal, addDecimal } from '../utils/tokenMath.js';
 const ABI = new Interface(['function balanceOf(address) view returns(uint256)', 'function decimals() view returns(uint8)']);
-const market = new Map(); // Public market/block data only. Never caches addresses or wallet balances.
 const inFlight = new Map();
-const verifiedRPC = new Map();
 export function coalesce(key, task, map = inFlight) {
   if (map.has(key)) return map.get(key);
   const promise = Promise.resolve().then(task).finally(() => { if (map.get(key) === promise) map.delete(key); });
@@ -29,6 +27,7 @@ export function historicalPriceKey(chain, asset, time) {
   return NETWORKS[chain].nativePrice;
 }
 export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), now = () => Date.now() } = {}) {
+  const market = new Map(), verifiedRPC = new Map(), publicPending = new Map(); // No wallet balances
   async function request(url, options = {}) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const r = await fetcher(url, { ...options, signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(6500)]) : AbortSignal.timeout(6500) });
@@ -48,7 +47,7 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
       const data = await request(url); market.set(url, { data, at: now() });
       if (market.size > 1000) market.delete(market.keys().next().value);
       return data;
-    });
+    }, publicPending);
   }
   async function rpc(chain, method, params, signal) {
     for (const url of NETWORKS[chain].rpc) {
@@ -73,7 +72,8 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
     let d;
     if (chain === 'pulse') {
       const scan = await publicData(`https://api.scan.pulsechain.com/api?module=block&action=getblocknobytime&timestamp=${Math.floor(time / 1000)}&closest=before`);
-      d = { height: typeof scan.result === 'string' && /^\d+$/.test(scan.result) ? Number(scan.result) : NaN };
+      const height = scan.result?.blockNumber ?? scan.result;
+      d = { height: (typeof height === 'string' || typeof height === 'number') && /^\d+$/.test(String(height)) ? Number(height) : NaN };
     } else d = await publicData(`https://coins.llama.fi/block/${NETWORKS[chain].llama}/${Math.floor(time / 1000)}`);
     if (!Number.isSafeInteger(d.height) || d.height < 0) throw Error('No historical block');
     let tag = '0x' + d.height.toString(16);
@@ -87,6 +87,7 @@ export function createHistoryProviders({ fetcher = fetch, sleep = (ms) => new Pr
   async function prices(chain, addresses, time, range) {
     const keys = addresses.map((a) => historicalPriceKey(chain, a, time));
     const tolerance = PRICE_TOLERANCE[range];
+    if (!keys.some(Boolean)) return Object.fromEntries(addresses.map(a => [a, null]));
     const d = await publicData(`https://coins.llama.fi/prices/historical/${Math.floor(time / 1000)}/${encodeURIComponent([...new Set(keys.filter(Boolean))].join(','))}?searchWidth=${Math.max(1, Math.ceil(tolerance / 3600000))}h`);
     return Object.fromEntries(addresses.map((address, i) => {
       const p = keys[i] && d.coins?.[keys[i]], stamp = Number(p?.timestamp) * 1000;

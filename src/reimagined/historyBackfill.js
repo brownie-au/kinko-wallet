@@ -20,7 +20,7 @@ export async function collectBackfill({ jobs, time, range, scope, request }) {
   if (!successful.length) return null;
   // Coverage includes requested membership, exact valued identities, sources and methodology.
   const coverage = JSON.stringify({ method: 'archive-liquid-v2', membership: jobs.map((j) => `${j.chain}:${j.address.toLowerCase()}`).sort(),
-    assets: responses.flatMap((r) => r.positions.filter((p) => p.valueExact != null).map((p) => `${r.chain}:${r.address}:${p.asset}`)).sort(),
+    assets: responses.flatMap((r) => r.positions.filter((p) => p.valueExact != null).map((p) => `${r.chain}:${r.address}:${p.asset}:${p.source || 'unknown'}:${p.key || 'zero'}`)).sort(),
     incomplete: responses.filter((r) => r.value == null).map((r) => `${r.chain}:${r.address}`).sort() });
   return identifyObservation({ scope, time, value: successful.reduce((n, r) => n + r.value, 0), coverage, partial: true,
     excluded: responses.reduce((n, r) => n + r.excluded, 0), method: 'archive-liquid-v2', cadence: 0,

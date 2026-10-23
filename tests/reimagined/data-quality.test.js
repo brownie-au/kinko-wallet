@@ -103,3 +103,10 @@ test('loading and failed reads do not reuse stale price warnings; completed read
   assert.equal(dataNotices([], [missing, second])[0].tokenCount, 2);
   assert.deepEqual(dataNotices([], [missing])[0].wallets, [wallet]);
 });
+test('price provider and timestamp quality changes create incompatible valuation coverage',()=>{
+  const good={...row,priceSource:'DefiLlama',priceTime:now};
+  const a=sample({rows:[good]});
+  const b=sample({rows:[{...good,priceSource:'Dexscreener'}]});
+  const c=sample({rows:[{...good,priceTime:now-3600000}]});
+  assert.notEqual(a.coverage,b.coverage);assert.notEqual(a.coverage,c.coverage);assert.equal(c.partial,true);
+});

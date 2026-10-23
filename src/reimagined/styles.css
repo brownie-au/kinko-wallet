@@ -4044,3 +4044,5 @@ h1 {
   .history-interval { line-height: 1.5; }
   .history-info-popover { width: min(300px, 78vw); }
 }
+.portfolio-readings { --history-line: #237d60; }
+[data-theme="dark"] .portfolio-readings { --history-line: #75cfaa; }

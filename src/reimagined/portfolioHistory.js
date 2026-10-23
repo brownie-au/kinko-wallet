@@ -39,7 +39,7 @@ export function normalizeHistory(samples, now = Date.now()) {
   if (!Array.isArray(samples)) throw new Error('Saved portfolio history is invalid.');
   const preferred = new Map();
   for (const s of samples) {
-    if (!s) continue;
+    if (!s || typeof s.scope !== 'string' || s.scope.length > 100 || !/^[a-f0-9]{64}$/.test(s.coverage) || !Number.isFinite(s.time) || s.time <= 0 || s.time > now + 300000 || !Number.isFinite(s.value) || s.value < 0) continue;
     const key = JSON.stringify([s.scope, s.time, s.coverage]);
     const prior = preferred.get(key);
     const rank = (p) => p?.provenance?.kind === 'observation' ? 3 : p?.provenance?.kind === 'backfill' ? 2 : 1;

@@ -63,3 +63,28 @@ test('native Polygon identity follows the dated MATIC/POL migration, not ticker 
   assert.equal(historicalPriceKey('polygon','native',Date.parse('2024-09-05T00:00Z')),'coingecko:polygon-ecosystem-token');
   assert.notEqual(historicalPriceKey('eth',token,time),historicalPriceKey('base',token,time));
 });
+test('PulseChain timestamp API accepts the documented nested blockNumber and verifies RPC time',async()=>{
+  const providers=createHistoryProviders({fetcher:async(url,options)=>{
+    if(url.includes('getblocknobytime'))return ok({status:'1',result:{blockNumber:'123'}});
+    const req=JSON.parse(options.body);
+    if(req.method==='eth_chainId')return ok({result:'0x171'});
+    return ok({result:{number:'0x7b',timestamp:'0x'+Math.floor(time/1000).toString(16)}});
+  }});
+  const result=await providers.block('pulse',time);
+  assert.equal(result.tag,'0x7b');assert.ok(time-result.time<1000);
+});
+test('API history validation, private request coalescing and in-flight budget fail safely',async()=>{
+  const {default:handler}=await import('../../api/data.js');
+  const {historyProviders}=await import('../../src/server/historyProviders.js');
+  const prior=historyProviders.snapshot;let calls=0,release;
+  historyProviders.snapshot=async()=>{calls++;return new Promise(r=>{release=r;});};
+  const invoke=(body)=>new Promise(resolve=>{const res={setHeader(){},end(text){resolve({status:this.statusCode,data:JSON.parse(text)});}};handler({method:'POST',headers:{'x-forwarded-for':'history-fixture'},body},res);});
+  const body={action:'history',chain:'base',address,contracts:[],time:Math.floor(time),range:'1M'};
+  try{
+    assert.equal((await invoke({...body,time:Date.now()+10000})).status,400);
+    assert.equal((await invoke({...body,range:'BAD'})).status,400);
+    const a=invoke(body), b=invoke(body);await Promise.resolve();
+    release({value:12,partial:true,positions:[],time});
+    assert.equal((await a).data.value,12);assert.equal((await b).status,200);assert.equal(calls,1);
+  }finally{historyProviders.snapshot=prior;}
+});

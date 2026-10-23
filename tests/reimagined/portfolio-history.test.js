@@ -137,3 +137,8 @@ test('v1 encrypted records migrate without deleting old samples or changing the 
   assert.deepEqual(await store.load(access),[old]);assert.equal(storage.getItem(key),raw);
   await store.save(access,[await sample()]);assert.equal((await store.load(access)).length,2);
 });
+test('invalid duplicate and late lower-quality backfill cannot erase a valid observed reading',async()=>{
+  const first=await sample({provenance:{kind:'observation'}});
+  const normalized=normalizeHistory([first,{...first,value:NaN},{...first,value:999,provenance:{kind:'backfill'}}]);
+  assert.deepEqual(normalized,[first]);
+});

@@ -70,6 +70,7 @@ export function portfolioObservation({ rows, results, scope, loading = false }) 
   );
   const coverage = JSON.stringify({
     method: 'observed-liquid-v2',
+    priceQuality: eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}:${r.priceSource || 'unknown'}:${!r.priceTime || Math.abs(r.priceTime - time) > 300000 ? 'outside-5m' : 'within-5m'}`).sort(),
     positions: [...new Set(eligible.map((r) => `${r.wallet.toLowerCase()}:${r.chain}:${r.address?.toLowerCase() || 'native'}`))].sort(),
     reads: results
       .map((r) => `${r.wallet}:${r.chain}:${r.error || r.stale ? 'stale' : r.discovery || (r.issues?.length ? 'partial' : 'complete')}`)
